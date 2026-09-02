@@ -1,0 +1,13 @@
+.git
+.github/skills
+.azure
+**/.azure
+**/.venv
+**/node_modules
+**/dist
+**/.pytest_cache
+**/.ruff_cache
+**/__pycache__
+**/*.pyc
+**/test-results
+report.*.json

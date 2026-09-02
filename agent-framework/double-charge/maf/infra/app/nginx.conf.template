@@ -1,0 +1,29 @@
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location /api/ {
+        proxy_pass https://${BACKEND_HOST};
+        proxy_http_version 1.1;
+        proxy_set_header Host ${BACKEND_HOST};
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_ssl_server_name on;
+        proxy_ssl_name ${BACKEND_HOST};
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+
+    location /health/ {
+        proxy_pass https://${BACKEND_HOST};
+        proxy_set_header Host ${BACKEND_HOST};
+        proxy_ssl_server_name on;
+        proxy_ssl_name ${BACKEND_HOST};
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

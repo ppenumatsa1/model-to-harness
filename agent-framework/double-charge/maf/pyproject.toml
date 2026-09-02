@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "model-to-harness-maf"
+version = "0.1.0"
+description = "Teaching-focused durable double-charge workflow built with Microsoft Agent Framework"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "agent-framework-core>=1.16.0,<2",
+  "agent-framework-foundry>=1.11.0,<2",
+  "ag-ui-protocol>=0.1.22,<0.2",
+  "azure-identity>=1.25.1,<2",
+  "fastapi>=0.121,<1",
+  "httpx>=0.28,<1",
+  "model-to-harness-shared>=0.1.0",
+  "opentelemetry-api>=1.38,<2",
+  "opentelemetry-sdk>=1.38,<2",
+  "opentelemetry-exporter-otlp-proto-http>=1.38,<2",
+  "psycopg[binary,pool]>=3.2,<4",
+  "pydantic>=2.12,<3",
+  "pydantic-settings>=2.11,<3",
+  "python-json-logger>=4.0,<5",
+  "uvicorn[standard]>=0.38,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "anyio>=4.11,<5",
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.2,<2",
+  "pytest-cov>=7,<8",
+  "ruff>=0.14,<1",
+]
+
+[project.scripts]
+maf-double-charge = "maf_double_charge.main:run"
+maf-double-charge-eval = "maf_double_charge.evaluation:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/src/maf_double_charge"]
+
+[tool.uv.sources]
+model-to-harness-shared = { path = "../../../shared", editable = true }
+
+[tool.pytest.ini_options]
+addopts = "-q"
+asyncio_mode = "auto"
+testpaths = ["backend/tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]

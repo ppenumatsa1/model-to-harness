@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: model-harness-langgraph
+services:
+  model-harness-langgraph:
+    project: ./infra/foundry-hosted/agent
+    host: azure.ai.agent
+    language: python
+    kind: hosted
+    name: model-harness-langgraph
+    description: Durable LangGraph double-charge workflow backed by PostgreSQL.
+    codeConfiguration:
+      runtime: python_3_13
+      entryPoint: main.py
+      dependencyResolution: remote_build
+    container:
+      resources:
+        cpu: "1"
+        memory: 2Gi
+    environmentVariables:
+      - name: APP_ENV
+        value: production
+      - name: DATABASE_URL
+        value: ${DATABASE_URL}
+      - name: LANGGRAPH_SCHEMA
+        value: langgraph_app
+      - name: LANGGRAPH_CHECKPOINT_SCHEMA
+        value: langgraph_checkpoints
+      - name: CORS_ORIGINS
+        value: ""
+      - name: AZURE_OPENAI_ENDPOINT
+        value: ${AZURE_OPENAI_ENDPOINT}
+      - name: AZURE_OPENAI_DEPLOYMENT
+        value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
+      - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+        value: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
+    protocols:
+      - protocol: responses
+        version: 2.0.0
+infra:
+  provider: bicep
+  path: infra

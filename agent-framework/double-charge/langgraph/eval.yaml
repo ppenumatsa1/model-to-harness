@@ -1,0 +1,8 @@
+name: double-charge-langgraph-local
+dataset:
+  local_uri: .foundry/datasets
+evaluators:
+  - outcome_contract
+options:
+  pass_threshold: 1.0
+  max_samples: 20

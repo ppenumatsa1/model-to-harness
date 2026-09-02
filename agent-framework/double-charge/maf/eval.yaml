@@ -1,0 +1,8 @@
+name: maf-double-charge-local
+dataset:
+  local_uri: shared-fixtures
+evaluators:
+  - deterministic_outcome_match
+options:
+  pass_threshold: 1.0
+max_samples: 7

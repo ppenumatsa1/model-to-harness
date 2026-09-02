@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "model-to-harness-langgraph"
+version = "0.1.0"
+description = "Teaching-focused durable double-charge workflow built with LangGraph"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "azure-identity>=1.19,<2",
+  "fastapi>=0.115,<1",
+  "langchain-openai>=0.3,<2",
+  "langgraph>=1.0,<2",
+  "langgraph-checkpoint-postgres>=3.0,<4",
+  "model-to-harness-shared>=0.1.0",
+  "psycopg[binary,pool]>=3.2,<4",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "python-json-logger>=3.2,<4",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "anyio>=4.8,<5",
+  "httpx>=0.28,<1",
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+  "ruff>=0.9,<1",
+]
+observability = [
+  "azure-monitor-opentelemetry>=1.6,<2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/src/model_to_harness_langgraph"]
+
+[tool.uv.sources]
+model-to-harness-shared = { path = "../../../shared", editable = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["backend/src", "../../../shared/src"]
+testpaths = ["backend/tests"]
+asyncio_mode = "auto"
+addopts = "-q"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]

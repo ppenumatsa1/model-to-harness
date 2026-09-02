@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: maf
+services:
+    ai-project:
+        host: azure.ai.project
+        deployments:
+            - name: model-harness-gpt-5-6-sol
+              model:
+                  format: OpenAI
+                  name: gpt-5.6-sol
+                  version: "2026-07-09"
+              sku:
+                  name: GlobalStandard
+                  capacity: 100
+    model-harness-maf:
+        project: ./infra/foundry-hosted/agent
+        host: azure.ai.agent
+        language: python
+        uses:
+            - ai-project
+        codeConfiguration:
+            dependencyResolution: remote_build
+            entryPoint: main.py
+            runtime: python_3_13
+        container:
+            resources:
+                cpu: "0.5"
+                memory: 1Gi
+        kind: hosted
+        name: model-harness-maf
+        description: Durable Microsoft Agent Framework double-charge workflow.
+        protocols:
+            - protocol: responses
+              version: 2.0.0
+        env:
+            APP_ENV: production
+            DATABASE_SCHEMA: maf_double_charge
+            DATABASE_URL: ${DATABASE_URL}
+            FOUNDRY_MODEL: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
+            APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
+infra:
+    provider: microsoft.foundry
