@@ -24,3 +24,26 @@ This project was built with the microsoft-foundry skill. Before working on or an
   not introduce a second workflow authority or infer approval from conversation.
 - Keep frontend traffic same-origin through the nginx `/api` proxy. Do not expose the
   internal backend Container App directly.
+- Keep the Foundry project connected to this lane's Application Insights resource
+  through `infra/main.bicep`. Do not set the platform-reserved
+  `APPLICATIONINSIGHTS_CONNECTION_STRING` in the hosted `azure.yaml`.
+- Preserve the Responses trace boundary and safe correlation hierarchy:
+  `foundry.responses.invoke` -> `workflow.run` -> workflow node/model/tool evidence.
+  Durable events may project node and deterministic tool spans, but telemetry never
+  replaces PostgreSQL audit state.
+- Never trace complaint text, prompts, model content, raw checkpoint state,
+  idempotency keys, credentials, connection strings, or unrestricted tool
+  arguments/results.
+
+## Required validation
+
+From this lane, run:
+
+```bash
+uv run pytest
+uv run ruff check backend/src backend/tests scripts/prepare_hosted.py
+./scripts/smoke.sh
+```
+
+For deployment changes, also compile `infra/main.bicep`, run `bash -n` on changed
+scripts, prepare the hosted package, and run `./scripts/smoke_azure.sh` after rollout.

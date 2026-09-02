@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import time
+from contextlib import contextmanager
 from typing import Any, Literal
 
 from langgraph.graph import END, START, StateGraph
@@ -126,6 +127,22 @@ class DoubleChargeWorkflow:
         ):
             builder.add_edge(terminal, END)
         return builder
+
+    @contextmanager
+    def trace_run(self, run_id: str, *, case_id: str, command: str):
+        try:
+            from opentelemetry import trace
+        except ImportError:
+            yield None
+            return
+
+        tracer = trace.get_tracer("model_to_harness_langgraph.workflow")
+        with tracer.start_as_current_span("workflow.run") as span:
+            span.set_attribute("workflow.case_id", case_id)
+            span.set_attribute("workflow.run_id", run_id)
+            span.set_attribute("workflow.command", command)
+            parent_context = trace.set_span_in_context(span)
+            yield parent_context
 
     async def _event(
         self,

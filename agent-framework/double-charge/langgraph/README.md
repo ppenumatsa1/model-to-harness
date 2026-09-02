@@ -105,7 +105,7 @@ deployment scripts. Nothing is shared with the MAF deployment.
 - `infra/main.bicep` defaults to `northcentralus` and creates the lane's Foundry
   account/project, `gpt-5.6-sol` `2026-07-09` GlobalStandard deployment, ACR,
   Container Apps, PostgreSQL Flexible Server, Log Analytics, Application Insights,
-  identities, and role assignments.
+  a Foundry project monitoring connection, identities, and role assignments.
 - The frontend is the only public Container App. nginx serves React and proxies
   `/api`, `/health`, and `/ready` to the internal FastAPI app.
 
@@ -147,7 +147,7 @@ running the smoke script to add a billable remote hosted-agent invocation.
 - Public application:
   <https://mth-lg-2vq7rokaqwhae-web.mangodune-3886db41.northcentralus.azurecontainerapps.io>
 - Foundry project: `model-harness-langgraph`
-- Hosted Agent: `model-harness-langgraph` version 5
+- Hosted Agent: `model-harness-langgraph` version 13
 - Model: `gpt-5.6-sol` version `2026-07-09`, Global Standard
 - Region/resource group: `northcentralus` / `rg-model-harness`
 - Hosted evaluation: 2 passed, 0 failed, 0 errored
@@ -155,3 +155,11 @@ running the smoke script to add a billable remote hosted-agent invocation.
 The public FastAPI smoke and remote Hosted Agent test both completed separate start,
 approval, and resume commands. The retry-safe case produced one PostgreSQL refund
 ledger row and one distinct refund ID before notification.
+
+Application Insights now shows `foundry.responses.invoke` followed by
+`workflow.run`, framework-local `workflow.node.*` spans, the model dependency, and
+safe deterministic tool spans. Start, approval, and resume remain separate operations
+linked by conversation, case, and run identifiers. Node and deterministic tool spans
+are projected from durable audit timestamps; the real model dependency remains
+auto-instrumented. Prompts, complaint text, checkpoint bodies, tool arguments/results,
+and credentials are not recorded.

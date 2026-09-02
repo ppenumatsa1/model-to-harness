@@ -38,6 +38,6 @@ services:
             DATABASE_SCHEMA: maf_double_charge
             DATABASE_URL: ${DATABASE_URL}
             FOUNDRY_MODEL: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
-            APPLICATIONINSIGHTS_CONNECTION_STRING: ${APPLICATIONINSIGHTS_CONNECTION_STRING}
+            OTEL_SERVICE_NAME: model-harness-maf
 infra:
     provider: microsoft.foundry

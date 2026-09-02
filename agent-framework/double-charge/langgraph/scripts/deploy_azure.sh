@@ -75,14 +75,6 @@ PROJECT_ID="$(az deployment group show -g "$RESOURCE_GROUP" -n "$DEPLOYMENT_NAME
 PROJECT_ENDPOINT="$(az deployment group show -g "$RESOURCE_GROUP" -n "$DEPLOYMENT_NAME" --query properties.outputs.foundryProjectEndpoint.value -o tsv)"
 OPENAI_ENDPOINT="$(az deployment group show -g "$RESOURCE_GROUP" -n "$DEPLOYMENT_NAME" --query properties.outputs.openAiEndpoint.value -o tsv)"
 MODEL_DEPLOYMENT="$(az deployment group show -g "$RESOURCE_GROUP" -n "$DEPLOYMENT_NAME" --query properties.outputs.modelDeploymentName.value -o tsv)"
-INSIGHTS_NAME="$(az deployment group show -g "$RESOURCE_GROUP" -n "$DEPLOYMENT_NAME" --query properties.outputs.applicationInsightsName.value -o tsv)"
-APPINSIGHTS_CONNECTION_STRING="$(az resource show \
-  --resource-group "$RESOURCE_GROUP" \
-  --resource-type Microsoft.Insights/components \
-  --name "$INSIGHTS_NAME" \
-  --api-version 2020-02-02 \
-  --query properties.ConnectionString \
-  -o tsv)"
 DATABASE_URL="postgresql://${POSTGRES_LOGIN}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/${POSTGRES_DATABASE}?sslmode=require"
 
 az acr build \
@@ -117,7 +109,6 @@ AZURE_DEV_USER_AGENT=microsoft_foundry_skill azd env set FOUNDRY_PROJECT_ENDPOIN
 AZURE_DEV_USER_AGENT=microsoft_foundry_skill azd env set AZURE_OPENAI_ENDPOINT "$OPENAI_ENDPOINT"
 AZURE_DEV_USER_AGENT=microsoft_foundry_skill azd env set AZURE_AI_MODEL_DEPLOYMENT_NAME "$MODEL_DEPLOYMENT"
 AZURE_DEV_USER_AGENT=microsoft_foundry_skill azd env set DATABASE_URL "$DATABASE_URL"
-AZURE_DEV_USER_AGENT=microsoft_foundry_skill azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "$APPINSIGHTS_CONNECTION_STRING"
 
 "$PYTHON_BIN" scripts/prepare_hosted.py
 AZURE_DEV_USER_AGENT=microsoft_foundry_skill azd deploy model-harness-langgraph --no-prompt

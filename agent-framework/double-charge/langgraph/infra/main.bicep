@@ -257,6 +257,11 @@ resource openAiUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' exi
   name: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
 }
 
+resource logAnalyticsReaderRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  scope: subscription()
+  name: '73c42c96-874c-492b-b04d-ab87d138a893'
+}
+
 resource backendAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(registry.id, backendIdentity.id, acrPullRole.id)
   scope: registry
@@ -295,6 +300,48 @@ resource projectOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' 
     principalId: foundryProject.identity.principalId
     principalType: 'ServicePrincipal'
   }
+}
+
+resource projectApplicationInsightsReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(insights.id, foundryProject.id, logAnalyticsReaderRole.id)
+  scope: insights
+  properties: {
+    roleDefinitionId: logAnalyticsReaderRole.id
+    principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource projectLogAnalyticsReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(logs.id, foundryProject.id, logAnalyticsReaderRole.id)
+  scope: logs
+  properties: {
+    roleDefinitionId: logAnalyticsReaderRole.id
+    principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource projectApplicationInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = {
+  parent: foundryProject
+  name: 'ApplicationInsights'
+  properties: {
+    category: 'AppInsights'
+    target: insights.id
+    authType: 'ApiKey'
+    isSharedToAll: true
+    credentials: {
+      key: insights.properties.ConnectionString
+    }
+    metadata: {
+      ApiType: 'Azure'
+      ResourceId: insights.id
+    }
+  }
+  dependsOn: [
+    projectApplicationInsightsReader
+    projectLogAnalyticsReader
+  ]
 }
 
 resource backend 'Microsoft.App/containerApps@2024-03-01' = {
@@ -375,6 +422,10 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               secretRef: 'appinsights'
+            }
+            {
+              name: 'OTEL_SERVICE_NAME'
+              value: 'model-harness-langgraph-api'
             }
           ]
           resources: {

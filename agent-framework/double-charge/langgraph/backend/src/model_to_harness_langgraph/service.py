@@ -1,3 +1,4 @@
+import os
 from typing import Any
 from uuid import uuid4
 
@@ -13,6 +14,7 @@ from .contracts import (
     StartCaseRequest,
     StartCaseResponse,
 )
+from .observability import project_durable_node_spans
 from .outcome import map_framework_outcome
 from .workflow import DoubleChargeWorkflow
 
@@ -91,10 +93,13 @@ class WorkflowService:
             node="start",
             status="running",
         )
-        result = await self.workflow.graph.ainvoke(
-            state,
-            config={"configurable": {"thread_id": thread_id}},
-        )
+        with self.workflow.trace_run(run_id, case_id=case_id, command="start") as parent_context:
+            result = await self.workflow.graph.ainvoke(
+                state,
+                config=_graph_config(thread_id, case_id=case_id, run_id=run_id),
+            )
+            events = await self.audit.list_events(run_id)
+            project_durable_node_spans(events, parent_context=parent_context)
         return await self._persist_result(result)
 
     async def submit_approval(self, case_id: str, approval: ApprovalRequest) -> None:
@@ -126,6 +131,8 @@ class WorkflowService:
         approval = await self.audit.get_pending_approval(run["run_id"])
         if not approval:
             raise InvalidCommandError("Record an approval command before resuming")
+        existing_events = await self.audit.list_events(run["run_id"])
+        after_sequence = existing_events[-1].sequence if existing_events else 0
         await self.audit.append_event(
             case_id=case_id,
             run_id=run["run_id"],
@@ -143,10 +150,27 @@ class WorkflowService:
                 "reason": approval.get("reason"),
             }
         )
-        result = await self.workflow.graph.ainvoke(
-            command,
-            config={"configurable": {"thread_id": f"langgraph:{run['run_id']}"}},
-        )
+        with self.workflow.trace_run(
+            run["run_id"],
+            case_id=case_id,
+            command="resume",
+        ) as parent_context:
+            result = await self.workflow.graph.ainvoke(
+                command,
+                config=_graph_config(
+                    f"langgraph:{run['run_id']}",
+                    case_id=case_id,
+                    run_id=run["run_id"],
+                ),
+            )
+            resumed_events = await self.audit.list_events(
+                run["run_id"],
+                after_sequence,
+            )
+            project_durable_node_spans(
+                resumed_events,
+                parent_context=parent_context,
+            )
         await self.audit.consume_approval(run["run_id"])
         return await self._persist_result(result)
 
@@ -168,10 +192,29 @@ class WorkflowService:
     async def continue_run(self, case_id: str) -> StartCaseResponse:
         """Continue a durable graph after a worker-level recovery breakpoint."""
         run = await self._require_run(case_id)
-        result = await self.workflow.graph.ainvoke(
-            None,
-            config={"configurable": {"thread_id": f"langgraph:{run['run_id']}"}},
-        )
+        existing_events = await self.audit.list_events(run["run_id"])
+        after_sequence = existing_events[-1].sequence if existing_events else 0
+        with self.workflow.trace_run(
+            run["run_id"],
+            case_id=case_id,
+            command="continue",
+        ) as parent_context:
+            result = await self.workflow.graph.ainvoke(
+                None,
+                config=_graph_config(
+                    f"langgraph:{run['run_id']}",
+                    case_id=case_id,
+                    run_id=run["run_id"],
+                ),
+            )
+            continued_events = await self.audit.list_events(
+                run["run_id"],
+                after_sequence,
+            )
+            project_durable_node_spans(
+                continued_events,
+                parent_context=parent_context,
+            )
         return await self._persist_result(result)
 
     async def list_events(self, case_id: str, after: int = 0) -> list[NativeEvent]:
@@ -312,3 +355,17 @@ class WorkflowService:
 
 def _public_state(state: dict[str, Any]) -> dict[str, Any]:
     return {key: state[key] for key in PUBLIC_STATE_KEYS if key in state}
+
+
+def _graph_config(thread_id: str, *, case_id: str, run_id: str) -> dict[str, Any]:
+    agent_name = os.getenv("FOUNDRY_HOSTED_AGENT_NAME", "model-harness-langgraph")
+    return {
+        "configurable": {"thread_id": thread_id},
+        "metadata": {
+            "agent_name": agent_name,
+            "agent_id": os.getenv("FOUNDRY_HOSTED_AGENT_ID", agent_name),
+            "gen_ai.conversation.id": case_id,
+            "workflow.case_id": case_id,
+            "workflow.run_id": run_id,
+        },
+    }

@@ -249,3 +249,75 @@ See each application README for its current validation commands.
 - The already-running MAF environment was not rebuilt solely for this script cleanup;
   its public smoke, Hosted Agent status, telemetry, and durable ledger were verified
   independently.
+
+## 2026-09-02 - Foundry projects had telemetry resources but no monitoring connections
+
+- Both lanes created Application Insights and exported selected telemetry, but the
+  Foundry project connection lists were empty. Hosted monitoring therefore depended
+  on manually supplied environment values and Foundry could not consistently surface
+  project conversations and transaction traces.
+- Each independent Bicep template now creates an `ApplicationInsights` project
+  connection targeting that lane's component and grants the project identity Log
+  Analytics Reader access to both Application Insights and its workspace.
+- Hosted `azure.yaml` files no longer attempt to set the platform-reserved
+  `APPLICATIONINSIGHTS_CONNECTION_STRING`. Foundry injects it from project monitoring;
+  the Container App backends continue to receive their lane-owned connection strings
+  through Container App secrets.
+- Azure verification confirmed one `AppInsights` connected resource in each project,
+  targeting only the matching lane resource.
+
+## 2026-09-02 - LangGraph needed an explicit Responses-to-workflow trace hierarchy
+
+- The baseline LangGraph resource contained logs under `unknown_service`, but no
+  cohesive hosted request, workflow, node, model, or conversation hierarchy. MAF
+  already emitted its framework-native workflow/edge/executor hierarchy.
+- The LangGraph Responses handler now creates `foundry.responses.invoke` with safe
+  GenAI agent, response, and conversation attributes. The command service creates
+  `workflow.run` and attaches case/run correlation.
+- A trial of the preview `langchain-azure-ai` callback traced ordinary graph nodes but
+  emitted missing `on_interrupt` and `on_resume` callback warnings and omitted parts
+  of the resumed retry path. It was removed rather than retained as a fragile runtime
+  dependency.
+- LangGraph now projects `workflow.node.*` and deterministic tool spans from its
+  durable PostgreSQL audit timestamps after each graph command. The model client's
+  real dependency span remains under the same `workflow.run`. The projection
+  records only identifiers, node/tool/model names, counts, and source metadata; it
+  never records prompts, complaint text, raw state, checkpoint bodies, credentials,
+  idempotency keys, or tool arguments/results.
+- This projection is operational telemetry, not a replacement for the native audit.
+  Start, approval, and resume remain separate request traces linked by conversation,
+  case, and run identifiers.
+
+## 2026-09-02 - Trace deployment and verification
+
+- MAF Hosted Agent version 3 and LangGraph Hosted Agent version 13 are active.
+- Fresh no-duplicate, approval-denied, and retry-safe-refund scenarios were exercised
+  with separate durable approval and resume commands. Both retry-safe flows completed
+  with one verified refund.
+- MAF trace `d75d9e816211ea239f3a31f077faef34` contains the hosted request plus
+  `workflow.run`, edge-group, executor, model, and message-send dependencies with the
+  same conversation key.
+- LangGraph version-12 trace `b8a81ebbf2c277c001311545c1f160d6`
+  contains `foundry.responses.invoke` → `workflow.run` → approval, refund,
+  verification, notification, one real model dependency, and safe tool dependencies
+  under one operation ID with conversation, case, and run correlation.
+- LangGraph version-13 trace `8f0c52b318c7eee4761407ab00a5be25`
+  confirms the outer `foundry.responses.invoke` span now carries the nested command
+  result's case ID, run ID, terminal status, current step, and conversation
+  correlation.
+- The public LangGraph React/nginx/FastAPI path passed a fresh durable
+  start/approval/resume smoke after the backend telemetry revision became healthy.
+
+## 2026-09-02 - Final telemetry review closed correlation and redaction gaps
+
+- The LangGraph Responses wrapper initially looked for case and run fields at the
+  command result root, while successful results place them inside the allowlisted
+  `case` object. The wrapper now reads that object before applying workflow span
+  attributes.
+- The wrapper no longer calls `record_exception` or logs raw stack traces. Validation
+  exceptions can contain rejected complaint or command values, so traces now record
+  only the exception class and sanitized error code.
+- Lane agent instructions use the standard uppercase `AGENTS.md` convention. Both
+  files now document independence, durable
+  approval, PostgreSQL authority, Foundry packaging, telemetry safety, and required
+  validation commands.

@@ -134,7 +134,7 @@ operational boundaries and safe future-hosting placeholders.
 - Public application:
   <https://mth-maf-wh2su65huqw5o-web.livelyhill-0f2b68f2.northcentralus.azurecontainerapps.io>
 - Foundry project: `model-harness-maf`
-- Hosted Agent: `model-harness-maf` version 2
+- Hosted Agent: `model-harness-maf` version 3
 - Model: `gpt-5.6-sol` version `2026-07-09`, Global Standard
 - Region/resource group: `northcentralus` / `rg-model-harness`
 - Hosted evaluation: 2 passed, 0 failed, 0 errored
@@ -143,3 +143,8 @@ Remote testing completed an ordinary case and a separate start, approval, and re
 sequence. PostgreSQL contains one durable refund for the verified idempotency key.
 The deployment is educational and is not a production network or payment-system
 reference.
+
+The Foundry project is connected through IaC to the lane-owned Application Insights
+resource. Hosted Responses traces preserve MAF's native `workflow.run`,
+edge-group, executor, model, and message-send hierarchy and include conversation
+correlation across separate approval and resume requests.

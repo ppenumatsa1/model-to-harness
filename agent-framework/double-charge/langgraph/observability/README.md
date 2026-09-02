@@ -5,6 +5,14 @@ checkpoint, retry attempt, and a one-way truncated idempotency-key hash. Install
 `.[observability]` and set `APPLICATIONINSIGHTS_CONNECTION_STRING` to enable the
 App Insights-ready OpenTelemetry setup in `observability.py`.
 
+For Foundry Hosted Agents, the project-level `ApplicationInsights` connection is
+created by this lane's Bicep and the Responses runtime injects the connection string.
+The adapter creates a `foundry.responses.invoke` span, each graph command creates a
+`workflow.run` span, and durable audit timestamps project safe `workflow.node.*`,
+and deterministic tool spans. The actual model dependency is auto-instrumented under
+the same run span. This keeps pause/resume traces correlated without treating
+telemetry as workflow state.
+
 Operational telemetry may be sampled and retained according to platform policy.
 Durable business audit is different: ordered `langgraph_app.events`, insert-once
 approval commands, idempotent refund records and fingerprints, run projections,

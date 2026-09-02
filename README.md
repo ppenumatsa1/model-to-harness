@@ -91,11 +91,17 @@ Container Apps, registries, identities, and telemetry resources.
 
 | Lane | Public application | Hosted Agent | Hosted evaluation |
 |---|---|---|---|
-| MAF | [Open UI](https://mth-maf-wh2su65huqw5o-web.livelyhill-0f2b68f2.northcentralus.azurecontainerapps.io) | `model-harness-maf` v2 | 2 passed, 0 failed, 0 errored |
-| LangGraph | [Open UI](https://mth-lg-2vq7rokaqwhae-web.mangodune-3886db41.northcentralus.azurecontainerapps.io) | `model-harness-langgraph` v5 | 2 passed, 0 failed, 0 errored |
+| MAF | [Open UI](https://mth-maf-wh2su65huqw5o-web.livelyhill-0f2b68f2.northcentralus.azurecontainerapps.io) | `model-harness-maf` v3 | 2 passed, 0 failed, 0 errored |
+| LangGraph | [Open UI](https://mth-lg-2vq7rokaqwhae-web.mangodune-3886db41.northcentralus.azurecontainerapps.io) | `model-harness-langgraph` v13 | 2 passed, 0 failed, 0 errored |
 
 Both use the `gpt-5.6-sol` `2026-07-09` Global Standard deployment. Remote
 start/approval/resume tests verified durable human approval and exactly one refund
 after an uncertain response. This remains an educational deployment: the
 deterministic simulators are not payment systems, public networking is intentionally
 simple, and the environment is not presented as production-ready.
+
+Each Foundry project is connected through IaC to its lane-owned Application Insights
+resource. Hosted Responses requests carry conversation correlation into workflow,
+node, model, and safe tool spans. LangGraph reconstructs resumed node timing from its
+durable PostgreSQL audit events because workflow state remains authoritative and an
+approval resume is a separate request/trace boundary.

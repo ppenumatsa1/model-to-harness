@@ -62,7 +62,6 @@ az deployment group create \
 REGISTRY_NAME="$(az deployment group show -g "$RESOURCE_GROUP" -n "$DEPLOYMENT_NAME-bootstrap" --query properties.outputs.registryName.value -o tsv)"
 REGISTRY_SERVER="$(az deployment group show -g "$RESOURCE_GROUP" -n "$DEPLOYMENT_NAME-bootstrap" --query properties.outputs.registryLoginServer.value -o tsv)"
 POSTGRES_HOST="$(az deployment group show -g "$RESOURCE_GROUP" -n "$DEPLOYMENT_NAME-bootstrap" --query properties.outputs.postgresHost.value -o tsv)"
-APPINSIGHTS_CONNECTION_STRING="$(az deployment group show -g "$RESOURCE_GROUP" -n "$DEPLOYMENT_NAME-bootstrap" --query properties.outputs.applicationInsightsConnectionString.value -o tsv)"
 DATABASE_URL="postgresql://mthadmin:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/model_harness_maf?sslmode=require"
 
 az acr build \
@@ -97,8 +96,6 @@ az deployment group create \
   --only-show-errors
 
 AZURE_DEV_USER_AGENT=microsoft_foundry_skill azd env set DATABASE_URL "$DATABASE_URL"
-AZURE_DEV_USER_AGENT=microsoft_foundry_skill azd env set \
-  APPLICATIONINSIGHTS_CONNECTION_STRING "$APPINSIGHTS_CONNECTION_STRING"
 "$PYTHON_BIN" scripts/prepare_hosted.py
 AZURE_DEV_USER_AGENT=microsoft_foundry_skill azd deploy model-harness-maf --no-prompt
 

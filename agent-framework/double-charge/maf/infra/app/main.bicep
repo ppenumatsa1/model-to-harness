@@ -159,6 +159,11 @@ resource foundryUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' ex
   name: '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 }
 
+resource logAnalyticsReaderRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  scope: subscription()
+  name: '73c42c96-874c-492b-b04d-ab87d138a893'
+}
+
 resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
   name: foundryAccountName
 }
@@ -206,6 +211,48 @@ resource backendFoundryUser 'Microsoft.Authorization/roleAssignments@2022-04-01'
     principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
+}
+
+resource projectApplicationInsightsReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(insights.id, foundryProject.id, logAnalyticsReaderRole.id)
+  scope: insights
+  properties: {
+    roleDefinitionId: logAnalyticsReaderRole.id
+    principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource projectLogAnalyticsReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(logs.id, foundryProject.id, logAnalyticsReaderRole.id)
+  scope: logs
+  properties: {
+    roleDefinitionId: logAnalyticsReaderRole.id
+    principalId: foundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource projectApplicationInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = {
+  parent: foundryProject
+  name: 'ApplicationInsights'
+  properties: {
+    category: 'AppInsights'
+    target: insights.id
+    authType: 'ApiKey'
+    isSharedToAll: true
+    credentials: {
+      key: insights.properties.ConnectionString
+    }
+    metadata: {
+      ApiType: 'Azure'
+      ResourceId: insights.id
+    }
+  }
+  dependsOn: [
+    projectApplicationInsightsReader
+    projectLogAnalyticsReader
+  ]
 }
 
 resource backend 'Microsoft.App/containerApps@2024-03-01' = {
@@ -284,6 +331,10 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
               secretRef: 'appinsights'
+            }
+            {
+              name: 'OTEL_SERVICE_NAME'
+              value: 'model-harness-maf-api'
             }
             {
               name: 'FRONTEND_ORIGIN'
