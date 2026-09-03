@@ -117,99 +117,177 @@ export default function App() {
   }
 
   return (
-    <main>
-      <header className="hero">
-        <div>
-          <p className="eyebrow">Model → workflow → durable harness</p>
-          <h1>Double-charge workflow lab</h1>
+    <div className="app-shell">
+      <aside className="navigation-rail" aria-label="Workspace navigation">
+        <a className="brand" href="#workspace" aria-label="MAF Workflow Lab home">
+          <span className="brand-mark" aria-hidden="true">M</span>
+          <span>
+            <strong>MAF</strong>
+            <small>Workflow Lab</small>
+          </span>
+        </a>
+        <nav className="primary-nav" aria-label="Workflow sections">
+          <a className="nav-item active" href="#case-composer" aria-current="page">
+            <span aria-hidden="true">⌁</span>
+            <span>Case workspace</span>
+          </a>
+          <a className="nav-item" href="#workflow-artifacts">
+            <span aria-hidden="true">◇</span>
+            <span>Workflow artifacts</span>
+          </a>
+          <a className="nav-item" href="#safe-explainer">
+            <span aria-hidden="true">◌</span>
+            <span>Safe explainer</span>
+          </a>
+        </nav>
+        <div className="rail-note">
+          <span className="rail-note-icon" aria-hidden="true">✓</span>
           <p>
-            A teaching-focused Microsoft Agent Framework app with explicit routes, parallel
-            validation, durable approval, retry evidence, and framework-neutral outcomes.
+            <strong>Teaching mode</strong>
+            Deterministic fixtures and durable evidence.
           </p>
         </div>
-        <div className="hero-status">
-          <span>{run?.state.status ?? "ready"}</span>
-          <strong>{run?.state.current_step?.replaceAll("_", " ") ?? "choose a fixture"}</strong>
+      </aside>
+
+      <main id="workspace">
+        <header className="top-bar">
+          <div className="breadcrumb">
+            <span>Support operations</span>
+            <span aria-hidden="true">/</span>
+            <strong>Double-charge review</strong>
+          </div>
+          <div className="top-bar-actions">
+            <span className="environment-badge">Local workspace</span>
+            <span className="run-status" role="status">
+              <span className={`status-dot ${run?.state.status ?? "ready"}`} aria-hidden="true" />
+              {run?.state.status ?? "Ready for a case"}
+            </span>
+          </div>
+        </header>
+
+        <div className="page-heading">
+          <div>
+            <p className="eyebrow">Microsoft Agent Framework</p>
+            <h1>Double-charge case workspace</h1>
+            <p>
+              Start a support scenario, then follow its durable decisions, validation evidence,
+              and human approval boundary.
+            </p>
+          </div>
+          <div className="current-step">
+            <span>Current workflow step</span>
+            <strong>{run?.state.current_step?.replaceAll("_", " ") ?? "Choose a fixture"}</strong>
+          </div>
         </div>
-      </header>
 
-      <section className="panel composer">
-        <div className="composer-copy">
-          <p className="eyebrow">Deterministic fixture + model normalization</p>
-          <h2>Start a support case</h2>
-          <p>{scenario?.description}</p>
-        </div>
-        <div className="composer-form">
-          <label>
-            Fixture
-            <select value={scenarioId} onChange={(event) => setScenarioId(event.target.value)}>
-              {scenarios.map((item) => (
-                <option value={item.id} key={item.id}>
-                  {item.id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Customer ID
-            <input value={customerId} onChange={(event) => setCustomerId(event.target.value)} />
-          </label>
-          <label className="wide">
-            Complaint
-            <textarea value={complaint} onChange={(event) => setComplaint(event.target.value)} />
-          </label>
-          <button
-            disabled={busy}
-            onClick={startRun}
-          >
-            {busy ? "Running…" : "Start workflow"}
-          </button>
-        </div>
-      </section>
+        <section className="panel composer" id="case-composer" aria-labelledby="composer-title">
+          <div className="composer-copy">
+            <p className="eyebrow">New support case</p>
+            <h2 id="composer-title">Compose a case for review</h2>
+            <p>
+              Choose a deterministic fixture and provide the customer context. The workflow will
+              normalize the complaint before it evaluates refund eligibility.
+            </p>
+            <div className="fixture-summary">
+              <span className="fixture-icon" aria-hidden="true">↗</span>
+              <div>
+                <strong>Selected scenario</strong>
+                <span>{scenario?.description ?? "Loading available scenarios…"}</span>
+              </div>
+            </div>
+          </div>
+          <div className="composer-form">
+            <label>
+              Scenario fixture
+              <select
+                aria-label="Scenario fixture"
+                value={scenarioId}
+                onChange={(event) => setScenarioId(event.target.value)}
+              >
+                {scenarios.map((item) => (
+                  <option value={item.id} key={item.id}>
+                    {item.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Customer ID
+              <input
+                aria-label="Customer ID"
+                value={customerId}
+                onChange={(event) => setCustomerId(event.target.value)}
+              />
+            </label>
+            <label className="wide">
+              Customer complaint
+              <textarea
+                aria-label="Customer complaint"
+                value={complaint}
+                onChange={(event) => setComplaint(event.target.value)}
+              />
+            </label>
+            <button className="primary-action" disabled={busy} onClick={startRun}>
+              <span aria-hidden="true">▶</span>
+              {busy ? "Starting workflow…" : "Start workflow"}
+            </button>
+          </div>
+        </section>
 
-      {error && <div className="error-banner">{error}</div>}
+        {error && <div className="error-banner" role="alert">{error}</div>}
 
-      <ApprovalPanel
-        state={run?.state ?? null}
-        busy={busy}
-        onApprove={(decision, reviewer, reason) =>
-          execute(async () => {
-            const state = run?.state;
-            if (!state?.checkpoint_id || !runId) throw new Error("No approval checkpoint");
-            await api.approve(runId, {
-              checkpoint_id: state.checkpoint_id,
-              decision,
-              reviewer_id: reviewer,
-              reason
-            });
-          })
-        }
-        onResume={() =>
-          execute(async () => {
-            const checkpoint = run?.state.checkpoint_id;
-            if (!runId || !checkpoint) throw new Error("No checkpoint to resume");
-            await api.resume(runId, checkpoint);
-          })
-        }
-      />
-
-      <div className="workspace">
-        <WorkflowGraph graph={graph} state={run?.state ?? null} events={events} />
-        <Timeline
-          events={events}
-          aguiEvents={aguiEvents}
-          malformed={malformed}
-          disconnected={aguiDisconnected}
-        />
-      </div>
-      <div className="workspace lower">
-        <RunInspector
+        <ApprovalPanel
           state={run?.state ?? null}
-          memory={run?.memory ?? {}}
-          outcome={run?.outcome}
+          busy={busy}
+          onApprove={(decision, reviewer, reason) =>
+            execute(async () => {
+              const state = run?.state;
+              if (!state?.checkpoint_id || !runId) throw new Error("No approval checkpoint");
+              await api.approve(runId, {
+                checkpoint_id: state.checkpoint_id,
+                decision,
+                reviewer_id: reviewer,
+                reason
+              });
+            })
+          }
+          onResume={() =>
+            execute(async () => {
+              const checkpoint = run?.state.checkpoint_id;
+              if (!runId || !checkpoint) throw new Error("No checkpoint to resume");
+              await api.resume(runId, checkpoint);
+            })
+          }
         />
-        <AssistantPanel state={run?.state ?? null} />
-      </div>
-    </main>
+
+        <section className="artifact-heading" id="workflow-artifacts" aria-labelledby="artifacts-title">
+          <div>
+            <p className="eyebrow">Selected run</p>
+            <h2 id="artifacts-title">Workflow artifacts</h2>
+          </div>
+          <p>Durable events lead; framework projections support the operational view.</p>
+        </section>
+
+        <div className="workspace">
+          <WorkflowGraph graph={graph} state={run?.state ?? null} events={events} />
+          <Timeline
+            events={events}
+            aguiEvents={aguiEvents}
+            malformed={malformed}
+            disconnected={aguiDisconnected}
+          />
+        </div>
+        <div className="workspace lower">
+          <RunInspector
+            state={run?.state ?? null}
+            memory={run?.memory ?? {}}
+            outcome={run?.outcome}
+          />
+          <div id="safe-explainer">
+            <AssistantPanel state={run?.state ?? null} />
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
