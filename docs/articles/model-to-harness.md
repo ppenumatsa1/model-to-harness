@@ -4,29 +4,28 @@
 
 We now call almost everything an *agent*: chatbots, copilots, coding assistants, research tools, workflows, and managed agent platforms. The word is useful, but it hides the more important change underneath.
 
-AI is moving from **answering questions**, to **taking actions**, to **finishing real work**: carrying a task to a checked result that people can trust.
+AI is moving from **answering questions**, to **taking actions**, to **carrying work across time and tools**: reaching a checked result that people can trust.
 
 The problem is that a model alone is not a working system. It can reason and generate, but it cannot reliably gather current information, operate tools, preserve progress, wait for approval, recover from failure, or prove that the task was completed correctly.
 
 Those missing capabilities accumulated around the model:
 
-```text
-Model
-  ↓
-Agent loop
-  ↓
-Agent SDKs / frameworks and workflow patterns
-  ↓
-Harness for completing real work
-  ↓
-Runtime / managed hosted agent
+```mermaid
+flowchart TB
+    subgraph progression["Capability progression"]
+        direction LR
+        model["Model"] --> loop["Agent loop"] --> framework["Agent framework"] --> harness["Harness for long-horizon tasks"] --> runtime["Hosted runtime"]
+    end
+
+    concerns["Cross-cutting concerns: experience layer · memory · observability + evals · identity · security · governance"]
+    concerns -. apply across every layer .-> progression
 ```
 
 This is not a strict history or a rigid product taxonomy. The layers overlap, and many products span several of them. It is a **capability progression**: each layer addresses limits exposed by the layer before it.
 
 The central idea is:
 
-> **Models generate. Agents act. Frameworks organize. Harnesses finish the job. Runtimes sustain the work.**
+> **Models generate. Agent loops act. Frameworks organize. Harnesses equip long-horizon work. Runtimes sustain the work.**
 
 > **A case to follow — the double charge.**  
 > A customer says they were billed twice. Resolving the case means reading the complaint and account history, checking billing records, validating the refund policy, obtaining approval, issuing the refund exactly once, notifying the customer, and retaining evidence of what happened. We will follow this same case through every layer.
@@ -37,8 +36,8 @@ The central idea is:
 |---|---|---|---|---|
 | Model | Reason and generate | Prompt, context window, response | Reads the supplied complaint and drafts a helpful reply | Cannot retrieve billing records or issue a refund |
 | Agent loop | Reason and act repeatedly | Observe, reason, act, reflect, continue or stop | Reads the account and investigates the charges | A custom loop becomes difficult to control and recover |
-| Agent SDKs / frameworks | Package and organize agent behavior | Model adapters, messages, tools, nodes, edges, workflows, state transitions, subagents, retries, interrupts, checkpoints | Defines investigate → approve → refund → notify | The work still needs a useful task environment |
-| Harness | Assemble a complete environment for finishing work | Context builder, skills, permissions, tool executor, workspace, filesystem, shell, code tools, verification | Carries the case to a verified refund and closed ticket | It must be run, persisted, isolated, and operated reliably |
+| Agent SDKs / frameworks | Package and organize agent behavior | Model adapters, messages, tools, nodes, edges, workflows, context and state transitions, subagents, retries, interrupts, checkpoints | Defines investigate → approve → refund → notify | The work still needs a useful task environment |
+| Harness | Assemble a complete environment for long-horizon tasks | Context builder, skills, permissions, tool executor, workspace, filesystem, shell, code tools, subagents, verification | Extends the case across tools, artifacts, people, and time | It must be run, persisted, isolated, and operated reliably |
 | Runtime / managed hosted agent | Run, persist, isolate, scale, pause, and recover the harness | Sessions, workers, events, queues, sandboxes, checkpoints, scheduling, identity integration | Preserves the approval wait and resumes the case later | Must be governed, observed, and evaluated |
 
 The boundaries are intentionally practical rather than absolute. An SDK may contain workflow features. A framework may ship with a runtime. A managed platform may host a simple agent, a framework workflow, or a complete harness. This sequence is a reader's story, not a claim that the runtime is technically added last: every framework and harness executes somewhere. The useful question is not “Which single box contains this product?” It is “Which capabilities does it provide, and which ones must we still design?”
@@ -91,17 +90,17 @@ Model reasons: response or tool
 
 This is the first important transition: the model is no longer only generating an answer. It can inspect the world and attempt to change it.
 
-### From custom loops to agent SDKs
-
-A small custom loop is easy to understand. Production work quickly introduces repeated engineering needs: model adapters, typed messages, tool schemas, validation, handoffs, guardrails, streaming, tracing, and error handling.
-
-Agent SDKs package these recurring parts. OpenAI Agents SDK, Claude Agent SDK, Microsoft Agent Framework, Google ADK, and similar libraries provide different combinations of these capabilities. In practical terms, **SDKs package reusable building blocks; frameworks add explicit control flow and stateful orchestration.** Product boundaries overlap, so these labels should be understood by the primitives being used rather than only by the product name.
-
 > **Double charge at the agent layer:** the agent can retrieve the account, compare the transactions, and determine that the customer was charged twice. It can draft a refund request. But a simple loop still lacks a dependable structure for parallel checks, approval waits, safe recovery, and exactly-once business actions.
 
 ## 3. Agent SDKs and frameworks: organizing the work
 
 An agent can decide its next action. A real business process also needs explicit control over how work moves, what state changes, when humans intervene, and how execution recovers.
+
+### From custom loops to agent SDKs
+
+A small custom loop is easy to understand. Production work quickly introduces repeated engineering needs: model adapters, typed messages, tool schemas, validation, handoffs, guardrails, streaming, tracing, and error handling.
+
+Agent SDKs package these recurring parts. [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/) and [Claude Agent SDK](https://platform.claude.com/docs/en/agent-sdk/overview) are examples. Orchestration frameworks include [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview), [Microsoft Agent Framework](https://learn.microsoft.com/en-ca/agent-framework/?view=agent-framework-python-latest), [CrewAI](https://docs.crewai.com/), and [Google ADK](https://google.github.io/adk-docs/). In practical terms, **SDKs package reusable building blocks; frameworks add explicit control flow and stateful orchestration.** Product boundaries overlap, so these labels should be understood by the primitives being used rather than only by the product name.
 
 ### Agent frameworks organize work
 
@@ -110,8 +109,8 @@ Agent frameworks provide primitives for:
 - **Nodes:** agents, tools, deterministic code, human steps, or sub-workflows that perform work.
 - **Edges:** transitions that connect nodes based on results, conditions, events, or failures.
 - **Graphs and workflows:** the overall control flow, including branches and loops.
-- **State transitions:** explicit changes to the task’s execution truth.
-- **Multi-agent orchestration:** delegation, handoffs, supervisors, subagents, and fan-out/fan-in.
+- **Context and state transitions:** explicit changes to the task’s execution truth and the information passed to the next step.
+- **Multi-agent orchestration:** sequential and parallel work, fan-out/fan-in, handoffs, group chat, supervisors, and subagents.
 - **Interrupts:** durable pauses for approval, clarification, external events, or unavailable dependencies.
 - **Failure controls:** retries, timeouts, cancellation, fallback, and error routing.
 - **Durability primitives:** checkpoints, resume, replay, and recovery from a known state.
@@ -131,20 +130,20 @@ The framework tracks shared workflow state: case data, plan, completed steps, re
 
 > **Double charge at the framework layer:** the framework glues the process together. It carries shared case state from investigation to the parallel billing and policy checks, pauses at the approval gate, routes a failure to a retry-safe refund step, and only then moves to verification and notification. It makes the order, branches, waits, and recovery behavior explicit rather than leaving them to an improvised agent loop.
 
-Framework patterns such as sequential steps, parallel work, routing, handoffs, supervisors, and fan-out/fan-in are simply different arrangements of nodes, edges, and state. The detailed mechanics belong in the framework deep dive. For now, the key point is that dependable systems usually combine deterministic workflow boundaries with model-directed judgment inside selected steps.
+Framework patterns such as sequential steps, parallel work, fan-out/fan-in, routing, handoffs, group chat, supervisors, and subagents are simply different arrangements of nodes, edges, context, and state. The detailed mechanics belong in the framework deep dive. For now, the key point is that dependable systems usually combine deterministic workflow boundaries with model-directed judgment inside selected steps.
 
-## 4. Harness: the execution shell for finishing the job
+## 4. Harness: the execution shell for long-horizon tasks
 
-A harness is the execution shell around a model that turns generation into repeated, stateful, tool-using work. It integrates the agent loop, framework and runtime capabilities with the context, skills, permissions, tools, workspace, environment, collaboration, and verification needed to complete a real task.
+A harness is the execution shell around a model that turns generation into repeated, stateful, tool-using work. It integrates the agent loop and framework capabilities with the context, skills, permissions, tools, workspace, environment, collaboration, and verification needed to carry a long-horizon task forward.
 
-A harness uses framework and runtime capabilities. This article introduces the runtime afterward because it explains how the harness is sustained: where its work runs, how it is isolated, and how it survives interruption.
+A framework can complete real work without being called a harness. A harness adds a task environment for work that must span context windows, tool calls, artifacts, approvals, and time. It can use framework and runtime capabilities; this article introduces the runtime afterward because it explains where that work runs, how it is isolated, and how it survives interruption.
 
 ```text
 Harness
   = agent loop and model adapter
   + context builder and context management
   + instructions, skills, planning, and memory access
-  + tool registry, permissions, and tool executor
+  + tool registry, permissions, tool executor, and subagent delegation
   + workspace, filesystem, shell, browser, and code tools
   + sandbox, container, microVM, or external systems
   + verification, human collaboration, and finished artifacts
@@ -286,19 +285,19 @@ The harness is the useful work environment. A runtime is the execution substrate
 The distinction is simple:
 
 ```text
-Framework defines: node, edge, transition, interrupt, retry, checkpoint
+Framework defines: node, edge, context and state transition, interrupt, retry, checkpoint
 Harness assembles: context, skills, tools, workspace, environment, verification
 Runtime provides:  worker, session, persistence, queue, isolation,
                    scheduling, restoration, scaling, recovery
 ```
 
-Managed hosted-agent platforms operate some or all of this runtime for the developer. Examples include Azure AI Foundry Hosted Agents, Claude Managed Agents, and LangChain managed agent offerings. A managed platform may run a simple agent, a framework workflow, or a complete harness.
+Managed hosted-agent platforms operate some or all of this runtime for the developer. Examples include [Azure AI Foundry Hosted Agents](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents), [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview), and [Managed Deep Agents from LangChain](https://docs.langchain.com/langsmith/python/managed-deep-agents-overview). A managed platform may run a simple agent, a framework workflow, or a complete harness.
 
 > **Double charge at the runtime layer:** the harness reaches the approval step and the hosted runtime saves the paused session. When approval arrives two hours later, it restores the work from its checkpoint. If the billing API fails, the refund step retries with an idempotency key so the customer is refunded once.
 
 ## 6. Cross-cutting concerns: what makes agency trustworthy
 
-The capability progression explains how increasingly complete work becomes possible. Cross-cutting concerns apply across agents, frameworks, hosted runtimes, and harnesses rather than appearing only at the end.
+The capability progression explains how increasingly complete work becomes possible. Cross-cutting concerns apply across agent loops, frameworks, and harnesses rather than appearing only at the end.
 
 | Plane | Questions it must answer |
 |---|---|
@@ -334,9 +333,11 @@ Controls include authentication, scoped authorization, secret handling, tool per
 
 ### Memory and knowledge
 
-Memory spans several layers but serves different purposes. A framework may carry thread state. A runtime may persist it. A memory system may retain selected facts, experiences, or procedures across sessions. A harness context builder retrieves only the information needed for the current model decision. Common building blocks include enterprise search and retrieval systems such as Azure AI Search, Microsoft Graph data, vector stores such as pgvector, Pinecone, or Weaviate, and knowledge graphs or application databases.
+Memory spans several layers but serves different purposes. A framework may carry thread state. A runtime may persist it. A memory system may retain selected facts, experiences, or procedures across sessions. A harness context builder retrieves only the information needed for the current model decision. Common building blocks include enterprise retrieval systems such as [Azure AI Search](https://learn.microsoft.com/en-us/azure/search/search-what-is-azure-search) and [Microsoft Foundry IQ](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/what-is-foundry-iq), business-context systems such as [Microsoft Fabric IQ](https://learn.microsoft.com/fabric/iq/overview), vector stores such as pgvector, Pinecone, or Weaviate, and knowledge graphs or application databases.
 
 Memory should therefore have scope, provenance, retention, access control, and update rules. Not every transcript or tool result should become long-term memory.
+
+Without those rules, stale or incorrect information can steer later decisions, sensitive information can leak from one user or task scope into another, and no one can determine why a fact was retained or remove it reliably. Treating memory as curated knowledge—not an ever-growing transcript—keeps it relevant, auditable, and safe to reuse.
 
 ### Observability and evaluation
 
@@ -358,7 +359,7 @@ Observe → Evaluate → Diagnose → Improve prompt, skill, tool, or workflow
    └──────────── Test → controlled rollout ────────────┘
 ```
 
-This does not require an agent that freely rewrites itself. It requires measurable changes, evaluation before release, monitoring afterward, and a safe rollback path.
+This does not require an agent that freely rewrites itself. It requires measurable changes, evaluation before release, monitoring afterward, and a safe rollback path. Otherwise, a prompt, skill, tool, or workflow change can silently reduce task quality, violate a control, or make an earlier failure impossible to reproduce. A baseline evaluation exposes regressions; a controlled rollout and rollback path limit their impact.
 
 ## The real contest
 
@@ -376,17 +377,23 @@ Model intelligence
 
 The real prize is not merely cleverness. It is consistency: carrying work to a verified outcome across tool calls, state transitions, failures, approvals, and time.
 
-That is why harnesses matter. They are the execution shell that brings the model, agent behavior, workflow control, runtime, context, tools, environment, state, and human collaboration together until the job is finished.
+That is why harnesses matter. They add the execution environment that long-horizon tasks need: context, tools, workspace, state, human collaboration, and verification. Frameworks can also carry work to completion; a harness becomes valuable when that work must persist and operate across a richer environment.
 
 ## Where this series goes next
 
-This article establishes the shared mental model. The next two pieces will dive into the framework and harness layers with focused examples and implementation projects:
+This summary is the first of seven articles. The next six examine the layers and cross-cutting concerns in focused examples and implementation projects:
 
-1. **Agent frameworks and managed hosting, with code**  
-   I will create equivalent workflows in Microsoft Agent Framework (MAF) and LangGraph. We will first explain each primitive—nodes, edges, state transitions, retries, checkpoints, pause/resume, replay, idempotency, memory, and multi-agent patterns—then build projects that show how those primitives run on a managed hosted-agent platform.
+1. **Agent frameworks and orchestration, with code:** I will create equivalent workflows in [Microsoft Agent Framework (MAF)](https://learn.microsoft.com/en-ca/agent-framework/?view=agent-framework-python-latest) and [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview). We will first explain each primitive—nodes, edges, state transitions, retries, checkpoints, pause/resume, replay, idempotency, memory, and multi-agent patterns—then build projects that show how those primitives run on a managed hosted-agent platform.
 
-2. **Inside the harness**  
-   I will build harness projects, then explain the context builder, skills, planning, tool permissions, tool execution, filesystem and shell, controlled environments, workspace artifacts, helper agents, memory updates, and verification loop.
+2. **Inside the harness for long-horizon tasks:** I will build harness projects, then explain the context builder, skills, planning, tool permissions, tool execution, filesystem and shell, controlled environments, workspace artifacts, helper agents, memory updates, and verification loop.
+
+3. **Runtimes and hosted agents:** I will cover sessions, persistence, isolation, scheduling, recovery, and the operating choices behind durable agent work.
+
+4. **Memory and knowledge:** I will examine the distinction between state, memory, and context, including retrieval, provenance, retention, and safe updates.
+
+5. **Observability and evaluations:** I will show how traces, outcome-based evaluation, release gates, and production monitoring make improvements measurable.
+
+6. **Identity, security, and governance:** I will cover authority, scoped access, approvals, auditability, policy enforcement, and control of consequential actions.
 
 The question for any new “agent” is therefore not only “Which model does it use?” It is:
 
@@ -399,7 +406,13 @@ The diagrams and category map in this article are original conceptual models. Pr
 - [Microsoft Agent Framework documentation](https://learn.microsoft.com/en-ca/agent-framework/?view=agent-framework-python-latest)
 - [Microsoft Foundry Hosted Agents](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agents)
 - [Claude Managed Agents overview](https://platform.claude.com/docs/en/managed-agents/overview)
+- [LangChain Managed Deep Agents](https://docs.langchain.com/langsmith/python/managed-deep-agents-overview)
+- [LangGraph overview](https://docs.langchain.com/oss/python/langgraph/overview)
+- [CrewAI documentation](https://docs.crewai.com/)
+- [Microsoft Foundry IQ overview](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/what-is-foundry-iq)
+- [Microsoft Fabric IQ overview](https://learn.microsoft.com/fabric/iq/overview)
 - [Microsoft Agent 365 identity](https://learn.microsoft.com/en-us/microsoft-agent-365/developer/identity)
+- [NIST AI Risk Management Framework: Generative AI Profile](https://doi.org/10.6028/NIST.AI.600-1)
 - [Model Context Protocol specification](https://modelcontextprotocol.io/specification/2024-11-05/index)
 - [A2A Protocol documentation](https://a2a-protocol.org/latest/)
 - [AG-UI documentation](https://docs.ag-ui.com/)
