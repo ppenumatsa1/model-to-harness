@@ -74,7 +74,7 @@ application is launched by the root Compose file.
 - [Technology stack](docs/design/techstack.md)
 - [Project structure](docs/design/projectstructure.md)
 - [Issues, changes, and fixes](docs/design/issues-changes-fixes.md)
-- [Part 2 outline](docs/articles/agent-framework-primitives.md)
+- [Part 2: Agent Frameworks](docs/articles/02-agent-frameworks.md)
 
 ## Contributor skills
 

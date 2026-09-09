@@ -12,7 +12,7 @@ before the implementation:
 6. [Technology stack](design/techstack.md)
 7. [Project structure](design/projectstructure.md)
 8. [Issues, changes, and fixes](design/issues-changes-fixes.md)
-9. [Part 2 outline](articles/agent-framework-primitives.md)
+9. [Part 2: Agent Frameworks](articles/02-agent-frameworks.md)
 
 `docs/design/` is the canonical implementation-documentation set. The
 [workflow](diagrams/double-charge-workflow.md) and
