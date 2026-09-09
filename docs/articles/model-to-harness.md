@@ -138,13 +138,13 @@ Managed hosted-agent platforms such as [Microsoft Foundry Hosted Agents](https:/
 
 These concerns surround every layer; they are not a final implementation step.
 
-| Concern                                | What it answers                                                                                                                             |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Experience**                         | Where do people review, correct, approve, and receive work: web applications, Teams, Slack, or another channel?                             |
-| **Standards**                          | How do systems exchange capabilities without one-off integration: MCP for tools and context, A2A for agents, and AG-UI for user interfaces? |
-| **Memory and knowledge**               | What should persist, for how long, under what access controls, and with what provenance?                                                    |
-| **Identity, security, and governance** | Who is acting, what can it access, which policies apply, and can the work be reconstructed and controlled?                                  |
-| **Observability and evals**            | What happened, did the system reach the right outcome safely, and did a change improve it?                                                  |
+| Concern                                | What it answers                                                                                                                          |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Experience**                         | Where do people review, correct, approve, and receive work: web applications, Teams, Slack, or another channel?                          |
+| **Standards**                          | How do systems exchange capabilities without one-off integration: MCP for tools and data, A2A for agents, and AG-UI for user interfaces? |
+| **Memory and knowledge**               | What should persist, for how long, under what access controls, and with what provenance?                                                 |
+| **Identity, security, and governance** | Who is acting, what can it access, which policies apply, and can the work be reconstructed and controlled?                               |
+| **Observability and evals**            | What happened, did the system reach the right outcome safely, and did a change improve it?                                               |
 
 ## The real contest
 
@@ -159,7 +159,7 @@ The prize is consistency: carrying work to a verified outcome across tool calls,
 This summary is the first of seven articles. The next six deepen the layers and concerns introduced here:
 
 1. **Agent frameworks and orchestration, with code:** equivalent workflows in [Microsoft Agent Framework (MAF)](https://learn.microsoft.com/en-ca/agent-framework/?view=agent-framework-python-latest) and [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview).
-2. **Inside the harness for long-horizon tasks:** context, skills, permissions, tools, workspaces, helper agents, and verification.
+2. **Inside the harness for long-horizon tasks:** context, skills, permissions, tools, workspaces, sub agents, and verification.
 3. **Runtimes and hosted agents:** sessions, persistence, isolation, scheduling, recovery, and operating choices.
 4. **Memory and knowledge:** state, memory, context, retrieval, provenance, retention, and safe updates.
 5. **Observability and evaluations:** traces, outcome-based evaluation, release gates, and production monitoring.
