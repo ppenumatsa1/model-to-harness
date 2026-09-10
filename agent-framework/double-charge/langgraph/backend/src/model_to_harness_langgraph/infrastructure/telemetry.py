@@ -98,6 +98,7 @@ def configure_telemetry(*, hosted: bool = False) -> Telemetry:
     try:
         configure_azure_monitor(
             connection_string=os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"],
+            logger_name="model_to_harness_langgraph",
             resource=Resource.create(
                 {
                     "service.name": os.getenv("OTEL_SERVICE_NAME", "model-to-harness-langgraph"),

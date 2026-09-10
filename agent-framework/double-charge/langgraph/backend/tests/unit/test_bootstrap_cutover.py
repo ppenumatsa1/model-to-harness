@@ -59,7 +59,7 @@ async def test_partial_audit_open_failure_closes_owned_pool(monkeypatch):
     assert calls == ["verify", "open", "close"]
 
 
-async def test_model_startup_failure_unwinds_saver_and_audit(monkeypatch):
+async def test_model_startup_failure_unwinds_saver_and_audit(monkeypatch, caplog):
     calls = []
 
     async def verify(settings, *, verify_only):
@@ -85,7 +85,7 @@ async def test_model_startup_failure_unwinds_saver_and_audit(monkeypatch):
 
     @asynccontextmanager
     async def model(*args):
-        raise RuntimeError("model construction failed")
+        raise RuntimeError("model construction failed SECRET")
         yield  # pragma: no cover
 
     monkeypatch.setattr(bootstrap, "setup_storage", verify)
@@ -96,6 +96,10 @@ async def test_model_startup_failure_unwinds_saver_and_audit(monkeypatch):
         async with bootstrap.open_runtime(Settings(_env_file=None)):
             pytest.fail("No fake production fallback is permitted")
     assert calls == ["audit_open", "saver_open", "saver_close", "audit_close"]
+    failures = [r for r in caplog.records if r.message == "runtime_startup_failed"]
+    assert len(failures) == 1
+    assert failures[0].error_type == "RuntimeError"
+    assert "SECRET" not in caplog.text
 
 
 def test_imports_do_not_construct_model_or_database_and_defaults_are_fresh():
@@ -137,11 +141,20 @@ async def test_real_model_boundary_unwinds_credential_and_http_clients_on_constr
         def __exit__(self, *args):
             calls.append("close-sync")
 
+    class SyncCredential:
+        def __enter__(self):
+            calls.append("open-sync-credential")
+            return self
+
+        def __exit__(self, *args):
+            calls.append("close-sync-credential")
+
     def fail_model(**kwargs):
         assert "azure_ad_async_token_provider" in kwargs
         raise RuntimeError("model SDK constructor rejected configuration")
 
     monkeypatch.setattr(model_client, "DefaultAzureCredential", lambda: AsyncResource("credential"))
+    monkeypatch.setattr(model_client, "SyncDefaultAzureCredential", SyncCredential)
     monkeypatch.setattr(model_client.httpx, "Client", SyncClient)
     monkeypatch.setattr(model_client.httpx, "AsyncClient", lambda: AsyncResource("async"))
     monkeypatch.setattr(model_client, "get_bearer_token_provider", lambda *_: object())
@@ -156,10 +169,12 @@ async def test_real_model_boundary_unwinds_credential_and_http_clients_on_constr
         ):
             pytest.fail("Model construction must fail explicitly")
     assert calls == [
+        "open-sync-credential",
         "open-credential",
         "open-sync",
         "open-async",
         "close-async",
         "close-sync",
         "close-credential",
+        "close-sync-credential",
     ]

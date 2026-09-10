@@ -6,9 +6,10 @@ This is a concise implementation ledger, not a release history.
 
 ### Current progress checkpoint
 
-**Nine of thirteen work packages are complete; release/deployment are active and
-cloud acceptance/final handoff are pending.** The verified cutover is committed
-locally as `a27cb6e` on `refactor/maf-backend-cutover`; no push or merge occurred.
+**Ten of thirteen work packages are complete; deployment is active and cloud
+acceptance/final handoff are pending.** Implementation is committed locally as
+`a27cb6e`, with subsequent release-gate corrections through `d6b0d09`, on
+`refactor/maf-backend-cutover`; no push or merge occurred.
 
 | Area | Current evidence / remaining work | Status |
 | --- | --- | --- |
@@ -16,13 +17,46 @@ locally as `a27cb6e` on `refactor/maf-backend-cutover`; no push or merge occurre
 | Independent review | The checkpoint-evidence restart defect is fixed and covered at both pre-validation restart boundaries; reviewer finding closed. | Complete |
 | Local acceptance | 182 tests with PostgreSQL and no skips; seven deterministic evaluations and seven API scenarios; frontend tests/build/browser; wheel and isolated Python 3.13 hosted package gates passed. | Complete |
 | Telemetry implementation | Real execution spans, safe correlation, full-retention policy and KQL positive/negative gates are implemented and locally checked. Fresh deployed hierarchy, noise and privacy still need verification. | Local complete; cloud pending |
-| Existing infrastructure | LangGraph PostgreSQL was explicitly started after review, without changing SKU. Full ARM preview succeeded and is privately persisted. No schema or application/hosted cutover yet. | Preflight active |
-| Release gate | Validator currently rejects non-mutating ARM `Ignore` entries; remaining property deltas must also be inspected, not blanket-allowed. | Active blocker |
+| Existing infrastructure | PostgreSQL was started without changing SKU. Fresh paired-schema setup and app-only ARM deployment succeeded. Frontend revision `0000008` is ready; API revision `0000013` is unhealthy, with `0000012` still the latest ready revision. Hosted cutover has not started. | Partial rollout; not accepted |
+| Release gate | Strict previews now pass after narrowly handling unmanaged `Ignore`, observed service defaults and empty environment values. Immutable rollout verification correctly rejected the unhealthy API revision. | API startup blocker |
 | Cloud acceptance and handoff | Immutable app/hosted rollout, smoke, API/hosted/browser E2E, SQL proof, four-case cloud evaluation, telemetry proof and final docs/evidence remain. | Pending |
 
 Core implementation has stopped and its owned test resources were cleaned up.
 Parent-owned disposable PostgreSQL was also removed after acceptance. MAF runtime,
 shared package and deployed MAF resources remain unchanged.
+
+### Partial rollout: API startup blocks revision readiness
+
+The `d6b0d09` release passed explicit fresh storage setup and ARM deployment, then
+timed out waiting for the latest API revision to become ready. Read-only checks
+confirmed the intended backend/frontend image digests are configured, frontend
+revision `0000008` is ready, and API revision `0000013` has
+`ActivationFailed` / `Deployment Progress Deadline Exceeded`. Platform events show
+connection-refused readiness probes on port 8000 and liveness restarts. This is an
+actual startup failure, not an overly strict revision comparison.
+
+The public `/ready` currently returns 200 through the previous ready API revision;
+that is not cutover acceptance. Diagnose the new revision before any Foundry
+deployment or business acceptance. Do not rerun fresh setup after this partial
+apply: verify the existing cutover schemas read-only and use the update-existing
+release path for any corrected image. No schema reset, fallback acceptance or
+unrelated infrastructure mutation is justified.
+
+The fresh application and checkpoint schemas subsequently passed read-only
+verification. Deployed database configuration matches the selected azd value
+(compared privately, not printed). Production-construction probes reproduced
+three tightly coupled defects:
+
+| Issue | Root cause and fix | Evidence / prevention |
+| --- | --- | --- |
+| Missing async identity transport | The API lock omitted `aiohttp`, required by async Azure Identity. Declare it directly in API and hosted dependency inputs. | Real, unmocked model construction reproduced `ImportError` before the dependency correction. Do not rely on a hosted SDK's transitive transport dependency. |
+| Keyless model constructor failure | Pinned `AzureChatOpenAI` builds both OpenAI clients; an async token provider alone leaves the sync client's constructor without credentials. Own both credential contexts and supply their corresponding providers. All actual inference stays async. | The same regression then reproduced `OpenAIError`; corrected construction passes with API-key variables absent and network access denied. A real SDK/HTTP-mock inference test proves only the async token provider is called. |
+| Exporter shutdown loop and opaque failure | Root log export captured Azure SDK/exporter logs, recursively producing more export work. Startup cleanup stalled and generic log sanitization hid the original constructor failure. Scope API log export to the lane's named logger and emit a safe startup-failure event with exception class before cleanup. | A bounded full-runtime probe reached readiness but timed out inside log `force_flush` before the logger fix; it now reaches ready and closes cleanly against actual cutover storage and App Insights. No raw exception text is exported. |
+
+Installed-wheel and isolated Python 3.13 hosted gates now also construct the real
+model/credential clients without keys or network; fake-model workflow scenarios
+remain separate. Hosted dependency versions did not change. These are verified
+local corrections, not yet proof that a corrected cloud revision is healthy.
 
 The hosted SDK constructor-time telemetry window is an **unverified coverage
 limitation**, not a confirmed leak: the offline detector probe did not exercise its

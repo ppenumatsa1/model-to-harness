@@ -16,6 +16,28 @@ from prepare_hosted import prepare
 LANE = Path(__file__).resolve().parents[1]
 ROOT = LANE.parents[2]
 
+MODEL_CHECK = """
+import asyncio
+import os
+import socket
+from model_to_harness_langgraph.config import Settings
+from model_to_harness_langgraph.infrastructure.model_client import open_model
+for name in ("AZURE_OPENAI_API_KEY", "OPENAI_API_KEY", "AZURE_OPENAI_AD_TOKEN"):
+    os.environ.pop(name, None)
+def deny_model_network(*args, **kwargs):
+    raise AssertionError("Model construction must not acquire tokens or invoke inference")
+socket.socket.connect = deny_model_network
+async def construct_model():
+    async with open_model(Settings(
+        _env_file=None,
+        azure_openai_endpoint="https://example.openai.azure.com/",
+        azure_openai_deployment="package-smoke",
+    )):
+        pass
+asyncio.run(construct_model())
+print("Real model and credential construction passed without API keys or network")
+"""
+
 WHEEL_CHECK = """
 import importlib.resources
 import pathlib
@@ -183,7 +205,7 @@ def main() -> None:
             }
             executable = hosted_python(workspace, bundle, env)
             result = subprocess.run(
-                [str(executable), "-I", "-c", HOSTED_CHECK, str(bundle)],
+                [str(executable), "-I", "-c", HOSTED_CHECK + MODEL_CHECK, str(bundle)],
                 cwd=workspace,
                 env=env,
                 capture_output=True,
@@ -232,7 +254,7 @@ def main() -> None:
                     sys.executable,
                     "-I",
                     "-c",
-                    WHEEL_CHECK,
+                    WHEEL_CHECK + MODEL_CHECK,
                     str(installed),
                     json.dumps(
                         [

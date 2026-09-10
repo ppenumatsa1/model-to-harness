@@ -9,6 +9,7 @@ description = "Teaching-focused durable double-charge workflow built with LangGr
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "aiohttp>=3.11,<4",
   "azure-identity>=1.19,<2",
   "fastapi>=0.115,<1",
   "langchain-openai>=0.3,<2",

@@ -2,7 +2,10 @@ from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Protocol
 
 import httpx
+from azure.core.credentials import TokenCredential
 from azure.core.credentials_async import AsyncTokenCredential
+from azure.identity import DefaultAzureCredential as SyncDefaultAzureCredential
+from azure.identity import get_bearer_token_provider as get_sync_bearer_token_provider
 from azure.identity.aio import DefaultAzureCredential, get_bearer_token_provider
 from langchain_openai import AzureChatOpenAI
 
@@ -24,6 +27,7 @@ class FoundryComplaintModel:
         settings: Settings,
         *,
         credential: AsyncTokenCredential,
+        sync_credential: TokenCredential,
         http_client: httpx.Client,
         http_async_client: httpx.AsyncClient,
     ) -> None:
@@ -39,6 +43,10 @@ class FoundryComplaintModel:
             "azure_endpoint": settings.azure_openai_endpoint,
             "azure_deployment": settings.azure_openai_deployment,
             "api_version": settings.azure_openai_api_version,
+            # LangChain constructs both SDK clients; inference still uses the async provider.
+            "azure_ad_token_provider": get_sync_bearer_token_provider(
+                sync_credential, "https://cognitiveservices.azure.com/.default"
+            ),
             "azure_ad_async_token_provider": token_provider,
             "http_client": http_client,
             "http_async_client": http_async_client,
@@ -99,11 +107,16 @@ async def open_model(settings: Settings):
     if not settings.model_ready:
         raise RuntimeError("AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_DEPLOYMENT are required")
     async with AsyncExitStack() as stack:
+        sync_credential = stack.enter_context(SyncDefaultAzureCredential())
         credential = await stack.enter_async_context(DefaultAzureCredential())
         sync_client = stack.enter_context(httpx.Client())
         async_client = await stack.enter_async_context(httpx.AsyncClient())
         yield FoundryComplaintModel(
-            settings, credential=credential, http_client=sync_client, http_async_client=async_client
+            settings,
+            credential=credential,
+            sync_credential=sync_credential,
+            http_client=sync_client,
+            http_async_client=async_client,
         )
 
 

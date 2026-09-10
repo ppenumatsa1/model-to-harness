@@ -21,6 +21,12 @@ bootstrap owns its providers and cleanup. The pinned hosted stack is tested
 independently from MAF. Do not copy version-sensitive MAF fixes or infer live
 instrumentor state from environment configuration alone.
 
+API log export is attached only to the `model_to_harness_langgraph` logger
+namespace, not the root logger: exporting Azure SDK transport/exporter logs can
+recursively generate more export logs and prevent shutdown from draining.
+Startup failures emit `runtime_startup_failed` with the exception class only,
+before owned resources unwind; exception text and stacks remain excluded.
+
 `trace-completeness.kql` checks one fresh no-duplicate operation, including exact
 node set, workflow/model presence, parent linkage and sampling weight. Empty input
 fails. Extend the executed-node expectation for other branches rather than

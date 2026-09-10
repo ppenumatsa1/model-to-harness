@@ -21,6 +21,7 @@ class SafeLogFilter(logging.Filter):
         safe_message = getattr(record, "safe_event", record.msg)
         allowed = {
             "runtime_log",
+            "runtime_startup_failed",
             "audit_readiness_failed",
             "storage_readiness_failed",
             "node_started",

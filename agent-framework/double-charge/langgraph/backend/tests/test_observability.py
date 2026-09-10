@@ -137,6 +137,7 @@ async def test_model_span_wraps_actual_inference_and_real_usage(monkeypatch, cap
     model = model_client.FoundryComplaintModel(
         Settings(azure_openai_endpoint="https://example.test", azure_openai_deployment="model"),
         credential=object(),
+        sync_credential=object(),
         http_client=object(),
         http_async_client=object(),
     )
@@ -204,6 +205,7 @@ def test_api_partial_exporter_startup_closes_only_new_owned_providers(monkeypatc
 
     def configure(**kwargs):
         assert kwargs["sampling_ratio"] == 1.0
+        assert kwargs["logger_name"] == "model_to_harness_langgraph"
         assert kwargs["instrumentation_options"]["httpx"]["enabled"] is False
         active[0] = Provider()
         raise RuntimeError("exporter configuration failed")
