@@ -546,3 +546,96 @@ See each application README for its current validation commands.
   test records, then stopped without deleting workflow data or old teaching
   sessions. Stopping the first verified completed session restored operator
   database access; the existing server still has its original 50-connection limit.
+- Live CLI validation confirmed `invoke --session-id` must not also receive
+  `--version`: the session is already bound to the explicit version at creation.
+  The harness and regression now enforce that distinction. Its `finally` cleanup
+  stopped the allocated session even during this argument-validation failure.
+- The corrected hosted harness then passed all seven scenarios against version
+  `5`, stopping each session after its command. API/browser and hosted behavior
+  now pass against the same fresh schema.
+
+## 2026-09-10 - Foundry evaluation executed, but scoring returned four errors
+
+- Agent-target run `evalrun_c4f502016b1941f1b3636ae7aecd4221` in
+  `eval_1ea80594fa1c4ec2bde07ba500bd90d1` completed against version `5`.
+- All four agent responses were produced with the intended no-refund, approval
+  pause, and bounded-failure behavior. Scoring reported 0 passed, 0 failed,
+  4 errored, and 0 unscored; each output item had an empty evaluator-results list
+  and no per-item error reason. This is not a passing evaluation.
+- Full SDK output rows are retained under the selected agent's local
+  `.foundry/results/maf-dev/` cache, and the run IDs/counts are recorded in its
+  metadata overlay. Scoring diagnostics and telemetry/business-evidence gates
+  remain in progress.
+
+## 2026-09-10 - Cloud behavior verified; evaluation scoring still blocks acceptance
+
+- The second agent-target run, `evalrun_c99898759e204f6a9f98b39cd5867719` in
+  `eval_ed89748454c24176acc778f8f1f02911`, used verified catalog versions
+  `builtin.task_completion:19` and `builtin.relevance:12`, with only the supported
+  query/response mappings. It also completed with 4 total, 0 passed, 0 failed,
+  4 errored, and 0 unscored. All evaluator-results lists were empty; neither the
+  item nor sample contained an error reason.
+- All eight actual responses across both jobs were inspected separately from
+  scoring. Each matched the expected no-refund, explicit approval pause, or bounded
+  read-failure contract. The second job's runs are `run-2e0a12e6a25e`,
+  `run-eab1c0c7129c`, `run-0802759076fa`, and `run-8bd374f96058`.
+  These response checks are not substitutes for passing evaluator scores.
+- A direct probe of the existing judge deployment rejected `temperature=0` with
+  HTTP 400; the same deployment successfully answered a default-temperature chat
+  request. This establishes a model constraint, not the complete root cause of
+  the opaque cloud scoring errors. The verified cloud catalog did not advertise
+  a reasoning-model override. No undocumented flag, replacement model, threshold
+  adjustment, SDK upgrade, or unbounded evaluation retry was applied.
+- The seed approval expectation incorrectly used null for `terminal_status`.
+  The actual hosted pause projects `waiting_approval`, with status `paused`,
+  approval required, and no refund. The seed now describes that existing contract;
+  the real hosted adapter is exercised with fakes against every seed expectation.
+  Historical evaluation outputs/bound inputs are retained unchanged.
+- Generated results and metadata were not initially excluded at the nested hosted
+  agent root: the existing lane-root `.foundry` patterns did not match that path.
+  Scoped ignore rules now exclude those caches while preserving the reviewed seed.
+  Git-based regression checks verify both exclusions and seed visibility.
+  Hosted `.agentignore` independently excludes `.foundry/` from deployment bundles.
+- The selected azd environment still points to active version `5`. A fresh archive
+  comparison verified all 73 files: 58 MAF package files, 13 shared package/resource
+  files, plus the hosted entrypoint and requirements. The archive hash is
+  `3064504d0bd63845c1122ce48fb55828e685f061528f537b12cf982695b21b52`.
+  Both hosts use
+  `maf_double_charge_cutover`; the old schema was neither adopted nor reset.
+- Final Azure readback confirmed API/frontend revision `0000004` is each the only
+  active revision receiving 100% traffic, private API/public frontend ingress is
+  unchanged, and public readiness succeeds. Both image tags are locked against
+  overwrite and deletion. Backend digest:
+  `sha256:594877bb8e146999a58cf81f6f523e775c9a16b894d71ff2af6fa9c30efd356f`;
+  frontend digest:
+  `sha256:f407b8faa9fd0a57bc5f22b6730e8245e9420fd47aaab01f71c96ad25e7143bc`.
+- Read-only SQL assertions verified 15 runs: seven API, seven hosted, and one
+  recovered approved workflow after its old sessions stopped. Durable approvals,
+  checkpoints, matching refund IDs, independent verification, retry evidence, and
+  absence of false-success notifications matched the scenario contracts.
+- Actual telemetry showed native parent-child workflow/executor/agent/model
+  relationships and model/token fields. One retry run correlated three distinct
+  start/approval/resume requests through the same safe case/run hashes, with
+  distinct conversation/response hashes. Approval correlation can exist only in
+  logs; queries now join request-scoped hosted identity to dependencies/logs by
+  operation ID rather than requiring one role instance or request-level business ID.
+  Classic success/duration fields are normalized before unions.
+- The scoped safety/event scan covered 5,550 records, including eight retry and six
+  workflow-failure events: no unmasked application run IDs, credential-pattern
+  matches, selected raw complaints, or prohibited custom-attribute names were
+  found. Some individual trace parents were absent; observed hierarchy does not
+  promise complete or unsampled telemetry. The two failed API request records were
+  HTTP 409 duplicate-resume rejections required by the E2E harness, not server errors.
+- Final Ruff and all 217 shared/backend tests passed, including real PostgreSQL
+  integration. Earlier frontend, wheel, Python 3.13 hosted, Docker, Bicep, shell,
+  deterministic evaluation, real-model local, and cloud API/browser/hosted gates
+  remain valid; the final changes do not alter deployed runtime code.
+- Task-owned local API/UI/hosted processes, disposable PostgreSQL container and
+  anonymous volume, temporary images, and three isolated virtual environments
+  were removed. Both evaluation sessions were trace-correlated to these jobs and
+  confirmed already stopped. Redacted evidence and ignored evaluation caches remain;
+  Azure apps, version `5`, and PostgreSQL stay running.
+- **Not merge-ready:** cloud scoring is unresolved. Older hosted-version definitions
+  remain, with retirement deferred until acceptance; no claim is made that all old
+  serving paths are retired. Work remains local on `refactor/maf-backend-cutover`;
+  no feature-branch push or merge to `main` was performed.

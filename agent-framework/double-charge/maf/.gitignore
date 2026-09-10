@@ -2,6 +2,8 @@
 .azure/
 infra/foundry-hosted/agent/maf_double_charge/
 infra/foundry-hosted/agent/model_to_harness_shared/
+infra/foundry-hosted/agent/.foundry/agent-metadata*.yaml
+infra/foundry-hosted/agent/.foundry/results/
 .venv/
 __pycache__/
 *.py[cod]

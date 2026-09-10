@@ -83,8 +83,6 @@ def invoke(runner: Runner, environment: str, version: str, command: dict[str, An
                 json.dumps(command),
                 "--protocol",
                 "responses",
-                "--version",
-                version,
                 "--session-id",
                 session_id,
                 "--new-conversation",

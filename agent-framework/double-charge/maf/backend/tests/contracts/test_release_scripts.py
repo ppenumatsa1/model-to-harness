@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import stat
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -427,7 +428,7 @@ def test_hosted_command_has_explicit_version_and_new_conversation(modules):
     session_id = created[created.index("--session-id") + 1]
     assert created[created.index("--version") + 1] == "4"
     assert session_id.startswith("maf-check-")
-    assert command[command.index("--version") + 1] == "4"
+    assert "--version" not in command
     assert command[command.index("--session-id") + 1] == session_id
     assert "--new-conversation" in command and "--new-session" not in command
     assert "--output" in command and "raw" in command
@@ -475,6 +476,40 @@ def test_eval_binding_does_not_change_seed_intent(modules):
     assert "version" not in original["agent"]
     assert original["dataset"]["local_uri"] == "seed.jsonl"
     assert bound["evaluators"] == original["evaluators"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "infra/foundry-hosted/agent/.foundry/agent-metadata.yaml",
+        "infra/foundry-hosted/agent/.foundry/results/maf-dev/example.json",
+    ],
+)
+def test_hosted_generated_evaluation_artifacts_are_git_ignored(path):
+    result = subprocess.run(
+        ["git", "check-ignore", "--no-index", "--quiet", "--", path],
+        cwd=LANE,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode()
+
+
+def test_hosted_evaluation_seed_is_not_git_ignored():
+    result = subprocess.run(
+        [
+            "git",
+            "check-ignore",
+            "--no-index",
+            "--quiet",
+            "--",
+            "infra/foundry-hosted/agent/.foundry/datasets/double-charge-hosted-cases.jsonl",
+        ],
+        cwd=LANE,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 1, result.stderr.decode()
 
 
 def test_api_scenario_harness_matches_real_test_factory(modules):
@@ -597,6 +632,18 @@ async def test_hosted_adapter_executes_explicit_workflow_commands(
             if scenario == "retry-safe-refund":
                 assert result["retry_count"] == 1
                 assert result["outcome"]["refund_id"]
+        seed = (
+            LANE / "infra/foundry-hosted/agent/.foundry/datasets/double-charge-hosted-cases.jsonl"
+        )
+        for line in seed.read_text().splitlines():
+            item = json.loads(line)
+            identifier = f"hosted-seed-{item['id']}"
+            command = json.loads(item["query"])
+            command.update(existing_case_id=identifier, idempotency_key=identifier)
+            result = await adapter._execute(command, identifier)
+            for key, expected in item.items():
+                if key.startswith("expected_"):
+                    assert result[key.removeprefix("expected_")] == expected, item["id"]
     finally:
         await runtime.close()
 

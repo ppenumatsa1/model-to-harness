@@ -28,8 +28,8 @@ CLI user-agent guidance in the calling environment when required; scripts never
 persist it in azd settings.
 
 ```bash
-export AZURE_DEV_USER_AGENT=microsoft_foundry_skill
-scripts/deploy_azure.sh --preview --environment maf-dev \
+AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
+  scripts/deploy_azure.sh --preview --environment maf-dev \
   --schema maf_double_charge_cutover
 ```
 
@@ -50,7 +50,8 @@ Foundry project/model settings must already exist. There is no automatic
 ## Ordered apply (operator only)
 
 ```bash
-scripts/deploy_azure.sh --apply --environment maf-dev \
+AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
+  scripts/deploy_azure.sh --apply --environment maf-dev \
   --source-commit "$(git rev-parse HEAD)" --schema maf_double_charge_cutover
 ```
 
@@ -85,8 +86,10 @@ fix does not change the deployed API/frontend runtime source.
 scripts/smoke_azure.sh --base-url https://THE-EXISTING-MAF-FRONTEND
 .venv/bin/python scripts/e2e.py --base-url https://THE-EXISTING-MAF-FRONTEND
 scripts/e2e-browser.sh --base-url https://THE-EXISTING-MAF-FRONTEND
-.venv/bin/python scripts/hosted_harness.py --environment maf-dev --version ACTUAL_VERSION
-.venv/bin/python scripts/bind_hosted_eval.py --environment maf-dev --version ACTUAL_VERSION
+AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
+  .venv/bin/python scripts/hosted_harness.py --environment maf-dev --version ACTUAL_VERSION
+AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
+  .venv/bin/python scripts/bind_hosted_eval.py --environment maf-dev --version ACTUAL_VERSION
 ```
 
 Cloud browser mode never starts a local API or Vite server. API and hosted harnesses

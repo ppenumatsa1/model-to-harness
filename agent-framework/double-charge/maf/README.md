@@ -3,8 +3,9 @@
 This independent Python 3.12 + React teaching app turns a deterministic
 double-charge support scenario into an inspectable, durable workflow. Microsoft
 Agent Framework (MAF) owns the explicit graph, fan-out/fan-in, status events, and
-checkpoint resume. PostgreSQL owns application state, selected memory, approvals,
-MAF checkpoints, the idempotent refund ledger, outcomes, and append-only audit events.
+checkpoint resume. PostgreSQL stores application state, selected memory, approvals,
+framework-owned MAF checkpoints, the idempotent refund ledger, outcomes, and
+append-only audit events.
 
 ## What the example teaches
 
@@ -14,7 +15,7 @@ MAF checkpoints, the idempotent refund ledger, outcomes, and append-only audit e
   separately resumes the saved MAF checkpoint.
 - Bounded retries plus explicit failure and manual-review routes.
 - A PostgreSQL-durable refund ledger with stable idempotency keys, request
-  fingerprint conflict detection, and exactly-once verification after restart.
+  fingerprint conflict detection, and independent verification after restart.
 - MAF-native events stored alongside application audit events.
 - An additive AG-UI projection; it is not a workflow command bus.
 - A real read-only CopilotKit AG-UI runtime invoked through `useAgent`; it exposes
@@ -176,17 +177,32 @@ release, evaluation, and telemetry boundaries.
 - Public application:
   <https://mth-maf-wh2su65huqw5o-web.livelyhill-0f2b68f2.northcentralus.azurecontainerapps.io>
 - Foundry project: `model-harness-maf`
-- Hosted Agent: `model-harness-maf` version 3
+- Hosted Agent: `model-harness-maf` version 5
 - Model: `gpt-5.6-sol` version `2026-07-09`, Global Standard
 - Region/resource group: `northcentralus` / `rg-model-harness`
-- Hosted evaluation: 2 passed, 0 failed, 0 errored
+- Fresh application/checkpoint schema: `maf_double_charge_cutover`
+- API/frontend ready revisions: `0000004`, built from `c460769`
+- Hosted source: `29b81e7` (same runtime code; hosted package-index correction)
+- Hosted evaluation acceptance: **blocked**. Two four-case runs each returned
+  0 passed, 0 failed, and 4 scoring errors despite producing the agent responses.
 
-Remote testing completed an ordinary case and a separate start, approval, and resume
-sequence. PostgreSQL contains one durable refund for the verified idempotency key.
+All seven API scenarios, all seven explicit hosted-command scenarios, and browser
+E2E passed. Read-only PostgreSQL checks verified approvals, checkpoint persistence,
+one matching refund where required, verification results, and no false-success
+notifications for 15 runs, including recovery after stopped hosted sessions.
+The evaluation service returned no per-item scoring reasons. A separate probe
+confirmed the configured judge rejects `temperature=0`; no model change or
+undocumented cloud-evaluator override was applied. See the
+[issue ledger](../../../docs/design/issues-changes-fixes.md) for retained run IDs
+and the unresolved acceptance gate. The feature branch is not merge-ready.
+Older hosted-version definitions and the old schema remain isolated from the new
+default deployment; retirement of those serving paths is deferred until acceptance.
+The new runtime does not read or convert old records/checkpoints.
+
 The deployment is educational and is not a production network or payment-system
 reference.
 
 The Foundry project is connected through IaC to the lane-owned Application Insights
 resource. Hosted Responses traces preserve MAF's native `workflow.run`,
-edge-group, executor, model, and message-send hierarchy and include conversation
-correlation across separate approval and resume requests.
+edge-group, executor, model, and message-send hierarchy. Hashed case/run IDs join
+separate commands while their supplied conversation/response IDs remain distinct.
