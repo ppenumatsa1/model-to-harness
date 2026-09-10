@@ -177,18 +177,19 @@ release, evaluation, and telemetry boundaries.
 - Public application:
   <https://mth-maf-wh2su65huqw5o-web.livelyhill-0f2b68f2.northcentralus.azurecontainerapps.io>
 - Foundry project: `model-harness-maf`
-- Hosted Agent: `model-harness-maf` version 6
+- Hosted Agent: `model-harness-maf` version 8
 - Model: `gpt-5.6-sol` version `2026-07-09`, Global Standard
 - Region/resource group: `northcentralus` / `rg-model-harness`
 - Fresh application/checkpoint schema: `maf_double_charge_cutover`
 - API/frontend ready revisions: `0000005`, built from `6948226`
-- Hosted source: version 6 uses the same verified 73-file runtime archive as
-  version 5, originally deployed from `29b81e7`; configuration commit `092f284`
-  changes only hosted sampling to fixed 100% retention
+- Hosted source: `73c8693`, with fixed 100% native sampling and a startup-only
+  correction that honors the hosted SDK/HTTP instrumentation opt-outs;
+  verified archive SHA-256
+  `5875ffe17d0ce5f7446cc282861cbd19d573f5d5e07ea431dbec3d147e202f7b`
 - Latest cloud evaluation (version 5): **4 passed, 0 failed, 0 errored, 0 unscored**,
   reproduced from repository configuration with pinned task-completion 19 and
   relevance 12 evaluators. The reviewed suite is retained; judge scoring was not
-  rerun for the sampling-only version 6 deployment.
+  rerun for the sampling/instrumentation-only follow-up deployments.
 
 All seven API scenarios, all seven explicit hosted-command scenarios, and browser
 E2E passed. Read-only PostgreSQL checks verified approvals, checkpoint persistence,
@@ -204,11 +205,17 @@ sampling, without replacing the hosted provider or changing workflow code.
 All seven hosted scenarios passed again: all 12 actual workflow executions had
 the exact expected executor branches, linked agent/model parents and no orphaned
 native parents. The five approval-only commands correctly have no workflow spans.
-The new no-duplicate trace `a6fe2589bfbd976dc4eb48e9c62d48ee` at
-`2026-09-10T15:28:21Z` has all 15 native spans and real token usage.
-Its per-operation gate passes; the old screenshot trace and empty telemetry fail.
-The user subsequently confirmed full flows in both Foundry and Application
-Insights. Old traces cannot be repaired retroactively.
+The user confirmed full version-6 flows in both Foundry and Application Insights.
+Version 8 additionally removes SDK bookkeeping and generic outgoing HTTP
+auto-instrumentation without removing native workflow spans. Its seven-scenario
+rerun has **zero SDK setup spans, zero HTTP transport spans, 12 complete workflow
+executions and 10 model calls**. All 17 verification sessions are idle.
+The current no-duplicate trace `5a2f13378426a7b2691f2a9ab1692dd2` at
+`2026-09-10T16:07:48Z` has all 15 native spans and passes the per-operation gate.
+The old broken screenshot trace and empty telemetry fail that gate.
+Use the [command-only index](observability/command-traces.kql) for a clean list
+that retains failed and approval-only commands. Operational logs remain available;
+old traces/noise cannot be repaired or removed retroactively by this deployment.
 
 Failed version 4 was deleted without force. Versions 1-3 remain nondefault with
 ten idle teaching sessions: Foundry rejected nonforced deletion, and forcing it

@@ -4,11 +4,11 @@ This is a concise implementation ledger, not a release history.
 
 ## 2026-09-10 - Consolidated MAF refactor summary
 
-**Functional deployment acceptance and hosted per-operation trace completeness
-passed; SDK-noise reduction is being verified and destructive legacy-session
-cleanup is held.** Applications run source `6948226` on
-`refactor/maf-backend-cutover`. Hosted version 7 retains version 5's runtime archive,
-with fixed sampling from `092f284` and instrumentation flags from `4afca7d`.
+**Functional deployment acceptance, hosted per-operation trace completeness and
+SDK-noise reduction passed; destructive legacy-session cleanup is held.**
+Applications remain on source `6948226`. Hosted version **8** runs `73c8693` on
+`refactor/maf-backend-cutover`, preserving native 100% sampling while enforcing
+SDK/HTTP instrumentation opt-outs.
 This table supersedes historical interim blockers below, whose evidence is retained.
 No feature-branch push or merge was performed.
 
@@ -26,12 +26,13 @@ No feature-branch push or merge was performed.
 | Azure preview and application rollout | PostgreSQL was stopped; ARM what-if emitted non-JSON output and coarse change classifications. | Started only the approved server with unchanged SKU; added detailed machine-readable preview and fail-closed gates. Refreshed locked images to API/frontend revisions `0000005` from `6948226`, preserving private API/public frontend and the existing schema. | Complete |
 | Repeatable releases and source provenance | Fresh-cutover-only deployment could not safely update migrated data; identical hosted uploads can reuse a version. | Added explicit read-only `--update-existing` migration-history verification, with no migration/reset. Verify authoritative hosted status, exact environment, archive hash and all 73 prepared files before accepting either a new or reused version. | Complete |
 | Hosted command sessions | Unstopped sessions exhausted PostgreSQL connections; CLI rejected combining invocation `--version` with `--session-id`. | Create uniquely owned sessions bound to a version, invoke by session ID only, and stop in `finally`. Stopped 28 verified task-owned sessions; all seven hosted scenarios then passed without increasing database capacity. | Complete |
-| Native telemetry and correlation | The default rate-limited sampler could drop workflow/model parents while retaining children; aggregate checks missed incomplete individual traces. | Reproduced implicit-parent sampling loss, configured supported fixed 100% hosted sampling, deployed version 6 with unchanged runtime source, and verified exact executed branches and native parentage for all 12 fresh workflow executions. The reusable gate rejects the old broken trace and empty telemetry; scoped privacy checks passed. Browser rendering was not independently inspected. | Per-operation data verified |
+| Native telemetry and correlation | The default rate-limited sampler could drop workflow/model parents while retaining children; aggregate checks missed incomplete individual traces. | Reproduced implicit-parent sampling loss, configured fixed 100% hosted sampling, and verified exact branches and native parentage for all 12 workflow executions. User confirmed full version-6 flows in both portals; version 8 preserves them. The reusable gate rejects the old broken trace and empty telemetry; privacy checks passed. | Complete |
+| Hosted trace noise | SDK setup/transport spans cluttered the trace list; distro 1.3.9's second HTTP instrumentation pass ignored environment-only opt-outs. | Enforced declared HTTP opt-outs through public instrumentor APIs after SDK setup. Version 8 has zero SDK setup/HTTP spans, while all 12 workflows and 10 model calls remain complete. Added a clean command index that preserves failed and approval-only commands and leaves diagnostic logs available. | Complete |
 | Evaluation seed and generated caches | Approval seed expected null instead of `waiting_approval`; nested generated results/metadata were not Git-ignored. | Corrected the seed to the existing durable-pause contract and tested every seed expectation against the hosted adapter. Added scoped cache exclusions while keeping the reviewed seed tracked and historical results intact. | Complete |
 | Current deployed acceptance | Local success alone did not establish deployed durability or source provenance. | Public smoke, seven API scenarios, seven hosted scenarios, browser E2E, and read-only SQL assertions for all 14 refreshed scenario runs passed. Verified immutable image/source provenance, native telemetry, usage when supplied, and safe cross-command correlation. | Complete |
 | Hosted operator authentication | Intermittent local azd credential-subprocess kills interrupted the latest harness; token prewarming failed. | Added explicit SDK transport using documented version-pinned sessions and agent-bound Responses, preserving identical assertions, fresh conversations, finally-stop and no request retries. All seven scenarios passed without global auth changes or a runtime redeploy. | Complete |
 | Foundry evaluation scoring | Two four-row jobs had opaque scoring errors; restoring a historical configuration exposed one contradictory seed complaint. | Preserved failures; restored response-items/tool mappings and both judge initialization values, then clarified the requested bounded-failure behavior without weakening expectations. Pinned task-completion 19/relevance 12 produced 4 passed, 0 failed, 0 errors, 0 unscored. No model or threshold change. | Complete |
-| Old-version retirement | Foundry rejects deletion while retained sessions reference a version, even when their compute is idle. | Deleted unused failed version 4 without force. Versions 1-3 retain ten idle teaching sessions; `force` would cascade-delete sessions/files, so they remain nondefault pending explicit destructive approval. Version 5, current version 6 and both SQL schemas are preserved. | Cleanup held |
+| Old-version retirement | Foundry rejects deletion while retained sessions reference a version, even when their compute is idle. | Deleted unused failed version 4 without force. Versions 1-3 retain ten idle teaching sessions; `force` would cascade-delete sessions/files, so they remain nondefault pending explicit destructive approval. Versions 5-7, current version 8 and both SQL schemas are preserved. All noise-repair sessions are idle. | Cleanup held |
 | Reproducible evaluation setup | CLI defaults can silently reuse old criteria and ignore requested evaluator versions. | Added a tested setup helper that verifies catalog pins, creates a fresh group and emits a private agent-target MCP request. A new run using only this repository configuration passed all four cases and all eight evaluator decisions. | Complete |
 | Final verification and handoff | Cloud gates are not a substitute for regression and source-provenance checks. | All 280 shared/backend tests, seven deterministic evaluations, Ruff, shell checks and final hosted smoke passed. Synchronized release/architecture/structure documentation; final tooling changes do not alter deployed runtime code. No push or merge. | Complete |
 
@@ -992,5 +993,35 @@ See each application README for its current validation commands.
 - Verified the real pinned SDK pass enables HTTP despite the environment flag,
   then verified the startup correction disables it while native MAF remains
   enabled. Added idempotence, scope, failure and startup-order coverage.
-  All 105 focused tests and Ruff passed. This follow-up runtime change still
-  requires a new hosted version and fresh live acceptance.
+  All 105 focused tests and Ruff passed. The required new hosted version and
+  fresh live acceptance were subsequently completed as follows.
+- **Final deployment:** hosted version **8**, source `73c8693`, active with exact
+  environment and source verification. Archive SHA-256:
+  `5875ffe17d0ce5f7446cc282861cbd19d573f5d5e07ea431dbec3d147e202f7b`.
+  The only runtime changes are the hosted startup hook and its telemetry helper;
+  business logic, model/prompts, Responses protocol and persistence are unchanged.
+- **Noise acceptance:** the same seven-scenario comparison shows version 6
+  emitting 17 SDK setup / 212 HTTP spans, version 7 emitting 0 / 12, and version 8
+  emitting **0 / 0**. Native workflow/model counts remain **12 / 10** in all three.
+  No residual standalone GET investigation remains open.
+- **Behavior/hierarchy acceptance:** all seven version-8 scenarios passed.
+  Verified exact branch-specific executor sets and every model's actual
+  agent/executor/workflow parents across all 12 executions. All 236 dependency
+  spans are native, with zero orphaned parents and sampling weights of one.
+  The seven runs are `run-747f8f26d14b`, `run-2f8b65e7a388`,
+  `run-fda93ec3ee33`, `run-393ad2ee5766`, `run-895f1256a1ee`,
+  `run-f422f2462a26`, and `run-f079540eaf6b`, in harness scenario order.
+- **Current trace:** no-duplicate operation
+  **`5a2f13378426a7b2691f2a9ab1692dd2`**, **2026-09-10 16:07:48 UTC**,
+  passes the completeness gate with 15 native spans, four edge groups, three
+  message sends and no missing required spans/parents.
+- **Clean view/privacy/cleanup:** the version-8 command query returns all 17
+  correlated commands, including five approval-only commands, without standalone
+  setup/log entries. No prohibited attribute keys were found. All 17 sessions
+  for each of versions 7 and 8 are idle; no retained sessions/files/versions were
+  deleted. Operational logs remain available separately. The old 24-hour view
+  can still show historical noise and sampled records.
+- Updated the MAF and observability READMEs with current source/version, tradeoffs,
+  query links and exact evidence. The existing reviewed evaluation suite remains
+  unchanged; latest cloud judge results are still explicitly the prior version-5
+  4/4 result, not an unexecuted version-8 judge run. No push or merge was performed.

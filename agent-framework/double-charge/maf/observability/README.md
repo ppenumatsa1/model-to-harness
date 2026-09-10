@@ -236,3 +236,31 @@ types** is the corresponding first filter; use the query for exact agent/version
 scoping. An **All selected / Last 24 hours** view can still contain historical
 version-5/6 noise and platform startup logs. The sampling warning can likewise
 reflect older sampled records; it does not override the per-operation evidence.
+
+### Verified version 8 noise reduction
+
+Version **8**, deployed from `73c8693`, includes the startup correction. Exact
+source/environment readback passed with archive SHA-256
+`5875ffe17d0ce5f7446cc282861cbd19d573f5d5e07ea431dbec3d147e202f7b`.
+For the same seven-scenario hosted harness:
+
+| Observed spans | Version 6 | Version 7 (flags only) | Version 8 |
+| --- | ---: | ---: | ---: |
+| `AIProjectClient.get_openai_client` | 17 | 0 | 0 |
+| HTTP transport | 212 | 12 | 0 |
+| Native workflow executions | 12 | 12 | 12 |
+| Native model calls | 10 | 10 | 10 |
+
+All 236 version-8 dependencies are native workflow/executor/edge/message/agent/model
+spans. Each executed branch and every model's actual parent chain were checked:
+zero orphaned native parents, real token usage, and sampling weights of one.
+The 17-command index includes all five approval-only commands and safe run
+correlation, without standalone setup/operational entries. The privacy query
+found no prohibited attribute keys; all owned version-7/8 sessions are idle.
+
+Current no-duplicate evidence: run `run-747f8f26d14b`, operation
+**`5a2f13378426a7b2691f2a9ab1692dd2`**, **2026-09-10 16:07:48 UTC**.
+Its completeness gate passes with 15 native spans, four edge groups, three
+message sends and no missing parents. User confirmation of the browser flows
+was for version 6; version-8 hierarchy and noise removal are verified from the
+ingested records. No additional visual portal inspection is claimed.
