@@ -28,16 +28,16 @@ let selectedRequests = materialize(
 let spans = materialize(
     union
         (selectedRequests | project operation_Id, spanId=id,
-            parentId=operation_ParentId, name, itemCount, kind="request"),
+            parentId=operation_ParentId, name, itemCount, spanType="request"),
         (dependencies
             | where timestamp between (windowStart .. windowEnd)
             | where operation_Id in (selectedRequests | project operation_Id)
             | project operation_Id, spanId=id, parentId=operation_ParentId,
-                name, itemCount, kind="dependency")
+                name, itemCount, spanType="dependency")
 );
 let native = materialize(
     spans
-    | where kind == "dependency"
+    | where spanType == "dependency"
     | where name matches regex @"^(workflow\.|executor\.process |edge_group\.process|message\.send|invoke_agent |chat )"
 );
 let orphans = materialize(
@@ -69,7 +69,7 @@ native
     orphanNames=toscalar(orphans | summarize make_set(name)),
     normalizerChains=toscalar(normalizerChains | count),
     requestCount=toscalar(selectedRequests | count),
-    failedRequests=toscalar(selectedRequests | where success != true | count)
+    failedRequests=toscalar(selectedRequests | where isnull(success) or success == false | count)
 | extend passed=requestCount > 0 and failedRequests == 0
     and array_length(missingNames) == 0 and orphanCount == 0
     and workflowRuns == 1 and normalizerChains == 1

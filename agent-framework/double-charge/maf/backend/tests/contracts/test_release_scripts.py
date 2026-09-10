@@ -735,6 +735,18 @@ def test_hosted_manifest_retains_complete_native_traces():
     assert environment["OTEL_TRACES_SAMPLER_ARG"] == "1.0"
 
 
+def test_hosted_manifest_disables_only_sdk_and_transport_instrumentation():
+    import yaml
+
+    environment = yaml.safe_load((LANE / "azure.yaml").read_text())["services"][
+        "model-harness-maf"
+    ]["env"]
+    assert set(environment["OTEL_PYTHON_DISABLED_INSTRUMENTATIONS"].split(",")) == {
+        "azure_sdk", "httpx", "httpx2", "requests", "urllib", "urllib3",
+    }
+    assert environment["AZURE_TRACING_ENABLED"] == "false"
+
+
 @pytest.mark.asyncio
 async def test_hosted_adapter_executes_explicit_workflow_commands(
     modules, monkeypatch, repository, model, settings

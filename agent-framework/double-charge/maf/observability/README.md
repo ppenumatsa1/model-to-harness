@@ -168,3 +168,63 @@ per-operation acceptance remains required: configuration and local tests alone d
 not prove ingestion or either portal's rendering. Do not fabricate spans, enable
 prompt capture, replace the hosted provider, or keep a span open across human
 approval just to resemble another application's screenshot.
+
+### Verified version 6 evidence
+
+The configuration-only deployment from `092f284` created hosted version **6**;
+authoritative readback confirms the sampling settings, unchanged schema and exact
+same 73-file runtime archive as version 5. All seven hosted scenarios completed
+with their expected outcomes. For all **12 workflow executions**, the ingested
+data contains exactly the executed branch's executors, linked native agent/model
+parents and no orphaned native parents; every native sampling weight is one.
+The five approval-only commands intentionally do not execute a workflow.
+No prohibited attribute keys were found in the scoped safety query. All 17
+scenario-owned sessions were stopped and verified idle without deleting files.
+
+Select version **6** in project/agent `model-harness-maf`. The new no-duplicate
+operation is **`a6fe2589bfbd976dc4eb48e9c62d48ee`**, started
+**2026-09-10 15:28:21 UTC**, for run `run-7451272727d9`. Its actual parent chain is:
+
+```text
+workflow.run                              1cc4da25317f76e5
+  executor.process normalize_complaint    fcfc774759ae96b3
+    invoke_agent ComplaintNormalizer      64b35e70a3418ef3
+      chat model-harness-gpt-5-6-sol       9a4d5f637c080fb3
+```
+
+The model reports 41 input / 19 output tokens. The single-operation gate reports
+15 native spans, four edge groups, three message sends, no missing required names,
+one complete normalizer chain and zero orphaned parents. The same gate rejects the
+old `91fe6312caef546b7c059f420242d780` trace (four orphaned native parents) and a
+nonexistent operation. These are query-verified records in the linked MAF
+Application Insights resource. The user subsequently confirmed that full flows
+are visible in both Foundry and Application Insights. The original version-5
+screenshots will continue to show incomplete historical data.
+
+## Command traces without SDK setup noise
+
+The hosted manifest disables redundant `azure_sdk`, `httpx`, `httpx2`, `requests`,
+`urllib` and `urllib3` auto-instrumentation through
+`OTEL_PYTHON_DISABLED_INSTRUMENTATIONS`, and disables Azure SDK method tracing with
+`AZURE_TRACING_ENABLED=false`. The pinned hosted distro supports these controls.
+This removes SDK bookkeeping such as `AIProjectClient.get_openai_client` and
+low-level transport spans; it does **not** randomly sample native spans or change
+the platform provider/exporter. MAF workflow, executor, agent/model, usage and
+message instrumentation remains enabled at 100% retention.
+
+The tradeoff is intentional: low-level HTTP/SDK spans, including their transport
+error details, are no longer captured. Native model/workflow failure status and
+operational logs remain available. Re-enable the relevant instrumentor for a
+targeted transport investigation rather than weakening workflow retention.
+
+Use [command-traces.kql](command-traces.kql) as a clean command-only index. It
+lists hosted `invoke_agent` requests, including failed requests and approval-only
+commands with no workflow spans. Standalone dependency/log operations are excluded
+from the index, not deleted from storage. Open an operation's full transaction to
+inspect its complete native hierarchy.
+
+In the Application Insights trace list, selecting **Requests** under **Event
+types** is the corresponding first filter; use the query for exact agent/version
+scoping. An **All selected / Last 24 hours** view can still contain historical
+version-5/6 noise and platform startup logs. The sampling warning can likewise
+reflect older sampled records; it does not override the per-operation evidence.

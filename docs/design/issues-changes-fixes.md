@@ -4,9 +4,10 @@ This is a concise implementation ledger, not a release history.
 
 ## 2026-09-10 - Consolidated MAF refactor summary
 
-**Functional deployment acceptance passed; complete per-run portal trace fidelity
-is open, and destructive legacy-session cleanup is held.** Applications run source `6948226` on
-`refactor/maf-backend-cutover`; identical hosted source remains version 5.
+**Functional deployment acceptance and hosted per-operation trace completeness
+passed; destructive legacy-session cleanup is held.** Applications run source
+`6948226` on `refactor/maf-backend-cutover`. Hosted version 6 retains version 5's
+runtime archive, with the sampling-only configuration fix from `092f284`.
 This table supersedes historical interim blockers below, whose evidence is retained.
 No feature-branch push or merge was performed.
 
@@ -24,12 +25,12 @@ No feature-branch push or merge was performed.
 | Azure preview and application rollout | PostgreSQL was stopped; ARM what-if emitted non-JSON output and coarse change classifications. | Started only the approved server with unchanged SKU; added detailed machine-readable preview and fail-closed gates. Refreshed locked images to API/frontend revisions `0000005` from `6948226`, preserving private API/public frontend and the existing schema. | Complete |
 | Repeatable releases and source provenance | Fresh-cutover-only deployment could not safely update migrated data; identical hosted uploads can reuse a version. | Added explicit read-only `--update-existing` migration-history verification, with no migration/reset. Verify authoritative hosted status, exact environment, archive hash and all 73 prepared files before accepting either a new or reused version. | Complete |
 | Hosted command sessions | Unstopped sessions exhausted PostgreSQL connections; CLI rejected combining invocation `--version` with `--session-id`. | Create uniquely owned sessions bound to a version, invoke by session ID only, and stop in `finally`. Stopped 28 verified task-owned sessions; all seven hosted scenarios then passed without increasing database capacity. | Complete |
-| Native telemetry and correlation | Hosted commands used different instances; approval correlation could exist only in logs; classic KQL union types differed. A subsequent screenshot demonstrates missing parent spans within an individual successful trace. | Native ingestion, linked hierarchy examples, usage, safe correlation and safety scans passed. Exact trace `91fe6312caef546b7c059f420242d780` has absent workflow/model parents and sampled records; the previous aggregate checks do not establish complete portal hierarchies. | Ingestion verified; per-run fidelity open |
+| Native telemetry and correlation | The default rate-limited sampler could drop workflow/model parents while retaining children; aggregate checks missed incomplete individual traces. | Reproduced implicit-parent sampling loss, configured supported fixed 100% hosted sampling, deployed version 6 with unchanged runtime source, and verified exact executed branches and native parentage for all 12 fresh workflow executions. The reusable gate rejects the old broken trace and empty telemetry; scoped privacy checks passed. Browser rendering was not independently inspected. | Per-operation data verified |
 | Evaluation seed and generated caches | Approval seed expected null instead of `waiting_approval`; nested generated results/metadata were not Git-ignored. | Corrected the seed to the existing durable-pause contract and tested every seed expectation against the hosted adapter. Added scoped cache exclusions while keeping the reviewed seed tracked and historical results intact. | Complete |
 | Current deployed acceptance | Local success alone did not establish deployed durability or source provenance. | Public smoke, seven API scenarios, seven hosted scenarios, browser E2E, and read-only SQL assertions for all 14 refreshed scenario runs passed. Verified immutable image/source provenance, native telemetry, usage when supplied, and safe cross-command correlation. | Complete |
 | Hosted operator authentication | Intermittent local azd credential-subprocess kills interrupted the latest harness; token prewarming failed. | Added explicit SDK transport using documented version-pinned sessions and agent-bound Responses, preserving identical assertions, fresh conversations, finally-stop and no request retries. All seven scenarios passed without global auth changes or a runtime redeploy. | Complete |
 | Foundry evaluation scoring | Two four-row jobs had opaque scoring errors; restoring a historical configuration exposed one contradictory seed complaint. | Preserved failures; restored response-items/tool mappings and both judge initialization values, then clarified the requested bounded-failure behavior without weakening expectations. Pinned task-completion 19/relevance 12 produced 4 passed, 0 failed, 0 errors, 0 unscored. No model or threshold change. | Complete |
-| Old-version retirement | Foundry rejects deletion while retained sessions reference a version, even when their compute is idle. | Deleted unused failed version 4 without force. Versions 1-3 retain ten idle teaching sessions; `force` would cascade-delete sessions/files, so they remain nondefault pending explicit destructive approval. Current version 5 and both SQL schemas are preserved. | Cleanup held |
+| Old-version retirement | Foundry rejects deletion while retained sessions reference a version, even when their compute is idle. | Deleted unused failed version 4 without force. Versions 1-3 retain ten idle teaching sessions; `force` would cascade-delete sessions/files, so they remain nondefault pending explicit destructive approval. Version 5, current version 6 and both SQL schemas are preserved. | Cleanup held |
 | Reproducible evaluation setup | CLI defaults can silently reuse old criteria and ignore requested evaluator versions. | Added a tested setup helper that verifies catalog pins, creates a fresh group and emits a private agent-target MCP request. A new run using only this repository configuration passed all four cases and all eight evaluator decisions. | Complete |
 | Final verification and handoff | Cloud gates are not a substitute for regression and source-provenance checks. | All 280 shared/backend tests, seven deterministic evaluations, Ruff, shell checks and final hosted smoke passed. Synchronized release/architecture/structure documentation; final tooling changes do not alter deployed runtime code. No push or merge. | Complete |
 
@@ -906,7 +907,59 @@ See each application README for its current validation commands.
 - Added `observability/trace-completeness.kql`: a single-operation no-duplicate
   acceptance gate checks executed nodes, the exact four-level native parent
   chain, orphaned parents, sampling weights, and missing telemetry.
-- Local telemetry/release checks passed (98 tests). Hosted rollout and fresh
-  per-operation ingestion verification are pending; the old screenshot cannot be
-  repaired retroactively. Retaining all spans has an ingestion-cost tradeoff,
-  appropriate here for the low-volume teaching deployment.
+- Local telemetry/release checks passed (98 tests). Retaining all spans has an
+  ingestion-cost tradeoff, appropriate here for the low-volume teaching deployment.
+- Deployed hosted version **6** from configuration commit `092f284`. Readback
+  verified active status, exact sampler settings, unchanged
+  `maf_double_charge_cutover` schema and the original 73-file archive hash
+  `3064504d0bd63845c1122ce48fb55828e685f061528f537b12cf982695b21b52`.
+  No application/IaC rollout, database reset, SDK upgrade or LangGraph change.
+- Repeated all seven hosted scenarios using explicit SDK transport and fresh
+  version-pinned sessions: no duplicate `run-7451272727d9`, confirmed refund
+  `run-1f9b2c3f4aaa`, denied approval `run-776f829012fa`, retry-safe refund
+  `run-b90ca25d38b7`, resumed approval `run-aea7c8e1faa4`, bounded failure
+  `run-efb8cf37e360`, and verification mismatch `run-1112ed8dcbc8`.
+  All expected outcomes passed. All 17 owned sessions were subsequently verified
+  idle; no retained versions, sessions, files or SQL records were deleted.
+- Queried 427 safe request/dependency rows from the correct MAF Application
+  Insights resource. For each of the **12 workflow executions**, asserted exact
+  branch-specific executor sets, executor-to-workflow and model-to-agent-to-executor
+  parent IDs, real model usage, no orphaned native parents and sampling weights of
+  one. Five explicit approval commands correctly have no workflow/model spans.
+- Fresh no-duplicate operation **`a6fe2589bfbd976dc4eb48e9c62d48ee`** at
+  **2026-09-10 15:28:21 UTC** has all 15 native spans, four edge groups,
+  three message sends and a complete normalizer/model chain (41 input / 19 output
+  tokens). Its acceptance gate passes. The same query rejects the historical
+  `91fe6312caef546b7c059f420242d780` operation (four orphaned native parents)
+  and empty telemetry. Fixed a KQL reserved-word alias (`kind` -> `spanType`)
+  exposed by live query validation before accepting the gate.
+- The version-6 scoped privacy query found no prohibited attribute keys.
+  The user subsequently confirmed that full flows are visible in both Foundry
+  and Application Insights. Old incomplete traces cannot be repaired retroactively.
+- Kept the existing reviewed `eval.yaml`/four-case dataset and pinned evaluators.
+  The latest cloud judge results remain the recorded 4/4 pass on version 5;
+  judges were not rerun for this configuration-only change to identical code.
+
+## 2026-09-10 - Hosted SDK setup and transport noise
+
+- After confirming complete flows in both portals, the user identified standalone
+  `AIProjectClient.get_openai_client`, `GET /` and operational-log rows as noise.
+  Do not reintroduce partial workflow sampling to remove these records.
+- Inspected the pinned hosted distro and Azure Core tracing implementation.
+  Standard OTel suppression does not suppress Azure Core's method decorator in
+  this version; no ineffective context wrapper, private SDK patch or span-dropping
+  processor was added.
+- Declared supported opt-outs for Azure SDK bookkeeping and low-level HTTP
+  auto-instrumentation, while retaining native MAF instrumentation and fixed 100%
+  sampling. The actual hosted configuration resolver confirms these selections.
+  Azure Core method tracing is explicitly disabled; warnings/errors and logs are
+  not globally disabled. Low-level transport spans are intentionally unavailable
+  under this policy, while native model/workflow failures remain observable.
+- Added `command-traces.kql` for a request-scoped index that excludes standalone
+  setup/operational entries without deleting their diagnostic records. Failed and
+  approval-only commands remain visible; the workflow hierarchy is not filtered.
+- Added a real Azure Projects client regression covering method-tracing opt-out
+  and unchanged native parentage, plus manifest contract coverage. Local tests
+  passed (101 tests); the configuration-only rollout and live noise checks are
+  pending. Existing API/frontend images, workflow source, database and LangGraph
+  remain outside this change.

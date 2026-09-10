@@ -177,16 +177,18 @@ release, evaluation, and telemetry boundaries.
 - Public application:
   <https://mth-maf-wh2su65huqw5o-web.livelyhill-0f2b68f2.northcentralus.azurecontainerapps.io>
 - Foundry project: `model-harness-maf`
-- Hosted Agent: `model-harness-maf` version 5
+- Hosted Agent: `model-harness-maf` version 6
 - Model: `gpt-5.6-sol` version `2026-07-09`, Global Standard
 - Region/resource group: `northcentralus` / `rg-model-harness`
 - Fresh application/checkpoint schema: `maf_double_charge_cutover`
 - API/frontend ready revisions: `0000005`, built from `6948226`
-- Hosted source: version 5 reused after exact 73-file/archive verification;
-  unchanged runtime bundle originally deployed from `29b81e7`
-- Hosted evaluation acceptance: **4 passed, 0 failed, 0 errored, 0 unscored**,
+- Hosted source: version 6 uses the same verified 73-file runtime archive as
+  version 5, originally deployed from `29b81e7`; configuration commit `092f284`
+  changes only hosted sampling to fixed 100% retention
+- Latest cloud evaluation (version 5): **4 passed, 0 failed, 0 errored, 0 unscored**,
   reproduced from repository configuration with pinned task-completion 19 and
-  relevance 12 evaluators.
+  relevance 12 evaluators. The reviewed suite is retained; judge scoring was not
+  rerun for the sampling-only version 6 deployment.
 
 All seven API scenarios, all seven explicit hosted-command scenarios, and browser
 E2E passed. Read-only PostgreSQL checks verified approvals, checkpoint persistence,
@@ -196,9 +198,17 @@ the explicit `--transport sdk` acceptance option after intermittent local azd
 credential-subprocess failures; it executes the same commands without request
 retries. Native telemetry, cross-session correlation and scoped safety checks
 also passed. Historical scoring failures remain recorded, not relabeled.
-The subsequent portal screenshot review found sampled traces with missing native
-parent spans: complete per-run portal hierarchy is still open, despite verified
-native ingestion and successful workflow execution.
+The subsequent screenshot review exposed a default rate-limited sampling defect
+that dropped native parent spans. Version 6 fixes this with supported fixed 100%
+sampling, without replacing the hosted provider or changing workflow code.
+All seven hosted scenarios passed again: all 12 actual workflow executions had
+the exact expected executor branches, linked agent/model parents and no orphaned
+native parents. The five approval-only commands correctly have no workflow spans.
+The new no-duplicate trace `a6fe2589bfbd976dc4eb48e9c62d48ee` at
+`2026-09-10T15:28:21Z` has all 15 native spans and real token usage.
+Its per-operation gate passes; the old screenshot trace and empty telemetry fail.
+The user subsequently confirmed full flows in both Foundry and Application
+Insights. Old traces cannot be repaired retroactively.
 
 Failed version 4 was deleted without force. Versions 1-3 remain nondefault with
 ten idle teaching sessions: Foundry rejected nonforced deletion, and forcing it

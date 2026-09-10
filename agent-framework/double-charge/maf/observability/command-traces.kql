@@ -1,0 +1,40 @@
+// A command-only index: standalone SDK dependencies and operational logs are
+// excluded from the list, not deleted from storage. Approval and failed commands
+// remain visible even when they have no workflow/model spans.
+let lookback = 24h;
+let hostedAgentName = "REPLACE_WITH_ACTUAL_HOSTED_AGENT_NAME";
+let hostedAgentVersion = "REPLACE_WITH_ACTUAL_HOSTED_VERSION";
+let commands = materialize(
+    requests
+    | where timestamp > ago(lookback)
+    | extend agentName=coalesce(tostring(customDimensions["gen_ai.agent.name"]),
+            tostring(customDimensions["azure.ai.agentserver.agent_name"])),
+        agentVersion=coalesce(tostring(customDimensions["gen_ai.agent.version"]),
+            tostring(customDimensions["agent.version"]),
+            extract(@":([^:]+)$", 1, tostring(customDimensions["gen_ai.agent.id"])))
+    | where agentName == hostedAgentName and agentVersion == hostedAgentVersion
+    | where name == "invoke_agent"
+    | project timestamp, operation_Id, requestId=id, name, success, resultCode, duration,
+        agentVersion
+);
+let native =
+    dependencies
+    | where timestamp > ago(lookback)
+    | where operation_Id in (commands | project operation_Id)
+    | where name matches regex @"^(workflow\.|executor\.process |edge_group\.process|message\.send|invoke_agent |chat )"
+    | summarize nativeSpanCount=count(), workflowRuns=countif(name == "workflow.run"),
+        models=make_set_if(name, name startswith "chat "),
+        maxSamplingWeight=max(itemCount) by operation_Id;
+let correlations =
+    union requests, dependencies, traces
+    | where timestamp > ago(lookback)
+    | where operation_Id in (commands | project operation_Id)
+    | extend safeRunId=tostring(customDimensions.run_id)
+    | summarize runId=take_anyif(safeRunId, safeRunId startswith "sha256:") by operation_Id;
+commands
+| join kind=leftouter native on operation_Id
+| join kind=leftouter correlations on operation_Id
+| project timestamp, operation_Id, requestId, agentVersion, name, success, resultCode,
+    duration, runId, nativeSpanCount=coalesce(nativeSpanCount, 0),
+    workflowRuns=coalesce(workflowRuns, 0), models, maxSamplingWeight
+| order by timestamp desc

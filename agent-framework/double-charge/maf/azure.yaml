@@ -42,6 +42,8 @@ services:
             OTEL_SERVICE_NAME: model-harness-maf
             OTEL_TRACES_SAMPLER: microsoft.fixed_percentage
             OTEL_TRACES_SAMPLER_ARG: "1.0"
+            OTEL_PYTHON_DISABLED_INSTRUMENTATIONS: azure_sdk,httpx,httpx2,requests,urllib,urllib3
+            AZURE_TRACING_ENABLED: "false"
             OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
 infra:
     provider: microsoft.foundry

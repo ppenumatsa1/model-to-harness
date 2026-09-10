@@ -5,7 +5,7 @@ import json
 import logging
 from threading import Event as ThreadEvent
 from time import monotonic
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from agent_framework import (
@@ -297,6 +297,34 @@ def test_sampling_preserves_implicit_parent_chain(
     assert orphans == ([] if fixed_percentage else ["executor.process normalize_complaint"])
     assert len({span.context.trace_id for span in spans}) == 1
     assert all(SECRET not in span.to_json() for span in spans)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sdk_tracing", [True, False])
+async def test_sdk_setup_tracing_opt_out_preserves_native_parentage(
+    provider, monkeypatch, sdk_tracing
+):
+    from azure.ai.projects.aio import AIProjectClient
+
+    monkeypatch.setenv("AZURE_TRACING_ENABLED", str(sdk_tracing).lower())
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = provider.get_tracer("native-instrumentation")
+    with tracer.start_as_current_span("workflow.run"):
+        async with AIProjectClient(
+            endpoint="https://example.invalid/api/projects/test",
+            credential=AsyncMock(),
+        ) as project:
+            async with project.get_openai_client():
+                pass
+        with tracer.start_as_current_span("executor.process normalize_complaint"):
+            pass
+    spans = exporter.get_finished_spans()
+    names = {span.name for span in spans}
+    assert ("AIProjectClient.get_openai_client" in names) is sdk_tracing
+    workflow = next(span for span in spans if span.name == "workflow.run")
+    executor = next(span for span in spans if span.name == "executor.process normalize_complaint")
+    assert executor.parent.span_id == workflow.context.span_id
 
 
 def test_safe_log_exporter_drops_body_extras_and_retains_trace_correlation():

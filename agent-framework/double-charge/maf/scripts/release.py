@@ -452,6 +452,10 @@ class Release:
                     "FOUNDRY_MODEL": self.parameters["modelDeploymentName"],
                     "OTEL_TRACES_SAMPLER": "microsoft.fixed_percentage",
                     "OTEL_TRACES_SAMPLER_ARG": "1.0",
+                    "OTEL_PYTHON_DISABLED_INSTRUMENTATIONS": (
+                        "azure_sdk,httpx,httpx2,requests,urllib,urllib3"
+                    ),
+                    "AZURE_TRACING_ENABLED": "false",
                     "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "false",
                 }
                 if any(environment.get(key) != value for key, value in expected.items()):
