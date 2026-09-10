@@ -40,6 +40,8 @@ services:
             FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
             FOUNDRY_MODEL: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
             OTEL_SERVICE_NAME: model-harness-maf
+            OTEL_TRACES_SAMPLER: microsoft.fixed_percentage
+            OTEL_TRACES_SAMPLER_ARG: "1.0"
             OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
 infra:
     provider: microsoft.foundry

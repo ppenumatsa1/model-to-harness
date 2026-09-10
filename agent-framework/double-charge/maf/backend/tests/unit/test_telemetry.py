@@ -19,6 +19,7 @@ from agent_framework import (
     handler,
 )
 from agent_framework.observability import OBSERVABILITY_SETTINGS, ChatTelemetryLayer
+from azure.monitor.opentelemetry.exporter import ApplicationInsightsSampler, RateLimitedSampler
 from maf_double_charge.config import Settings
 from maf_double_charge.infrastructure import logging as safe_logging
 from maf_double_charge.infrastructure import telemetry
@@ -214,6 +215,7 @@ def test_separate_requests_share_safe_correlation_not_trace(provider, settings):
 
 @pytest.mark.asyncio
 async def test_actual_native_workflow_retains_parentage_and_message_links(provider, settings):
+    provider.sampler = ApplicationInsightsSampler(1.0)
     exporter = InMemorySpanExporter()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     telemetry.configure_telemetry(settings, host="hosted")
@@ -263,6 +265,38 @@ async def test_actual_native_workflow_retains_parentage_and_message_links(provid
     assert all(
         span.attributes["run_id"] == safe_logging.correlation_id("run-native") for span in spans
     )
+
+
+@pytest.mark.parametrize("fixed_percentage", [False, True])
+def test_sampling_preserves_implicit_parent_chain(
+    provider, settings, monkeypatch, fixed_percentage
+):
+    if fixed_percentage:
+        provider.sampler = ApplicationInsightsSampler(1.0)
+    else:
+        sampler = RateLimitedSampler(5.0)
+        # Reproduce a rate change without relying on timing or random trace IDs.
+        monkeypatch.setattr(
+            sampler._sampling_percentage_generator,
+            "get",
+            Mock(side_effect=[100.0, 0.0, 100.0]),
+        )
+        provider.sampler = sampler
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    telemetry.configure_telemetry(settings, host="hosted")
+    tracer = provider.get_tracer("implicit-parent-sampling")
+    with tracer.start_as_current_span("invoke_agent"):
+        with tracer.start_as_current_span("workflow.run"):
+            with tracer.start_as_current_span("executor.process normalize_complaint") as child:
+                child.set_attribute("gen_ai.input.messages", SECRET)
+    spans = exporter.get_finished_spans()
+    ids = {span.context.span_id for span in spans}
+    orphans = [span.name for span in spans if span.parent and span.parent.span_id not in ids]
+    assert ("workflow.run" in {span.name for span in spans}) is fixed_percentage
+    assert orphans == ([] if fixed_percentage else ["executor.process normalize_complaint"])
+    assert len({span.context.trace_id for span in spans}) == 1
+    assert all(SECRET not in span.to_json() for span in spans)
 
 
 def test_safe_log_exporter_drops_body_extras_and_retains_trace_correlation():

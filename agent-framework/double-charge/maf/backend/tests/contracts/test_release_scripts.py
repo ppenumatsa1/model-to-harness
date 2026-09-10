@@ -725,6 +725,16 @@ def test_hosted_content_capture_disabled_before_sdk_construction(monkeypatch):
     assert "APPLICATIONINSIGHTS_CONNECTION_STRING" not in environment
 
 
+def test_hosted_manifest_retains_complete_native_traces():
+    import yaml
+
+    environment = yaml.safe_load((LANE / "azure.yaml").read_text())["services"][
+        "model-harness-maf"
+    ]["env"]
+    assert environment["OTEL_TRACES_SAMPLER"] == "microsoft.fixed_percentage"
+    assert environment["OTEL_TRACES_SAMPLER_ARG"] == "1.0"
+
+
 @pytest.mark.asyncio
 async def test_hosted_adapter_executes_explicit_workflow_commands(
     modules, monkeypatch, repository, model, settings

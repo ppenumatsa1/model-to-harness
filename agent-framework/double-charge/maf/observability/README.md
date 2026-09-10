@@ -115,3 +115,56 @@ version/archive hashes and application image provenance with the release evidenc
 See [SETUP.md](SETUP.md), [release-verification.kql](release-verification.kql), and
 [queries.sql](queries.sql). Local tests prove exporter behavior without sending
 telemetry to Azure; deployed ingestion must be verified separately.
+
+## Interpreting the portal trace tree
+
+The hosted entrypoint is `ResponsesAgentServerHost`, and the deployed protocol is
+`responses`. A Foundry span labeled `invoke_agent` is an operation classification,
+not evidence that the application uses the Invocations protocol. Likewise, MAF's
+model span can be named `chat ...` while its Foundry client uses the Responses API.
+Custom span names in other applications are not required protocol wrappers.
+
+Open the **MAF** Application Insights component from the deployment outputs, not
+the independently owned LangGraph component. Select an actual request/operation
+and open its end-to-end transaction; a list of platform configuration requests
+does not represent the application's workflow graph.
+
+Native span existence is not a complete-tree acceptance check. For one selected
+operation, verify the parent IDs linking `workflow.run` -> `executor.process ...`
+-> `invoke_agent ...` -> `chat ...`, and check missing parents as well as usage.
+The September 10 screenshot review found retained children whose workflow/model
+parents were absent, even though the business run completed successfully.
+Several records had `itemCount > 1`, indicating sampling. An unset ARM
+`SamplingPercentage` alone does not establish that SDK/collector sampling is off.
+See the [sampling guidance](https://learn.microsoft.com/azure/azure-monitor/app/opentelemetry-sampling)
+and the [issue ledger](../../../../docs/design/issues-changes-fixes.md) for exact evidence.
+
+### Hosted sampling policy
+
+The hosted manifest explicitly sets `OTEL_TRACES_SAMPLER=microsoft.fixed_percentage`
+and `OTEL_TRACES_SAMPLER_ARG=1.0`. The existing platform-owned Microsoft distro
+reads these settings before constructing its provider; the application does not
+replace the sampler/provider or add another exporter. This low-volume teaching
+deployment retains 100% of application spans, increasing ingestion relative to
+sampling. Review volume and cost before adopting that policy for a high-traffic
+production deployment.
+
+The pinned `microsoft-opentelemetry` 1.3.9 defaults to a rate-limited sampler
+targeting five traces/second. In exporter 1.0.0b57 with OTel 1.44, an implicit
+parent context can cause a new rate-dependent sampling decision for each nested
+span. A controlled rate change reproduces an exported executor with a missing
+workflow parent; the same reproduction with fixed 100% sampling retains both.
+The privacy filter is active in both cases and does not cause that sampling loss.
+
+Use [trace-completeness.kql](trace-completeness.kql) for a fresh **no-duplicate**
+smoke operation. Supply the actual agent/version, operation, model and UTC window.
+It requires the executed branch's native spans, real workflow -> executor ->
+normalizer -> model parent IDs, no orphaned native parents, and sampling weights
+of one. Empty telemetry fails. Do not apply this branch-specific gate to a
+refund/resume or approval-only command without changing its expectations.
+
+Deploying this policy cannot restore spans missing from an old trace. Live
+per-operation acceptance remains required: configuration and local tests alone do
+not prove ingestion or either portal's rendering. Do not fabricate spans, enable
+prompt capture, replace the hosted provider, or keep a span open across human
+approval just to resemble another application's screenshot.

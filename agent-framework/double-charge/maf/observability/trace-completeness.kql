@@ -1,0 +1,80 @@
+// One no-duplicate smoke operation, not an aggregate over unrelated runs.
+// Replace identity/version/window/operation/model with actual deployment evidence.
+// Other branches require their own expected executed nodes; approval-only commands
+// intentionally do not execute a workflow. Empty telemetry is a failed gate.
+let windowStart = datetime(2026-01-01T00:00:00Z);
+let windowEnd = datetime(2026-01-01T01:00:00Z);
+let hostedAgentName = "REPLACE_WITH_ACTUAL_HOSTED_AGENT_NAME";
+let hostedAgentVersion = "REPLACE_WITH_ACTUAL_HOSTED_VERSION";
+let selectedOperation = "REPLACE_WITH_ACTUAL_OPERATION_ID";
+let modelDeployment = "REPLACE_WITH_ACTUAL_MODEL_DEPLOYMENT";
+let requiredNames = array_concat(dynamic([
+    "workflow.build", "workflow.run",
+    "executor.process normalize_complaint", "executor.process load_account",
+    "executor.process detect_duplicate", "executor.process close_no_duplicate",
+    "invoke_agent ComplaintNormalizer"
+]), pack_array(strcat("chat ", modelDeployment)));
+let selectedRequests = materialize(
+    requests
+    | where timestamp between (windowStart .. windowEnd)
+    | where operation_Id == selectedOperation
+    | extend agentName=coalesce(tostring(customDimensions["gen_ai.agent.name"]),
+            tostring(customDimensions["azure.ai.agentserver.agent_name"])),
+        agentVersion=coalesce(tostring(customDimensions["gen_ai.agent.version"]),
+            tostring(customDimensions["agent.version"]),
+            extract(@":([^:]+)$", 1, tostring(customDimensions["gen_ai.agent.id"])))
+    | where agentName == hostedAgentName and agentVersion == hostedAgentVersion
+);
+let spans = materialize(
+    union
+        (selectedRequests | project operation_Id, spanId=id,
+            parentId=operation_ParentId, name, itemCount, kind="request"),
+        (dependencies
+            | where timestamp between (windowStart .. windowEnd)
+            | where operation_Id in (selectedRequests | project operation_Id)
+            | project operation_Id, spanId=id, parentId=operation_ParentId,
+                name, itemCount, kind="dependency")
+);
+let native = materialize(
+    spans
+    | where kind == "dependency"
+    | where name matches regex @"^(workflow\.|executor\.process |edge_group\.process|message\.send|invoke_agent |chat )"
+);
+let orphans = materialize(
+    native
+    | join kind=leftanti (spans | project operation_Id, parentId=spanId)
+        on operation_Id, parentId
+);
+let normalizerChains =
+    (native | where name == "workflow.run" | project operation_Id, workflowId=spanId)
+    | join kind=inner
+        (native | where name == "executor.process normalize_complaint"
+            | project operation_Id, workflowId=parentId, executorId=spanId)
+        on operation_Id, workflowId
+    | join kind=inner
+        (native | where name == "invoke_agent ComplaintNormalizer"
+            | project operation_Id, executorId=parentId, agentId=spanId)
+        on operation_Id, executorId
+    | join kind=inner
+        (native | where name == strcat("chat ", modelDeployment)
+            | project operation_Id, agentId=parentId, modelId=spanId)
+        on operation_Id, agentId;
+native
+| summarize nativeSpans=count(), names=make_set(name),
+    workflowRuns=countif(name == "workflow.run"), maxSamplingWeight=max(itemCount),
+    edgeGroups=countif(name startswith "edge_group.process"),
+    messages=countif(name == "message.send")
+| extend missingNames=set_difference(requiredNames, names),
+    orphanCount=toscalar(orphans | count),
+    orphanNames=toscalar(orphans | summarize make_set(name)),
+    normalizerChains=toscalar(normalizerChains | count),
+    requestCount=toscalar(selectedRequests | count),
+    failedRequests=toscalar(selectedRequests | where success != true | count)
+| extend passed=requestCount > 0 and failedRequests == 0
+    and array_length(missingNames) == 0 and orphanCount == 0
+    and workflowRuns == 1 and normalizerChains == 1
+    and maxSamplingWeight == 1 and edgeGroups > 0 and messages > 0
+| project operation_Id=selectedOperation, hostedAgentName, hostedAgentVersion,
+    passed, requestCount, failedRequests, nativeSpans, workflowRuns,
+    normalizerChains, edgeGroups, messages, maxSamplingWeight, missingNames,
+    orphanCount, orphanNames

@@ -4,8 +4,8 @@ This is a concise implementation ledger, not a release history.
 
 ## 2026-09-10 - Consolidated MAF refactor summary
 
-**Refreshed deployment and cloud acceptance passed; destructive legacy-session
-cleanup is held.** Applications run source `6948226` on
+**Functional deployment acceptance passed; complete per-run portal trace fidelity
+is open, and destructive legacy-session cleanup is held.** Applications run source `6948226` on
 `refactor/maf-backend-cutover`; identical hosted source remains version 5.
 This table supersedes historical interim blockers below, whose evidence is retained.
 No feature-branch push or merge was performed.
@@ -24,7 +24,7 @@ No feature-branch push or merge was performed.
 | Azure preview and application rollout | PostgreSQL was stopped; ARM what-if emitted non-JSON output and coarse change classifications. | Started only the approved server with unchanged SKU; added detailed machine-readable preview and fail-closed gates. Refreshed locked images to API/frontend revisions `0000005` from `6948226`, preserving private API/public frontend and the existing schema. | Complete |
 | Repeatable releases and source provenance | Fresh-cutover-only deployment could not safely update migrated data; identical hosted uploads can reuse a version. | Added explicit read-only `--update-existing` migration-history verification, with no migration/reset. Verify authoritative hosted status, exact environment, archive hash and all 73 prepared files before accepting either a new or reused version. | Complete |
 | Hosted command sessions | Unstopped sessions exhausted PostgreSQL connections; CLI rejected combining invocation `--version` with `--session-id`. | Create uniquely owned sessions bound to a version, invoke by session ID only, and stop in `finally`. Stopped 28 verified task-owned sessions; all seven hosted scenarios then passed without increasing database capacity. | Complete |
-| Native telemetry and correlation | Hosted commands used different instances; approval correlation could exist only in logs; classic KQL union types differed. | Joined request-scoped agent identity to logs/dependencies by operation ID, correlated commands through hashed case/run IDs, and normalized types. Observed native hierarchy and usage; scoped safety scans found no targeted leaks. Telemetry is not an exactly-once or complete-trace guarantee. | Complete |
+| Native telemetry and correlation | Hosted commands used different instances; approval correlation could exist only in logs; classic KQL union types differed. A subsequent screenshot demonstrates missing parent spans within an individual successful trace. | Native ingestion, linked hierarchy examples, usage, safe correlation and safety scans passed. Exact trace `91fe6312caef546b7c059f420242d780` has absent workflow/model parents and sampled records; the previous aggregate checks do not establish complete portal hierarchies. | Ingestion verified; per-run fidelity open |
 | Evaluation seed and generated caches | Approval seed expected null instead of `waiting_approval`; nested generated results/metadata were not Git-ignored. | Corrected the seed to the existing durable-pause contract and tested every seed expectation against the hosted adapter. Added scoped cache exclusions while keeping the reviewed seed tracked and historical results intact. | Complete |
 | Current deployed acceptance | Local success alone did not establish deployed durability or source provenance. | Public smoke, seven API scenarios, seven hosted scenarios, browser E2E, and read-only SQL assertions for all 14 refreshed scenario runs passed. Verified immutable image/source provenance, native telemetry, usage when supplied, and safe cross-command correlation. | Complete |
 | Hosted operator authentication | Intermittent local azd credential-subprocess kills interrupted the latest harness; token prewarming failed. | Added explicit SDK transport using documented version-pinned sessions and agent-bound Responses, preserving identical assertions, fresh conversations, finally-stop and no request retries. All seven scenarios passed without global auth changes or a runtime redeploy. | Complete |
@@ -824,3 +824,89 @@ See each application README for its current validation commands.
   local PostgreSQL container and its anonymous volume after the full test run.
   Local dependency environments, retained evaluation reports and running Azure
   apps/database were left intact.
+
+## 2026-09-10 - Screenshot review: Responses confirmed, incomplete portal trace reopened
+
+- Confirmed the hosted entrypoint uses `ResponsesAgentServerHost` from
+  `azure.ai.agentserver.responses` and registers `response_handler`; `azure.yaml`
+  declares only protocol `responses`. The SDK harness uses an agent-bound OpenAI
+  client and `responses.create`. Internal model calls use MAF `FoundryChatClient`,
+  whose installed OpenAI base implementation calls
+  `client.responses.with_raw_response.create`, not the Invocations endpoint.
+  The generic telemetry name `invoke_agent` does not imply the Invocations protocol.
+  An application-specific span named `foundry.responses.invoke` is not required
+  for the Responses API to be in use.
+- The supplied Application Insights search screenshot targets
+  `mth-lg-2vq7rokaqwhae-appi`, the LangGraph component. MAF uses
+  `mth-maf-wh2su65huqw5o-appi` in `rg-model-harness`; this investigation did not
+  query or modify the LangGraph lane.
+- Queried the exact Foundry screenshot operation
+  `91fe6312caef546b7c059f420242d780`, around `14:09:51Z`. Its hashed run ID matches
+  successful no-duplicate smoke `run-f844320e26e4`, not the intentional billing
+  failure case. `workflow.build`, `executor.process load_account`, edges,
+  normalization start/completion logs and `run.completed` are present.
+  The visible HTTP 404 is not evidence that this business workflow failed;
+  the request and durable outcome succeeded. Its specific HTTP target is not
+  established from the deliberately redacted URL fields.
+- The user's missing-parent observation is valid in the ingested data, not merely
+  a collapsed tree: workflow parent `3db4c10f9628143f`, normalization executor
+  parent `b26dbfaa664350d0` and model-call parent `4146816a605b0bce` are referenced
+  by retained children/logs but absent as spans in that operation. Several retained
+  dependencies have `itemCount = 2`, which confirms sampling according to the
+  [Application Insights sampling documentation](https://learn.microsoft.com/azure/azure-monitor/app/opentelemetry-sampling).
+  The ARM component's `SamplingPercentage` is unset. This establishes sampled,
+  incomplete telemetry, but not which SDK/export/ingestion layer dropped each span.
+  Do not invent a 100-percent sampling override for the hosted platform or replace
+  its provider without verifying the supported configuration.
+- A separate version-5 operation, `902c13fc62e39a434db29761ffd9da8b` at
+  `14:08:13Z`, contains a verified parent-ID chain:
+  `workflow.run` (`1c393a0466695413`) ->
+  `executor.process normalize_complaint` (`2672f8e91a1c1dd5`) ->
+  `invoke_agent ComplaintNormalizer` (`27a4e38fc48a21c4`) ->
+  `chat model-harness-gpt-5-6-sol` (`ed8c6a8572bd2f4a`).
+  Thus native workflow/model instrumentation exists, but it is not retained
+  consistently enough to claim the requested per-run portal hierarchy is complete.
+- Corrected the current summary's telemetry status. The earlier aggregate native
+  span/usage checks were narrower than the user's expected trace-tree acceptance.
+  The remaining work is supported sampler/export/collector diagnosis and a new
+  single-run parent-completeness gate, not a switch to an Invocations wrapper or
+  synthetic replacement spans. Start, approval and resume remain separate durable
+  commands/traces correlated by safe run IDs; no blocking HITL span is introduced.
+  This confirmation changed documentation only; no runtime or cloud deployment
+  settings were changed.
+- The follow-up Foundry screenshot is on the correct project and agent,
+  both named `model-harness-maf`, version 5. Its `902c1...` row at 09:08:13 local
+  time is the verified native-chain example; `91fe63...` at 09:09:50 is the
+  incomplete smoke trace. These rows are the accepted release's actual traffic.
+  Subsequent screenshot investigations were read-only cloud operations, not a
+  new deployment or new workflow execution. The confirmed Application Insights
+  application ID is `39d900dd-2761-41a6-8841-2cf18592b62a`; hosted request spans use
+  role `agentsv2`, with application spans under `model-harness-maf`.
+
+## 2026-09-10 - Hosted trace sampling repair
+
+- Both latest screenshots still show the old incomplete operation
+  `91fe6312caef546b7c059f420242d780`; resource navigation is not the fix.
+- Inspected isolated copies of the pinned agentserver 2.0.0 and
+  `microsoft-opentelemetry` 1.3.9 packages. The hosted distro defaults to
+  `RateLimitedSampler(5.0)`, not unconditional retention. Its exporter dependency
+  is `azure-monitor-opentelemetry-exporter~=1.0.0b57`.
+- Reproduced the missing-parent defect with exporter 1.0.0b57/OTel 1.44: implicit
+  parent context bypasses the rate-limited sampler's explicit-parent inheritance.
+  A controlled rate change retains an executor while dropping its workflow
+  parent. Fixed 100% sampling retains the complete chain. Regression coverage
+  includes the privacy filter in both cases and the real native MAF graph under
+  fixed sampling; no fake production spans or SDK patch were introduced.
+- Declared supported `microsoft.fixed_percentage` / `1.0` sampler settings in the
+  hosted manifest and required them in authoritative release readback. Verified
+  that the actual pinned hosted configuration resolver selects ratio `1.0`.
+  The existing hosted provider/exporter, Responses protocol, content-capture
+  prohibition and application runtime bundle remain unchanged. API application
+  images and their sampling configuration are not part of this hosted-only fix.
+- Added `observability/trace-completeness.kql`: a single-operation no-duplicate
+  acceptance gate checks executed nodes, the exact four-level native parent
+  chain, orphaned parents, sampling weights, and missing telemetry.
+- Local telemetry/release checks passed (98 tests). Hosted rollout and fresh
+  per-operation ingestion verification are pending; the old screenshot cannot be
+  repaired retroactively. Retaining all spans has an ingestion-cost tradeoff,
+  appropriate here for the low-volume teaching deployment.

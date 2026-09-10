@@ -450,6 +450,8 @@ class Release:
                     "DATABASE_URL": self.database_url,
                     "FOUNDRY_PROJECT_ENDPOINT": self.parameters["foundryProjectEndpoint"],
                     "FOUNDRY_MODEL": self.parameters["modelDeploymentName"],
+                    "OTEL_TRACES_SAMPLER": "microsoft.fixed_percentage",
+                    "OTEL_TRACES_SAMPLER_ARG": "1.0",
                     "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "false",
                 }
                 if any(environment.get(key) != value for key, value in expected.items()):

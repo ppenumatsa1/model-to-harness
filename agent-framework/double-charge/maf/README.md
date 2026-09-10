@@ -196,6 +196,9 @@ the explicit `--transport sdk` acceptance option after intermittent local azd
 credential-subprocess failures; it executes the same commands without request
 retries. Native telemetry, cross-session correlation and scoped safety checks
 also passed. Historical scoring failures remain recorded, not relabeled.
+The subsequent portal screenshot review found sampled traces with missing native
+parent spans: complete per-run portal hierarchy is still open, despite verified
+native ingestion and successful workflow execution.
 
 Failed version 4 was deleted without force. Versions 1-3 remain nondefault with
 ten idle teaching sessions: Foundry rejected nonforced deletion, and forcing it
