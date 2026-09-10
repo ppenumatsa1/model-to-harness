@@ -15,6 +15,7 @@ from release import (
     ReleaseError,
     validate_schemas,
     verify_code_archive,
+    verify_hosted_code_configuration,
     verify_hosted_environment,
 )
 
@@ -33,11 +34,7 @@ def main() -> None:
             raise ReleaseError("Hosted version is not the selected active immutable version")
         definition = document["definition"]
         configuration = definition["code_configuration"]
-        if (
-            configuration.get("runtime") != "python_3_13"
-            or configuration.get("entry_point") != "main.py"
-        ):
-            raise ReleaseError("Hosted runtime/entry point differs from the release contract")
+        verify_hosted_code_configuration(configuration)
         expected = json.loads(args.expected_environment.read_text())
         mandatory = {
             "APP_ENV",
@@ -50,6 +47,7 @@ def main() -> None:
             "OTEL_PYTHON_DISABLED_INSTRUMENTATIONS",
             "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT",
             "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED",
+            "AZURE_TRACING_ENABLED",
         }
         if not isinstance(expected, dict) or any(
             not isinstance(expected.get(key), str) or not expected[key] for key in mandatory
@@ -60,7 +58,8 @@ def main() -> None:
             or expected["OTEL_TRACES_SAMPLER"] != "always_on"
             or expected["OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"] != "false"
             or expected["AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED"] != "false"
-            or expected["OTEL_PYTHON_DISABLED_INSTRUMENTATIONS"] != "requests,urllib3"
+            or expected["OTEL_PYTHON_DISABLED_INSTRUMENTATIONS"] != "requests,urllib3,httpx"
+            or expected["AZURE_TRACING_ENABLED"] != "false"
         ):
             raise ReleaseError("Expected hosted environment violates telemetry/production policy")
         schemas = tuple(expected[key] for key in SCHEMA_ENV)

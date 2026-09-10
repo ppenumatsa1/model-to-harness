@@ -13,7 +13,7 @@ from opentelemetry.trace import Status, StatusCode
 
 from .domain_gateway import ToolResult
 
-HOSTED_TRANSPORT_OPTOUTS = frozenset({"requests", "urllib3"})
+HOSTED_TRANSPORT_OPTOUTS = frozenset({"requests", "urllib3", "httpx"})
 
 
 def correlation(value: str) -> str:
@@ -41,6 +41,10 @@ def verify_telemetry_policy(*, hosted: bool = False) -> None:
         if os.getenv(variable, "false").lower() not in {"false", "0", ""}:
             raise RuntimeError("Telemetry message-content capture must be disabled")
     if hosted:
+        from azure.core.settings import settings as azure_settings
+
+        if azure_settings.tracing_enabled():
+            raise RuntimeError("Redundant hosted Azure SDK transport tracing is active")
         active = sorted(
             {
                 entry.name
@@ -147,6 +151,7 @@ def execution_span(name: str, **attributes: str | int | bool) -> Iterator[trace.
             raise
         except BaseException as exc:
             span.set_attribute("error.type", type(exc).__name__)
+            span.set_attribute("workflow.error_type", type(exc).__name__)
             span.set_status(Status(StatusCode.ERROR))
             raise
 

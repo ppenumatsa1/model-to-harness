@@ -102,13 +102,32 @@ from model_to_harness_langgraph.config import Settings
 from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
 from model_to_harness_langgraph.testing.fakes import FakeModel, FakeDomainGateway
 from opentelemetry import trace
+from azure.core.settings import settings as azure_settings
+from contextlib import asynccontextmanager
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.urllib3 import URLLib3Instrumentor
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-host = module.create_host()
+audit, saver = InMemoryAuditRepository(), InMemorySaver()
+lifecycle = []
+@asynccontextmanager
+async def runtime_context():
+    lifecycle.append("open")
+    try:
+        async with module.open_runtime(
+            Settings(_env_file=None), hosted=True,
+            audit=audit, model=FakeModel(),
+            gateway=FakeDomainGateway(), checkpointer=saver,
+        ) as runtime:
+            yield runtime
+    finally:
+        lifecycle.append("close")
+host = module.create_host(runtime_factory=runtime_context)
 assert not RequestsInstrumentor().is_instrumented_by_opentelemetry
 assert not URLLib3Instrumentor().is_instrumented_by_opentelemetry
+assert not HTTPXClientInstrumentor().is_instrumented_by_opentelemetry
+assert not azure_settings.tracing_enabled()
 provider = trace.get_tracer_provider()
 assert hasattr(provider, "sampler")
 exporter = InMemorySpanExporter()
@@ -116,46 +135,45 @@ provider.add_span_processor(SimpleSpanProcessor(exporter))
 for trace_id in (1, 1 << 127, (1 << 128) - 1):
     assert provider.sampler.should_sample(None, trace_id, "retention").decision.is_sampled()
 async def smoke():
-    async with module.open_runtime(
-        Settings(_env_file=None), hosted=True,
-        audit=InMemoryAuditRepository(), model=FakeModel(),
-        gateway=FakeDomainGateway(), checkpointer=InMemorySaver(),
-    ) as runtime:
-        host.state.runtime = runtime
-        async with host.router.lifespan_context(host):
-            async with AsyncClient(
-                transport=ASGITransport(app=host), base_url="http://smoke"
-            ) as client:
-                async def command(payload):
-                    response = await client.post("/responses", json={
-                        "input": json.dumps(payload), "store": False, "stream": False,
-                    })
-                    assert response.status_code == 200, response.text
-                    body = response.json()
-                    assert body["status"] == "completed", body
-                    texts = [
-                        content["text"] for item in body["output"]
-                        for content in item.get("content", []) if content["type"] == "output_text"
-                    ]
-                    result = json.loads("".join(texts))
-                    assert result["ok"], result
-                    return result["case"]
-                started = await command({"action": "start", "case_id": "packaged-smoke"})
-                assert started["status"] == "paused"
-                await command({
-                    "action": "approval", "case_id": started["case_id"],
-                    "checkpoint_id": started["checkpoint_id"],
-                    "decision": "approve", "reviewer_id": "package-smoke",
+    async with host.router.lifespan_context(host):
+        async with AsyncClient(
+            transport=ASGITransport(app=host), base_url="http://smoke"
+        ) as client:
+            async def command(payload, *, ok=True):
+                before = len(lifecycle)
+                response = await client.post("/responses", json={
+                    "input": json.dumps(payload), "store": False, "stream": False,
                 })
-                resumed = await command({"action": "resume", "case_id": started["case_id"]})
-                assert resumed["status"] == "completed"
+                assert response.status_code == 200, response.text
+                body = response.json()
+                assert body["status"] == "completed", body
+                texts = [
+                    content["text"] for item in body["output"]
+                    for content in item.get("content", []) if content["type"] == "output_text"
+                ]
+                result = json.loads("".join(texts))
+                assert result["ok"] is ok, result
+                assert lifecycle[before:] == ["open", "close"]
+                return result["case"] if ok else result
+            started = await command({"action": "start", "case_id": "packaged-smoke"})
+            assert started["status"] == "paused"
+            await command({
+                "action": "approval", "case_id": started["case_id"],
+                "checkpoint_id": started["checkpoint_id"],
+                "decision": "approve", "reviewer_id": "package-smoke",
+            })
+            resumed = await command({"action": "resume", "case_id": started["case_id"]})
+            assert resumed["status"] == "completed"
+            failure = await command({"action": "resume", "case_id": "missing"}, ok=False)
+            assert failure["error"]["code"] == "case_not_found"
 asyncio.run(smoke())
 spans = exporter.get_finished_spans()
 assert any(span.name.startswith("workflow.node.") for span in spans)
 assert any(span.name.startswith("execute_tool ") for span in spans)
 assert all(
     span.instrumentation_scope.name not in {
-        "opentelemetry.instrumentation.requests", "opentelemetry.instrumentation.urllib3"
+        "opentelemetry.instrumentation.requests", "opentelemetry.instrumentation.urllib3",
+        "opentelemetry.instrumentation.httpx",
     }
     for span in spans
 )

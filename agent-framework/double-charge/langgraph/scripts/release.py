@@ -266,6 +266,16 @@ def verify_code_archive(root: Path, content: bytes, expected_hash: str) -> str:
     return digest
 
 
+def verify_hosted_code_configuration(configuration: Any) -> None:
+    if (
+        not isinstance(configuration, dict)
+        or configuration.get("runtime") != "python_3_13"
+        or configuration.get("entry_point") != ["python", "main.py"]
+        or configuration.get("dependency_resolution") != "remote_build"
+    ):
+        raise ReleaseError("Hosted runtime/entry point differs from the release contract")
+
+
 def verify_hosted_environment(actual: dict[str, str], expected: dict[str, str]) -> None:
     if "APPLICATIONINSIGHTS_CONNECTION_STRING" in actual:
         raise ReleaseError("Hosted environment must not override platform-reserved App Insights")

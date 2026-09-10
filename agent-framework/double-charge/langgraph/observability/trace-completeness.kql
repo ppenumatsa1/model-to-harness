@@ -14,8 +14,21 @@ let Spans = materialize(
 let Native = materialize(Spans
     | where name in ("foundry.responses.invoke", "workflow.run")
         or name startswith "workflow.node."
-        or genaiOperation in ("chat", "execute_tool"));
+        or name == "chat complaint_model"
+        or name startswith "execute_tool ");
 let Workflows = Native | where name == "workflow.run";
+let Graphs = Spans
+    | where name == "invoke_agent LangGraph"
+    | join kind=inner (Workflows | project workflowId = spanId)
+        on $left.parentId == $right.workflowId;
+let Routes = Spans
+    | where name startswith "invoke_agent route_"
+    | join kind=inner (Graphs | project graphId = spanId)
+        on $left.parentId == $right.graphId;
+let NodeParents = union
+    (Workflows | project allowedParent = spanId),
+    (Graphs | project allowedParent = spanId),
+    (Routes | project allowedParent = spanId);
 let Nodes = Native
     | where name startswith "workflow.node."
     | extend node = substring(name, strlen("workflow.node."));
@@ -28,8 +41,8 @@ let MissingParents = toscalar(Native
         on $left.parentId == $right.knownParent
     | count);
 let MisparentedNodes = toscalar(Nodes
-    | join kind=leftanti (Workflows | project workflowId = spanId)
-        on $left.parentId == $right.workflowId
+    | join kind=leftanti NodeParents
+        on $left.parentId == $right.allowedParent
     | count);
 let NormalizerModels = toscalar(Native
     | where genaiOperation == "chat"

@@ -37,7 +37,9 @@ services:
       - name: OTEL_TRACES_SAMPLER
         value: always_on
       - name: OTEL_PYTHON_DISABLED_INSTRUMENTATIONS
-        value: requests,urllib3
+        value: requests,urllib3,httpx
+      - name: AZURE_TRACING_ENABLED
+        value: "false"
       - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
         value: "false"
       - name: AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED

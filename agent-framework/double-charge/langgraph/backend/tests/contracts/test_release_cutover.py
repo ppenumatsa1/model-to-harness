@@ -373,6 +373,37 @@ def test_archive_rejects_secret_cache_traversal_and_duplicate(tmp_path, extra):
         release.verify_code_archive(tmp_path, content, digest)
 
 
+def test_hosted_code_configuration_matches_sdk_argv_contract():
+    release.verify_hosted_code_configuration(
+        {
+            "runtime": "python_3_13",
+            "entry_point": ["python", "main.py"],
+            "dependency_resolution": "remote_build",
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"runtime": "python_3_12"},
+        {"entry_point": "main.py"},
+        {"entry_point": ["python", "other.py"]},
+        {"entry_point": ["python", "main.py", "--unexpected"]},
+        {"dependency_resolution": "none"},
+    ],
+)
+def test_hosted_code_configuration_rejects_runtime_or_command_drift(change):
+    configuration = {
+        "runtime": "python_3_13",
+        "entry_point": ["python", "main.py"],
+        "dependency_resolution": "remote_build",
+        **change,
+    }
+    with pytest.raises(release.ReleaseError):
+        release.verify_hosted_code_configuration(configuration)
+
+
 def test_hosted_environment_prohibits_reserved_override_and_drift():
     release.verify_hosted_environment({"LANGGRAPH_SCHEMA": "ok"}, {"LANGGRAPH_SCHEMA": "ok"})
     for actual in (

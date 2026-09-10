@@ -6,9 +6,9 @@ This is a concise implementation ledger, not a release history.
 
 ### Current progress checkpoint
 
-**Ten of thirteen work packages are complete; deployment is active and cloud
-acceptance/final handoff are pending.** Implementation is committed locally as
-`a27cb6e`, with subsequent release-gate corrections through `d6b0d09`, on
+**Ten of thirteen work packages are complete; corrective hosted deployment and
+cloud acceptance are active, and final handoff is pending.** Implementation is committed locally as
+`a27cb6e`, with subsequent release/startup corrections through `901634a`, on
 `refactor/maf-backend-cutover`; no push or merge occurred.
 
 | Area | Current evidence / remaining work | Status |
@@ -17,9 +17,9 @@ acceptance/final handoff are pending.** Implementation is committed locally as
 | Independent review | The checkpoint-evidence restart defect is fixed and covered at both pre-validation restart boundaries; reviewer finding closed. | Complete |
 | Local acceptance | 182 tests with PostgreSQL and no skips; seven deterministic evaluations and seven API scenarios; frontend tests/build/browser; wheel and isolated Python 3.13 hosted package gates passed. | Complete |
 | Telemetry implementation | Real execution spans, safe correlation, full-retention policy and KQL positive/negative gates are implemented and locally checked. Fresh deployed hierarchy, noise and privacy still need verification. | Local complete; cloud pending |
-| Existing infrastructure | PostgreSQL was started without changing SKU. Fresh paired-schema setup and app-only ARM deployment succeeded. Frontend revision `0000008` is ready; API revision `0000013` is unhealthy, with `0000012` still the latest ready revision. Hosted cutover has not started. | Partial rollout; not accepted |
-| Release gate | Strict previews now pass after narrowly handling unmanaged `Ignore`, observed service defaults and empty environment values. Immutable rollout verification correctly rejected the unhealthy API revision. | API startup blocker |
-| Cloud acceptance and handoff | Immutable app/hosted rollout, smoke, API/hosted/browser E2E, SQL proof, four-case cloud evaluation, telemetry proof and final docs/evidence remain. | Pending |
+| Existing infrastructure | Corrected API revision `0000014` and frontend revision `0000009` are ready on immutable `901634a` images. Foundry version 14 is active; runtime, environment and downloaded source archive are verified. | Deployed |
+| Release gate | Strict app-only previews and immutable rollout checks passed. Recovery verified existing cutover storage read-only. Corrective hosted resource-lifecycle/transport edits are now in the worktree, not yet validated or deployed. | Corrective release active |
+| Cloud acceptance and handoff | Seven API scenarios, direct SQL evidence, browser approval/resume, hosted v14 smoke and all four cloud evaluation items passed. Both full hosted matrix attempts stopped after four scenarios. Final hosted E2E, ancestry/noise/privacy proof and evidence sync remain. | Active; not complete |
 
 Core implementation has stopped and its owned test resources were cleaned up.
 Parent-owned disposable PostgreSQL was also removed after acceptance. MAF runtime,
@@ -57,6 +57,57 @@ Installed-wheel and isolated Python 3.13 hosted gates now also construct the rea
 model/credential clients without keys or network; fake-model workflow scenarios
 remain separate. Hosted dependency versions did not change. These are verified
 local corrections, not yet proof that a corrected cloud revision is healthy.
+
+### Corrected rollout and hosted artifact verification
+
+The `901634a` update-existing release subsequently passed both exact-image and
+latest-ready-revision checks: API `0000014`, frontend `0000009`. Foundry direct-code
+version **14** is active. Downloaded hosted archive SHA-256:
+`24f7fef2ab75b9e919140ea9825e00908f4533a8f787e05be09efc6e8cff18d2`.
+
+An artifact-verifier assumption initially rejected this valid deployment: the SDK
+returns `entry_point` as `["python", "main.py"]`, not the scalar `main.py` used in
+`azure.yaml`. Verification now requires that exact argv, Python 3.13 and
+`remote_build`; wrong runtime, script, arguments or dependency mode still fail.
+Nine targeted hosted release checks passed, and the already-downloaded v14
+artifact then passed verification without rebuilding or redeploying.
+
+Live API acceptance passed all seven scenarios, plus direct read-only PostgreSQL
+checks of outcomes, refund IDs/counts, approval consumption, events and native
+checkpoints. Deployed browser approval/resume and version-pinned hosted smoke
+also passed. These results do not substitute for the remaining hosted matrix,
+cloud judges or native trace/privacy gates.
+
+### Latest report: cloud judges passed; hosted lifecycle and tracing remain open
+
+Foundry v14 evaluation `eval_580d7544add645a780f4fc7d5d70604d`, run
+`evalrun_0a8102b049284b8a88b4561305b27a43`, completed with **4 passed, 0 failed,
+0 errored and 0 unscored**. Every item was downloaded and checked for both evaluator
+decisions; results remain private under the selected agent's `.foundry/results`.
+
+| Remaining issue | Observed evidence | Current action / completion boundary |
+| --- | --- | --- |
+| Full hosted matrix does not finish | Two attempts passed the first four scenarios, then failed around the next approval command. The first emitted `OperationalError`; the serial retry emitted a hosted SDK `HttpResponseError`. PostgreSQL had 33 connections against 35 ordinary slots (50 total minus 10 superuser and 5 reserved). Exact server SQLSTATE was not retained, so exhaustion is a strong hypothesis, not a proven error code. | The first failed approval had no durable decision recorded; explicit approval then resume recovered the same run successfully. Serial execution alone did not close the issue. Command-scoped hosted runtime ownership is being implemented so idle hosted compute cannot retain application pools or native saver connections. Regression/package checks and a new deployed full matrix are still required. |
+| Trace ancestry gate assumes direct parents | Live v14 traces contain workflow, node, tool and model spans, plus real LangChain graph/conditional-route callback spans. Four nodes fail the current direct-parent assertion even though their ancestor chain reaches the workflow. | Preserve native framework callbacks and validate actual ancestry rather than removing legitimate framework layers or declaring the current gate passed. |
+| Redundant SDK/HTTP tracing remains | Live operations still contain Azure SDK metadata/history and HTTPX model-transport spans. The original request/urllib3 opt-outs do not cover those mechanisms. | Add the supported Azure tracing opt-out and HTTPX post-constructor opt-out while retaining SDK provider ownership and native GenAI/framework tracing. These edits are not yet validated or deployed. |
+
+One hosted smoke operation passed the prohibited-attribute-key check; that is not
+full startup/privacy acceptance. The latest hosted lifecycle and telemetry edits
+are **work in progress**. API/frontend remain verified revisions `0000014` and
+`0000009`; the deployed hosted version remains **14**. No push/merge, schema reset,
+SKU increase or MAF runtime/resource change has occurred.
+
+The corrective candidate now closes hosted resources at each explicit command,
+including errors, and performs a separate startup verification without retaining
+idle database connections. The real isolated Python 3.13 hosted ASGI gate passed
+start, approval, resume and an error command with a fresh runtime context and
+verified close after every response. It also verifies actual Azure SDK tracing
+and HTTPX/request/urllib3 opt-outs without replacing the SDK provider.
+134 focused tests passed (two PostgreSQL-only cases were not selected into an
+active database environment). The ancestry query now accepts the observed native
+LangChain graph/route layers; actual v14 evidence passes, while broken graph
+ancestry, broken model parents and empty data remain failing fixtures.
+This candidate still requires a new hosted deployment and final cloud acceptance.
 
 The hosted SDK constructor-time telemetry window is an **unverified coverage
 limitation**, not a confirmed leak: the offline detector probe did not exercise its

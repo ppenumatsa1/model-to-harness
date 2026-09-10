@@ -278,10 +278,10 @@ def test_api_request_spans_use_route_templates_without_urls_or_payloads(monkeypa
 
 def test_hosted_policy_checks_actual_transport_state_not_just_opt_out_environment(monkeypatch):
     monkeypatch.delenv("APPLICATIONINSIGHTS_CONNECTION_STRING", raising=False)
-    monkeypatch.setenv("OTEL_PYTHON_DISABLED_INSTRUMENTATIONS", "requests,urllib3")
+    monkeypatch.setenv("OTEL_PYTHON_DISABLED_INSTRUMENTATIONS", "requests,urllib3,httpx")
     monkeypatch.setattr(trace, "get_tracer_provider", lambda: SimpleNamespace(sampler=ALWAYS_ON))
     loaded = []
-    states = {"requests": True, "urllib3": False, "langchain": True, "openai": True}
+    states = {"requests": True, "urllib3": False, "httpx": False, "langchain": True, "openai": True}
 
     def entry(name):
         def load():
@@ -297,7 +297,7 @@ def test_hosted_policy_checks_actual_transport_state_not_just_opt_out_environmen
         telemetry.verify_telemetry_policy(hosted=True)
     states["requests"] = False
     telemetry.verify_telemetry_policy(hosted=True)
-    assert set(loaded) == {"requests", "urllib3"}
+    assert set(loaded) == {"requests", "urllib3", "httpx"}
     assert states["langchain"] and states["openai"]
 
 

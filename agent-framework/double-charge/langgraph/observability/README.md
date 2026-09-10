@@ -15,6 +15,12 @@ reconstructed from audit timestamps, and no artificial MAF agent layer is added.
 Separate start, approval and resume requests retain their own operation IDs and
 safe hashed case/run correlation.
 
+Hosted commands open and close their own application pool, native saver and model
+clients. Startup verifies storage and releases those resources before serving;
+idle hosted compute does not retain them. SDK telemetry providers remain alive
+under SDK ownership. Do not overlap the full hosted matrix with cloud evaluation
+on the small teaching database.
+
 This teaching deployment requires full native retention, configured and checked
 after SDK initialization. Hosted SDK providers/exporters remain SDK-owned; API
 bootstrap owns its providers and cleanup. The pinned hosted stack is tested
@@ -29,7 +35,13 @@ before owned resources unwind; exception text and stacks remain excluded.
 
 `trace-completeness.kql` checks one fresh no-duplicate operation, including exact
 node set, workflow/model presence, parent linkage and sampling weight. Empty input
-fails. Extend the executed-node expectation for other branches rather than
+fails. Native LangChain graph and conditional-route callback spans may sit between
+`workflow.run` and instrumented nodes; the query validates their actual ancestor
+chain instead of requiring direct parents. SDK model spans remain available, but
+native model counts use `chat complaint_model` to avoid double-counting one call.
+Azure SDK transport tracing is disabled with `AZURE_TRACING_ENABLED=false`;
+requests, urllib3 and HTTPX opt-outs are checked after SDK construction.
+Extend the executed-node expectation for other branches rather than
 requiring every graph node in every operation. `trace-safety.kql` returns only
 prohibited attribute key names, never unrestricted attributes. `command-traces.kql`
 indexes actual commands, including failed and approval-only commands, without
