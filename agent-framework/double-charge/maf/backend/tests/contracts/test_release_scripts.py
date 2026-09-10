@@ -87,6 +87,46 @@ def test_pending_hosted_versions_are_not_success(modules):
     assert release.active_agent({"status": "active", "version": "4"}) == "4"
 
 
+def test_existing_update_requires_the_current_maf_schema(modules):
+    release, *_ = modules
+    schema = release.SCHEMA
+    assert release.validate_schema(schema, schema, update_existing=True) == schema
+    for requested in ("maf_other", "public", "langgraph_double_charge"):
+        with pytest.raises(release.ReleaseError):
+            release.validate_schema(requested, schema, update_existing=True)
+
+
+@pytest.mark.parametrize("invalid_history", [False, True])
+def test_existing_schema_check_is_read_only_and_fails_closed(modules, monkeypatch, invalid_history):
+    from maf_double_charge.application.errors import SchemaVersionError
+
+    release, *_ = modules
+    connection = AsyncMock()
+    connection.__aenter__.return_value = connection
+    connect = AsyncMock(return_value=connection)
+    check = AsyncMock(
+        side_effect=SchemaVersionError("private database details") if invalid_history else None
+    )
+    monkeypatch.setattr("psycopg.AsyncConnection.connect", connect)
+    monkeypatch.setattr(
+        "maf_double_charge.infrastructure.persistence.migrations.check_schema", check
+    )
+    subject = release.Release(release.parser().parse_args(["--update-existing"]))
+    subject.database_url = "private-connection"
+    subject.schema = release.SCHEMA
+    if invalid_history:
+        with pytest.raises(release.ReleaseError, match="schema verification failed") as error:
+            subject.verify_existing_schema()
+        assert "private" not in str(error.value)
+    else:
+        subject.verify_existing_schema()
+    connection.execute.assert_awaited_once_with("SET TRANSACTION READ ONLY")
+    check.assert_awaited_once_with(
+        connection, release.SCHEMA, migrations_dir=LANE / "backend/migrations"
+    )
+    connection.__aexit__.assert_awaited_once()
+
+
 @pytest.mark.parametrize("preview", [True, False])
 def test_arm_output_uses_machine_json_without_pretty_print_for_preview(modules, tmp_path, preview):
     release, *_ = modules
@@ -218,11 +258,18 @@ def test_apply_rejects_dirty_commit(modules):
 
 
 def configured_release(
-    release, monkeypatch, *, apply=False, foundation=False, migration_error=False
+    release,
+    monkeypatch,
+    *,
+    apply=False,
+    foundation=False,
+    migration_error=False,
+    update_existing=False,
 ):
     args = release.parser().parse_args(
         (["--apply", "--source-commit", "a" * 40] if apply else [])
         + (["--foundation"] if foundation else [])
+        + (["--update-existing"] if update_existing else [])
     )
     operations = []
     runner = Mock()
@@ -247,7 +294,7 @@ def configured_release(
         "backendImage": "registry/old-api:old",
         "frontendImage": "registry/old-web:old",
         "backendTargetPort": 8010,
-        "postgresSchema": "maf_double_charge",
+        "postgresSchema": release.SCHEMA if update_existing else "maf_double_charge",
         "postgresAdministratorPassword": "secret",
         "foundryProjectEndpoint": "https://project",
     }
@@ -263,6 +310,9 @@ def configured_release(
     subject.dirty = False
     monkeypatch.setattr(subject, "discover", lambda: None)
     monkeypatch.setattr(subject, "source_commit", lambda: "a" * 40)
+    monkeypatch.setattr(
+        subject, "verify_existing_schema", lambda: operations.append("schema-check")
+    )
 
     def deploy(parameters, *, preview, suffix=""):
         if preview:
@@ -270,7 +320,9 @@ def configured_release(
             assert parameters["postgresSchema"] == release.SCHEMA
             return {"changes": []}
         operations.append("foundation" if suffix else "rollout")
-        assert parameters["postgresSchema"] == ("maf_double_charge" if suffix else release.SCHEMA)
+        assert parameters["postgresSchema"] == (
+            "maf_double_charge" if suffix and not update_existing else release.SCHEMA
+        )
         if suffix:
             assert parameters["backendImage"] == "registry/old-api:old"
             assert parameters["frontendImage"] == "registry/old-web:old"
@@ -289,6 +341,47 @@ def test_preview_never_builds_migrates_or_deploys(modules, monkeypatch, capsys):
     subject.execute()
     assert operations == ["preview"]
     assert "secret" not in capsys.readouterr().out
+
+
+def test_existing_update_preview_only_checks_schema(modules, monkeypatch):
+    release, *_ = modules
+    subject, operations = configured_release(release, monkeypatch, update_existing=True)
+    subject.execute()
+    assert operations == ["preview", "schema-check"]
+
+
+def test_existing_update_checks_before_foundation_and_never_migrates(modules, monkeypatch):
+    release, *_ = modules
+    subject, operations = configured_release(
+        release, monkeypatch, apply=True, foundation=True, update_existing=True
+    )
+    subject.execute()
+    assert operations == [
+        "preview",
+        "schema-check",
+        "foundation",
+        "wait-apps",
+        "build",
+        "rollout",
+        "wait-apps",
+        "setup",
+        "setup",
+        "setup",
+        "hosted-deploy",
+    ]
+
+
+def test_existing_update_schema_failure_prevents_all_mutations(modules, monkeypatch):
+    release, *_ = modules
+    subject, operations = configured_release(
+        release, monkeypatch, apply=True, foundation=True, update_existing=True
+    )
+    monkeypatch.setattr(
+        subject, "verify_existing_schema", Mock(side_effect=release.ReleaseError("not current"))
+    )
+    with pytest.raises(release.ReleaseError, match="not current"):
+        subject.execute()
+    assert operations == ["preview"]
 
 
 def test_preview_never_logs_full_resource_payloads(modules, monkeypatch, capsys):
@@ -830,3 +923,27 @@ def test_hosted_telemetry_uses_the_compatible_platform_distro():
     ):
         assert f"{name}>=1.44,<1.45" in requirements
     assert not any(line.startswith("azure-monitor-opentelemetry==") for line in requirements)
+
+
+def test_api_release_packages_use_the_approved_mirror_without_tls_bypass():
+    from urllib.parse import urlsplit
+
+    mirror = "https://packagefeedproxy.microsoft.io/pypi/simple/"
+    manifest = tomllib.loads((LANE / "pyproject.toml").read_text())
+    indexes = manifest["tool"]["uv"]["index"]
+    assert [index["url"] for index in indexes if index.get("default")] == [mirror]
+    lock = tomllib.loads((LANE / "uv.lock").read_text())
+    for package in lock["package"]:
+        if registry := package.get("source", {}).get("registry"):
+            assert registry == mirror
+        artifacts = [package["sdist"]] if "sdist" in package else []
+        artifacts += package.get("wheels", [])
+        for artifact in artifacts:
+            assert urlsplit(artifact["url"]).hostname in {
+                "packagefeedproxy.microsoft.io",
+                "ms-feed-25.pkgs.visualstudio.com",
+            }
+    dockerfile = (LANE / "infra/container/Dockerfile").read_text()
+    assert "--allow-insecure-host" not in dockerfile
+    assert "UV_INDEX_URL" not in dockerfile
+    assert "--index-url" not in dockerfile

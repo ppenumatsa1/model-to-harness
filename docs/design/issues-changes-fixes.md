@@ -2,6 +2,32 @@
 
 This is a concise implementation ledger, not a release history.
 
+## 2026-09-10 - Consolidated MAF refactor summary
+
+**Implemented and deployed; not merge-ready.** This summary records the verified
+checkpoint `8da8444` on `refactor/maf-backend-cutover`, not subsequent uncommitted
+edits. It supersedes earlier interim status statements below; the detailed entries
+remain as the issue/fix evidence. No feature-branch push or merge was performed.
+
+| Task / area | Issue faced | Fix / completed outcome | Status |
+| --- | --- | --- | --- |
+| Backend organization | Flat modules mixed workflow, API, persistence, and presentation responsibilities. | Introduced explicit `api`, `application`, native `maf`, `infrastructure`, `projections`, and `testing` packages. Removed old modules without compatibility shims; LangGraph/shared runtime code stayed unchanged. | Complete |
+| Migrations and restart durability | Duplicate schema setup and namespace-bound checkpoints made an implicit cutover unsafe; reconstructed in-memory wrappers lost checkpoint backing state. | Kept `backend/migrations/` authoritative, with transactional locking, version/checksum tracking, packaged SQL, startup validation, and explicit fresh-schema migration. Checkpoint views now persist per repository/run; no old checkpoint conversion or schema reset. | Complete |
+| Workflow, API, and projections | Refactoring could change command semantics or allow chat to become an approval path. | Preserved 17 HTTP endpoints, 16 graph node IDs, seven scenario outcomes, durable explicit approval followed by separate resume, and read-only selected-run projections. Refunds retain idempotency plus independent verification. | Complete |
+| Runtime lifecycle and packaging | API and Python 3.13 hosted execution have different dependencies and telemetry ownership. | Added explicit bootstrap/start/close boundaries, canonical entrypoints, installed-wheel SQL resources, independent hosted requirements, and host-owned telemetry lifecycle. Local API/hosted, wheel, and container gates passed. | Complete |
+| Test integration and CI | Combined suites selected the wrong configuration; CI PostgreSQL settings violated the disposable-database guard. | Made MAF pytest configuration explicit and aligned CI database/user/port and fixture checks. Retained the guard against running destructive integration fixtures on remote databases. | Complete |
+| Safe access logging | Removing Uvicorn's formatting arguments caused logging errors; an unconditional Uvicorn import then broke the Hypercorn-based hosted environment. | Added a safe JSON access formatter and guarded detection of already-loaded formatter classes. Verified logging with real Uvicorn and isolated hosted startup without Uvicorn installed. | Complete |
+| Local/container package downloads | npm and PyPI downloads failed TLS handshakes inside containers. | Used the approved Microsoft npm/PyPI mirrors without disabling TLS or changing locked versions. Recorded the NuGet feed for future use; this lane has no NuGet build step. | Complete |
+| Hosted build recovery | Forcing the same PyPI mirror into Foundry remote build caused version 4 to fail. | Removed only the hosted index override, verified the same 94 resolved package versions, and deployed hosted version 5 without resetting data or redeploying applications. | Complete |
+| Browser acceptance | A browser assertion required the fake model's exact explanation wording. | Asserted successful streaming and exact rendering of the actual nonempty explanation while preserving deterministic business-outcome checks. Real-model browser E2E passed. | Complete |
+| Azure preview and application rollout | PostgreSQL was stopped; ARM what-if emitted non-JSON output and coarse change classifications. | Started only the approved server with unchanged SKU; added `--no-pretty-print`, detailed internal change inspection, sanitized output, and fail-closed gates. Migrated `maf_double_charge_cutover` and deployed locked images to API/frontend revisions `0000004`, preserving ingress boundaries. | Complete |
+| Hosted command sessions | Unstopped sessions exhausted PostgreSQL connections; CLI rejected combining invocation `--version` with `--session-id`. | Create uniquely owned sessions bound to a version, invoke by session ID only, and stop in `finally`. Stopped 28 verified task-owned sessions; all seven hosted scenarios then passed without increasing database capacity. | Complete |
+| Native telemetry and correlation | Hosted commands used different instances; approval correlation could exist only in logs; classic KQL union types differed. | Joined request-scoped agent identity to logs/dependencies by operation ID, correlated commands through hashed case/run IDs, and normalized types. Observed native hierarchy and usage; scoped safety scans found no targeted leaks. Telemetry is not an exactly-once or complete-trace guarantee. | Complete |
+| Evaluation seed and generated caches | Approval seed expected null instead of `waiting_approval`; nested generated results/metadata were not Git-ignored. | Corrected the seed to the existing durable-pause contract and tested every seed expectation against the hosted adapter. Added scoped cache exclusions while keeping the reviewed seed tracked and historical results intact. | Complete |
+| Verification and cleanup | Local success alone did not establish deployed durability or source provenance; test resources needed scoped cleanup. | Recorded 217 passing shared/backend tests, seven deterministic evaluations, seven cloud API and seven hosted scenarios, browser E2E, read-only SQL evidence for 15 runs, locked image digests, and a 73-file hosted archive match. Removed task-owned local services/storage/images/temporary environments; retained evidence and running Azure resources. | Complete |
+| Foundry evaluation scoring | Two four-row jobs each returned 0 passed, 0 failed, and 4 scoring errors without reasons, although all eight agent responses matched expectations. | Verified catalog versions and query/response mappings; retained both full results. The judge rejects `temperature=0` but accepts default-temperature chat. This constraint does not prove the scoring root cause; no unsupported override or replacement model was applied. | Blocked |
+| Merge acceptance and old-version retirement | Passing workflow behavior does not satisfy the unresolved cloud scoring gate; older hosted versions remain recorded. | Kept work on the feature branch and documented the blocker. Resolve scoring through supported diagnostics/configuration, obtain passing evaluation evidence, then complete scoped old-version retirement and merge review. | Blocked / deferred |
+
 ## Initial implementation
 
 - Added a framework-neutral Python 3.12 shared package with Pydantic contracts,
@@ -639,3 +665,26 @@ See each application README for its current validation commands.
   remain, with retirement deferred until acceptance; no claim is made that all old
   serving paths are retired. Work remains local on `refactor/maf-backend-cutover`;
   no feature-branch push or merge to `main` was performed.
+
+## 2026-09-10 - Resuming end-to-end release without resetting migrated state
+
+- The requested follow-up covers the latest MAF changes, existing-environment IaC,
+  deployment, smoke, E2E, evaluations, telemetry, and documentation. The feature
+  branch remains local; no push or merge is implied.
+- Pending edits had reintroduced the hosted PyPI mirror override that failed in
+  version 4, alongside contradictory documentation/tests. The useful API lock/CDN
+  mirror assertions are retained; hosted requirements continue to use the verified
+  platform-default index with TLS enabled.
+- The original helper only supported a fresh-schema cutover. Added explicit
+  `--update-existing` mode for later releases: it requires the currently deployed
+  MAF schema and verifies complete migration history/checksums read-only before
+  any cloud mutation. It never runs migrations, adopts legacy storage, or resets
+  records. The original fresh-schema guard and all topology/source/readiness
+  checks remain. Focused tests cover mismatch rejection, read-only verification,
+  failure before foundation changes, and absence of migration on updates.
+- Cloud scoring diagnostics and final new-release acceptance are in progress;
+  earlier passing workflow responses are not being relabeled as passing scores.
+- Local validation of this follow-up passed all 224 shared/backend tests with the
+  dedicated PostgreSQL database, all seven deterministic evaluations, Ruff, four
+  frontend tests, the production frontend build, Bicep compilation, and release
+  shell syntax checks. Hosted source/SQL preparation completed.

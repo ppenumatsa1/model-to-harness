@@ -1,8 +1,9 @@
-"""Reviewed existing-environment cutover. Preview is the default; never resets state."""
+"""Reviewed fresh cutover or existing-schema update. Preview is the default; never resets state."""
 
 from __future__ import annotations
 
 import argparse
+import asyncio
 import ipaddress
 import json
 import os
@@ -74,9 +75,14 @@ def required(values: dict[str, Any], key: str) -> Any:
     return value
 
 
-def validate_schema(value: str, old: str) -> str:
-    if not re.fullmatch(r"maf_[a-z0-9_]{1,59}", value) or value == old:
-        raise ReleaseError("Cutover requires a distinct MAF-only schema, at most 63 characters")
+def validate_schema(value: str, old: str, *, update_existing: bool = False) -> str:
+    if not re.fullmatch(r"maf_[a-z0-9_]{1,59}", value):
+        raise ReleaseError("Release requires a MAF-only schema, at most 63 characters")
+    if update_existing:
+        if value != old:
+            raise ReleaseError("Existing-schema update must use the currently deployed API schema")
+    elif value == old:
+        raise ReleaseError("Fresh cutover requires a distinct schema; use --update-existing")
     return value
 
 
@@ -167,7 +173,9 @@ class Release:
         frontend_container = self.frontend["properties"]["template"]["containers"][0]
         backend_env = {v["name"]: v.get("value") for v in backend_container.get("env", [])}
         old_schema = required(backend_env, "DATABASE_SCHEMA")
-        self.schema = validate_schema(self.args.schema, old_schema)
+        self.schema = validate_schema(
+            self.args.schema, old_schema, update_existing=self.args.update_existing
+        )
         ingress = self.backend["properties"]["configuration"]["ingress"]
         if ingress.get("external") is not False:
             raise ReleaseError("Existing API must remain private; refusing an unexpected topology")
@@ -249,6 +257,28 @@ class Release:
         ):
             raise ReleaseError("Existing app image is a placeholder; refusing direct cutover")
         self.database_url = database_url
+
+    def verify_existing_schema(self) -> None:
+        from maf_double_charge.application.errors import StorageReadinessError
+        from maf_double_charge.infrastructure.persistence.migrations import check_schema
+        from psycopg import AsyncConnection, Error
+        from psycopg.rows import dict_row
+
+        async def verify() -> None:
+            async with await AsyncConnection.connect(
+                self.database_url, row_factory=dict_row, connect_timeout=15
+            ) as connection:
+                await connection.execute("SET TRANSACTION READ ONLY")
+                await check_schema(
+                    connection, self.schema, migrations_dir=LANE / "backend/migrations"
+                )
+
+        try:
+            asyncio.run(verify())
+        except (StorageReadinessError, Error, ValueError):
+            raise ReleaseError(
+                "Existing schema verification failed; check database access and migration history"
+            ) from None
 
     def source_commit(self) -> str:
         commit = self.runner.run(
@@ -431,6 +461,7 @@ class Release:
             json.dumps(
                 {
                     "mode": "apply" if self.args.apply else "preview",
+                    "schema_mode": "existing" if self.args.update_existing else "fresh",
                     "environment": self.args.environment,
                     "resource_group": self.group,
                     "source_commit": commit,
@@ -476,6 +507,9 @@ class Release:
             for change in changes
         )
         print(f"Foundation apply preserving old images/schema required: {foundation}")
+        if self.args.update_existing:
+            self.verify_existing_schema()
+            print("Existing schema history/checksums verified read-only; no migration will run.")
         if not self.args.apply:
             print("Preview only. No images, schemas, resources, or hosted versions changed.")
             return
@@ -488,17 +522,18 @@ class Release:
             "DATABASE_URL": self.database_url,
             "DATABASE_SCHEMA": self.schema,
         }
-        self.runner.run(
-            [
-                str(LANE / ".venv/bin/python"),
-                str(LANE / "scripts/migrate.py"),
-                "--migrations-dir",
-                str(LANE / "backend/migrations"),
-                "--require-empty",
-            ],
-            env=migration_env,
-        )
-        print("Explicit fresh-schema SQL migration completed.")
+        if not self.args.update_existing:
+            self.runner.run(
+                [
+                    str(LANE / ".venv/bin/python"),
+                    str(LANE / "scripts/migrate.py"),
+                    "--migrations-dir",
+                    str(LANE / "backend/migrations"),
+                    "--require-empty",
+                ],
+                env=migration_env,
+            )
+            print("Explicit fresh-schema SQL migration completed.")
         print("Building archived committed app sources into immutable tags.")
         self.build(commit, tag)
         self.source_commit()
@@ -546,6 +581,11 @@ def parser() -> argparse.ArgumentParser:
     mode.add_argument("--apply", action="store_true", help="Execute the reviewed ordered cutover")
     result.add_argument("--environment", default="maf-dev")
     result.add_argument("--schema", default=SCHEMA)
+    result.add_argument(
+        "--update-existing",
+        action="store_true",
+        help="Verify and preserve the current versioned schema instead of creating a fresh one",
+    )
     result.add_argument("--source-commit", help="Validated clean HEAD commit (required for apply)")
     result.add_argument("--operator-ip", help="Explicit PostgreSQL operator firewall IPv4 address")
     result.add_argument(

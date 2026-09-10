@@ -1,4 +1,4 @@
-# Existing MAF deployment cutover
+# Existing MAF deployment
 
 This lane owns its Container Apps, ACR, PostgreSQL configuration and Foundry
 integration independently of LangGraph. The API stays private; the public nginx
@@ -14,6 +14,12 @@ Hosted platform distro `microsoft-opentelemetry==1.3.9` supports the tested OTel
 The API's Azure Monitor distro is not installed as a competing hosted provider.
 The SDK content-capture flag is forced to `false` before host construction and is
 also declared in `azure.yaml`; inherited local settings cannot enable prompt capture.
+API package downloads use the approved HTTPS mirror
+`https://packagefeedproxy.microsoft.io/pypi/simple/`. The API Docker build honors
+the default uv index and artifact URLs in the lane-owned manifest/lock.
+The mirror supplies Microsoft Azure
+Artifacts download URLs; the lock contains no original PyPI CDN downloads.
+TLS verification stays enabled.
 
 The local/API uv configuration and frontend builds use the approved Microsoft
 package-feed mirrors. Hosted `remote_build` requirements intentionally leave the
@@ -79,6 +85,29 @@ version with the Projects SDK; azd can still select the previous active version.
 Retry only the hosted deployment from a clean validated source snapshot, preserving
 the already-migrated schema and application images. A dependency-index-only hosted
 fix does not change the deployed API/frontend runtime source.
+
+## Update an already migrated deployment
+
+For subsequent releases, explicitly select `--update-existing` with the schema
+already configured on the API. Preview and apply verify that schema's complete
+migration history and checksums through a read-only connection. Missing, legacy,
+changed, or pending migrations stop the release before any cloud mutation.
+This mode does not create, migrate, adopt, or reset a schema; it is not a bypass
+for the fresh-cutover guard. Apply any future reviewed SQL migration explicitly
+before using it.
+
+```bash
+AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
+  scripts/deploy_azure.sh --preview --update-existing --environment maf-dev \
+  --schema maf_double_charge_cutover
+AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
+  scripts/deploy_azure.sh --apply --update-existing --environment maf-dev \
+  --source-commit "$(git rev-parse HEAD)" --schema maf_double_charge_cutover
+```
+
+The remaining source, IaC, immutable-image, private-ingress, readiness, and hosted
+version gates are unchanged. Preview is still read-only; apply creates new image
+tags and a new hosted version, preserving all workflow records and checkpoints.
 
 ## Explicit acceptance
 
