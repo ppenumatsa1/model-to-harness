@@ -8,6 +8,7 @@ import json
 import os
 import stat
 import zipfile
+from copy import deepcopy
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -430,6 +431,230 @@ def test_rollout_requires_exact_environment_and_narrow_delta():
     result["changes"][0]["delta"] = [{"path": "properties.configuration.ingress.external"}]
     with pytest.raises(release.ReleaseError):
         release.validate_what_if(result, {"/api", "/web"}, rollout=True, expected=expected)
+
+
+def test_identical_unmanaged_ignore_is_not_an_arm_mutation():
+    result = what_if()
+    result["changes"].append(
+        {
+            "resourceId": "/maf",
+            "changeType": "Ignore",
+            "before": {"name": "untouched", "properties": {"setting": "unchanged"}},
+            "after": {"name": "untouched", "properties": {"setting": "unchanged"}},
+            "delta": [],
+        }
+    )
+    release.validate_what_if(result, {"/api", "/web"})
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"resourceId": "/api"},
+        {"before": None, "after": None},
+        {"after": {"name": "changed"}},
+        {"delta": [{"path": "properties.setting", "propertyChangeType": "Modify"}]},
+        {"diagnostics": [{"code": "ExpansionLimit"}]},
+        {"unsupportedReason": "ShortCircuited"},
+        {"changeType": "Modify"},
+        {"changeType": "Create"},
+        {"changeType": "Delete"},
+        {"changeType": "Deploy"},
+    ],
+)
+def test_ignore_never_hides_unevaluated_apps_or_other_lane_mutations(override):
+    result = what_if()
+    result["changes"].append(
+        {
+            "resourceId": "/maf",
+            "changeType": "Ignore",
+            "before": {"name": "untouched"},
+            "after": {"name": "untouched"},
+            **override,
+        }
+    )
+    with pytest.raises(release.ReleaseError):
+        release.validate_what_if(result, {"/api", "/web"})
+
+
+def test_arm_global_diagnostics_and_contradictory_nochange_fail():
+    result = what_if()
+    result["diagnostics"] = [{"code": "ExpansionLimit"}]
+    with pytest.raises(release.ReleaseError):
+        release.validate_what_if(result, {"/api", "/web"})
+    result = what_if()
+    result["changes"][0]["delta"] = [{"path": "identity", "propertyChangeType": "Modify"}]
+    with pytest.raises(release.ReleaseError):
+        release.validate_what_if(result, {"/api", "/web"})
+
+
+def service_default_preview():
+    before = {
+        "properties": {
+            "runningStatus": "Running",
+            "configuration": {"ingress": {"exposedPort": 0}},
+            "template": {"containers": [{"image": "unchanged", "env": []}]},
+        }
+    }
+    after = deepcopy(before)
+    del after["properties"]["runningStatus"]
+    del after["properties"]["configuration"]["ingress"]["exposedPort"]
+    return what_if(
+        "Modify",
+        before=before,
+        after=after,
+        delta=[
+            {"path": "properties.runningStatus", "propertyChangeType": "Delete"},
+            {
+                "path": "properties.configuration.ingress.exposedPort",
+                "propertyChangeType": "Delete",
+            },
+        ],
+    )
+
+
+def test_baseline_accepts_only_observed_readonly_and_zero_port_omissions():
+    release.validate_what_if(service_default_preview(), {"/api", "/web"})
+    for value in (80, None, "0"):
+        result = service_default_preview()
+        result["changes"][0]["before"]["properties"]["configuration"]["ingress"]["exposedPort"] = (
+            value
+        )
+        with pytest.raises(release.ReleaseError):
+            release.validate_what_if(result, {"/api", "/web"})
+    result = service_default_preview()
+    result["changes"][0]["before"]["properties"]["runningStatus"] = "Stopped"
+    with pytest.raises(release.ReleaseError):
+        release.validate_what_if(result, {"/api", "/web"})
+    result = service_default_preview()
+    result["changes"][0]["delta"][0]["propertyChangeType"] = "Modify"
+    with pytest.raises(release.ReleaseError):
+        release.validate_what_if(result, {"/api", "/web"})
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "properties.configuration.ingress.traffic",
+        "properties.configuration.registries[0].server",
+        "properties.configuration.secrets",
+        "properties.template.containers[0].env[0].value",
+        "identity.userAssignedIdentities",
+    ],
+)
+def test_baseline_rejects_meaningful_changes_alongside_service_noise(path):
+    result = service_default_preview()
+    result["changes"][0]["delta"].append({"path": path, "propertyChangeType": "Modify"})
+    with pytest.raises(release.ReleaseError):
+        release.validate_what_if(result, {"/api", "/web"})
+
+
+def nested_container_delta(path):
+    return [
+        {
+            "path": "properties.template.containers",
+            "propertyChangeType": "Array",
+            "children": [
+                {
+                    "path": "0",
+                    "propertyChangeType": "Modify",
+                    "children": [{"path": path, "propertyChangeType": "Modify"}],
+                }
+            ],
+        }
+    ]
+
+
+def test_nested_arm_array_deltas_preserve_exact_runtime_paths():
+    deltas = nested_container_delta("env[3].value")
+    assert [path for path, _ in release.delta_leaves(deltas)] == [
+        "properties.template.containers[0].env[3].value"
+    ]
+    payload = {
+        "properties": {
+            "template": {
+                "containers": [
+                    {"image": "digest", "env": [{"name": "LANGGRAPH_SCHEMA", "value": "cutover"}]}
+                ]
+            }
+        }
+    }
+    wanted = {"/api": deepcopy(payload["properties"]["template"]["containers"][0])}
+    result = what_if("Modify", before=payload, after=payload, delta=deltas)
+    release.validate_what_if(result, {"/api", "/web"}, rollout=True, expected=wanted)
+    result["changes"][0]["delta"] = nested_container_delta("resources.cpu")
+    with pytest.raises(release.ReleaseError):
+        release.validate_what_if(result, {"/api", "/web"}, rollout=True, expected=wanted)
+    result["changes"][0]["delta"] = deltas
+    wanted["/api"]["env"][0]["value"] = "unapproved"
+    with pytest.raises(release.ReleaseError):
+        release.validate_what_if(result, {"/api", "/web"}, rollout=True, expected=wanted)
+
+
+@pytest.mark.parametrize("deltas", [[None], [{}], [{"path": "x", "children": {}}]])
+def test_malformed_nested_arm_deltas_fail_closed(deltas):
+    with pytest.raises(release.ReleaseError):
+        list(release.delta_leaves(deltas))
+
+
+def reference_apps():
+    apps = {}
+    for kind in ("backend", "frontend"):
+        identity = f"/subscriptions/fixture/resourceGroups/langgraph/identities/{kind}"
+        apps[kind] = {
+            "identity": {"userAssignedIdentities": {identity: {"clientId": kind + "-client"}}},
+            "properties": {
+                "configuration": {
+                    "activeRevisionsMode": "Single",
+                    "ingress": {
+                        "fqdn": kind + ".example.test",
+                        "traffic": [{"latestRevision": True, "weight": 100}],
+                    },
+                    "registries": [
+                        {"server": "registry.example.test", "identity": identity.lower()}
+                    ],
+                },
+                "template": {
+                    "containers": [
+                        {
+                            "env": [
+                                {"name": "AZURE_CLIENT_ID", "value": kind + "-client"},
+                                {"name": "BACKEND_HOST", "value": "backend.example.test"},
+                            ]
+                        }
+                    ]
+                },
+            },
+        }
+    return apps
+
+
+def test_resolved_app_parameters_verify_existing_reference_linkage_case_insensitively():
+    assert release.app_reference_parameters(reference_apps(), "registry.example.test") == {
+        "registryEndpoint": "registry.example.test",
+        "backendClientId": "backend-client",
+        "backendHost": "backend.example.test",
+    }
+
+
+@pytest.mark.parametrize("field", ["traffic", "registry", "identity", "client", "host", "topology"])
+def test_resolved_app_parameters_reject_unreviewed_reference_drift(field):
+    apps = reference_apps()
+    configuration = apps["backend"]["properties"]["configuration"]
+    if field == "traffic":
+        configuration["ingress"]["traffic"] = [{"revisionName": "old", "weight": 100}]
+    elif field == "registry":
+        configuration["registries"][0]["server"] = "other.example.test"
+    elif field == "identity":
+        configuration["registries"][0]["identity"] = "/other"
+    elif field == "client":
+        apps["backend"]["properties"]["template"]["containers"][0]["env"][0]["value"] = "other"
+    elif field == "host":
+        apps["frontend"]["properties"]["template"]["containers"][0]["env"][1]["value"] = "other"
+    else:
+        apps["backend"]["properties"]["template"]["containers"].append({"env": []})
+    with pytest.raises(release.ReleaseError):
+        release.app_reference_parameters(apps, "registry.example.test")
 
 
 class RecordingRelease(release.Release):

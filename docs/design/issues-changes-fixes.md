@@ -4,6 +4,31 @@ This is a concise implementation ledger, not a release history.
 
 ## LangGraph direct cutover - implementation in progress
 
+### Current progress checkpoint
+
+**Nine of thirteen work packages are complete; release/deployment are active and
+cloud acceptance/final handoff are pending.** The verified cutover is committed
+locally as `a27cb6e` on `refactor/maf-backend-cutover`; no push or merge occurred.
+
+| Area | Current evidence / remaining work | Status |
+| --- | --- | --- |
+| Backend and storage cutover | Independent package boundaries, explicit application/native-checkpoint setup, verify-only startup, durable approval/resume and recovery are implemented. No legacy-data migration. | Complete |
+| Independent review | The checkpoint-evidence restart defect is fixed and covered at both pre-validation restart boundaries; reviewer finding closed. | Complete |
+| Local acceptance | 182 tests with PostgreSQL and no skips; seven deterministic evaluations and seven API scenarios; frontend tests/build/browser; wheel and isolated Python 3.13 hosted package gates passed. | Complete |
+| Telemetry implementation | Real execution spans, safe correlation, full-retention policy and KQL positive/negative gates are implemented and locally checked. Fresh deployed hierarchy, noise and privacy still need verification. | Local complete; cloud pending |
+| Existing infrastructure | LangGraph PostgreSQL was explicitly started after review, without changing SKU. Full ARM preview succeeded and is privately persisted. No schema or application/hosted cutover yet. | Preflight active |
+| Release gate | Validator currently rejects non-mutating ARM `Ignore` entries; remaining property deltas must also be inspected, not blanket-allowed. | Active blocker |
+| Cloud acceptance and handoff | Immutable app/hosted rollout, smoke, API/hosted/browser E2E, SQL proof, four-case cloud evaluation, telemetry proof and final docs/evidence remain. | Pending |
+
+Core implementation has stopped and its owned test resources were cleaned up.
+Parent-owned disposable PostgreSQL was also removed after acceptance. MAF runtime,
+shared package and deployed MAF resources remain unchanged.
+
+The hosted SDK constructor-time telemetry window is an **unverified coverage
+limitation**, not a confirmed leak: the offline detector probe did not exercise its
+metadata transport. Request-path cleanup and native spans passed, but live startup
+and command privacy/noise checks must close that gap before final acceptance.
+
 The approved scope includes backend organization, explicit storage setup, native
 execution tracing, packaging/CI, IaC, deployment, smoke, E2E, cloud evaluations and
 documentation. Work continues on `refactor/maf-backend-cutover`; no push or merge is
@@ -74,6 +99,31 @@ parent failed. These are query-validation results, not deployed cutover trace pr
 **Implementation/review and local acceptance are complete.** Cloud rollout,
 fresh source/version/archive verification, smoke/E2E, actual cloud evaluation rows
 and fresh native trace acceptance remain separate pending gates. No push or merge.
+
+### Cloud preflight after local acceptance
+
+The verified implementation is committed locally as `a27cb6e`. Azure ARM what-if
+itself returned `ServerStoppedError` for the existing stopped LangGraph PostgreSQL
+server, not a runtime failure. After review and local acceptance, that existing
+server was explicitly started without a SKU/capacity change. The next full ARM
+preview succeeded and was persisted privately.
+
+The release validator then rejected ARM `Ignore` entries for resources outside the
+incremental deployment, including the untouched MAF lane. This is a fail-closed
+validator limitation, not authorization to change those resources. Narrow handling
+of non-mutating `Ignore` entries and inspection of remaining property-level deltas
+are required before apply. No application/hosted rollout or schema cutover has
+occurred at this point. The task-owned disposable acceptance database was removed
+after the 182-test run.
+
+The bounded correction is now verified: the live read-only baseline preview passes.
+The release template manages only the two LangGraph Container Apps and references
+supporting infrastructure as existing, avoiding unrelated RBAC, connection,
+PostgreSQL and service-default rewrites. All 22 unmanaged `Ignore` entries have
+identical before/after payloads and no deltas. Only the two observed service-generated
+app omissions are accepted; deletion, managed-app Ignore, diagnostics, supporting
+resource changes and meaningful baseline deltas still fail closed. The final
+immutable-image/schema preview remains mandatory before migration or rollout.
 
 ## 2026-09-10 - Consolidated MAF refactor summary
 

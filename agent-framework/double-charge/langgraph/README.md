@@ -112,9 +112,9 @@ deployment scripts. Nothing is shared with the MAF deployment.
 - The Foundry hosted agent uses direct-code `codeConfiguration` with
   `python_3_13` and the Responses `2.0.0` protocol.
 - `infra/main.bicep` uses the resolved existing region and references the lane's
-  Foundry account/project and model deployment. It manages ACR, Container Apps,
-  PostgreSQL Flexible Server, Log Analytics, Application Insights, a project
-  monitoring connection, identities and role assignments with reviewed update gates.
+  Foundry account/project, model and supporting resources. The release template
+  manages only the two Container Apps; it does not rewrite infrastructure,
+  permissions or monitoring connections as a side effect of an application update.
 - The frontend is the only public Container App. nginx serves React and proxies
   `/api`, `/health`, and `/ready` to the internal FastAPI app.
 

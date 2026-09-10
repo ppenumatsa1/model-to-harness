@@ -319,7 +319,7 @@ def persist_arm_preview(result: dict[str, Any]) -> Path:
         resource_id = change.get("resourceId")
         safe_id = isinstance(resource_id, str) and re.fullmatch(
             r"/subscriptions/[0-9a-fA-F-]+/resourceGroups/[A-Za-z0-9_.()-]+/"
-            r"providers/[A-Za-z0-9_./()-]+",
+            r"providers/[A-Za-z0-9_ ./()-]+",
             resource_id,
         )
         kind = change.get("changeType")
@@ -402,6 +402,64 @@ def stage_sources(destination: Path, runner: Runner) -> dict[str, str]:
     return files
 
 
+def delta_leaves(deltas: list[dict[str, Any]], prefix: str = ""):
+    for delta in deltas:
+        if not isinstance(delta, dict):
+            raise ReleaseError("ARM delta is malformed")
+        part = delta.get("path")
+        if not isinstance(part, str) or not part:
+            raise ReleaseError("ARM delta has no property path")
+        path = (
+            f"{prefix}[{part}]"
+            if prefix and part.isdecimal()
+            else (f"{prefix}.{part}" if prefix else part)
+        )
+        children = delta.get("children")
+        if children is not None and not isinstance(children, list):
+            raise ReleaseError("ARM delta children are malformed")
+        if children:
+            yield from delta_leaves(children, path)
+        else:
+            yield path, delta
+
+
+def app_reference_parameters(
+    apps: dict[str, dict[str, Any]], registry_endpoint: str
+) -> dict[str, str]:
+    containers = {}
+    for kind, app in apps.items():
+        configuration = app["properties"]["configuration"]
+        if configuration.get("activeRevisionsMode") != "Single" or (
+            configuration["ingress"].get("traffic") != [{"latestRevision": True, "weight": 100}]
+        ):
+            raise ReleaseError("Release requires existing single-revision latest traffic")
+        registries = configuration.get("registries", [])
+        identities = app.get("identity", {}).get("userAssignedIdentities", {})
+        if (
+            len(registries) != 1
+            or registries[0].get("server") != registry_endpoint
+            or str(registries[0].get("identity", "")).lower()
+            not in {identity.lower() for identity in identities}
+        ):
+            raise ReleaseError("Container App registry/identity differs from discovered ACR")
+        items = app["properties"]["template"]["containers"]
+        if len(items) != 1:
+            raise ReleaseError("Release requires one existing container per app")
+        containers[kind] = {item["name"]: item.get("value") for item in items[0].get("env", [])}
+    client_id = required(containers["backend"], "AZURE_CLIENT_ID")
+    identities = apps["backend"]["identity"]["userAssignedIdentities"]
+    if not any(identity.get("clientId") == client_id for identity in identities.values()):
+        raise ReleaseError("Backend client ID is not its existing managed identity")
+    backend_host = required(apps["backend"]["properties"]["configuration"]["ingress"], "fqdn")
+    if containers["frontend"].get("BACKEND_HOST") != backend_host:
+        raise ReleaseError("Frontend proxy does not target the discovered private backend")
+    return {
+        "registryEndpoint": registry_endpoint,
+        "backendClientId": client_id,
+        "backendHost": backend_host,
+    }
+
+
 def validate_what_if(
     result: dict[str, Any],
     app_ids: set[str],
@@ -409,7 +467,7 @@ def validate_what_if(
     rollout: bool = False,
     expected: dict[str, dict[str, Any]] | None = None,
 ) -> None:
-    if result.get("status") != "Succeeded" or result.get("error"):
+    if result.get("status") != "Succeeded" or result.get("error") or result.get("diagnostics"):
         raise ReleaseError("Full ARM what-if did not succeed")
     changes = result.get("changes")
     if not isinstance(changes, list) or not changes:
@@ -423,35 +481,66 @@ def validate_what_if(
         if resource in app_ids:
             seen_apps.add(resource)
         if kind == "NoChange":
+            if change.get("delta"):
+                raise ReleaseError("NoChange resource contains contradictory property deltas")
             continue
-        # ARM reports unrelated resources in the shared resource group as Ignore.
-        # They have no desired payload and are never mutation candidates.
-        if kind == "Ignore" and resource not in app_ids and not change.get("after"):
+        # FullResourcePayloads includes identical before/after for resources outside the template.
+        # Never accept Ignore for a managed app: that can indicate unevaluated/short-circuited work.
+        if (
+            kind == "Ignore"
+            and resource not in app_ids
+            and not change.get("delta")
+            and isinstance(change.get("before"), dict)
+            and change["before"] == change.get("after")
+        ):
             continue
-        if kind != "Modify" or resource not in app_ids or not rollout:
+        if kind != "Modify" or resource not in app_ids:
             raise ReleaseError("Unapproved ARM change type; inspect the private preview artifact")
         if not isinstance(change.get("before"), dict) or not isinstance(change.get("after"), dict):
             raise ReleaseError("ARM what-if must include full before/after payloads")
-        if expected is None or resource not in expected:
+        if rollout and (expected is None or resource not in expected):
             raise ReleaseError("Rollout requires exact desired runtime payloads")
         properties = change["after"].get("properties", {})
         containers = properties.get("template", {}).get("containers", [])
         if len(containers) != 1:
             raise ReleaseError("ARM proposed an unexpected container topology")
         actual = containers[0]
-        wanted = expected[resource]
-        if any(actual.get(key) != value for key, value in wanted.items()):
+        wanted = expected[resource] if rollout and expected is not None else {}
+        if rollout and any(actual.get(key) != value for key, value in wanted.items()):
             raise ReleaseError("ARM runtime payload differs from the reviewed image/environment")
         deltas = change.get("delta")
         if not isinstance(deltas, list) or not deltas:
             raise ReleaseError("Modified resource lacks property-level evidence")
-        for delta in deltas:
-            path = delta.get("path", "")
-            allowed = path == "properties.configuration.ingress.targetPort" or re.fullmatch(
-                r"properties\.template\.containers\[0\]\."
-                r"(image|probes(?:\[.*)?|env(?:\[.*)?)",
-                path,
+        for path, delta in delta_leaves(deltas):
+            before = change["before"].get("properties", {})
+            # Evidence-backed service fields only; do not normalize arbitrary deleted properties.
+            if (
+                path == "properties.runningStatus"
+                and delta.get("propertyChangeType") == "Delete"
+                and before.get("runningStatus") == "Running"
+                and "runningStatus" not in properties
+            ):
+                continue
+            if (
+                path == "properties.configuration.ingress.exposedPort"
+                and delta.get("propertyChangeType") == "Delete"
+                and before.get("configuration", {}).get("ingress", {}).get("exposedPort") == 0
+                and "exposedPort" not in properties.get("configuration", {}).get("ingress", {})
+            ):
+                continue
+            if not rollout:
+                raise ReleaseError("Baseline ARM preview contains meaningful app changes")
+            allowed = bool(
+                re.fullmatch(
+                    r"properties\.template\.containers\[0\]\."
+                    r"(image|probes(?:\[.*)?|env\[\d+\]\.value)",
+                    path,
+                )
             )
+            if path == "properties.configuration.ingress.targetPort":
+                allowed = bool(wanted.get("probes")) and (
+                    properties.get("configuration", {}).get("ingress", {}).get("targetPort") == 8000
+                )
             if not allowed:
                 raise ReleaseError("ARM proposed changes outside approved runtime properties")
     if seen_apps != app_ids:
@@ -585,7 +674,6 @@ class Release:
             "postgresAdministratorPassword": unquote(database.password),
             "postgresDatabaseName": unquote(database.path.lstrip("/")),
             "postgresServerName": server_name,
-            "operatorIp": previous.get("operatorIp", ""),
             "tags": previous.get("tags", {}),
             "langgraphSchema": current[0],
             "langgraphCheckpointSchema": current[1],
@@ -596,6 +684,7 @@ class Release:
             ],
             "enableBackendProbes": bool(containers["backend"].get("probes")),
         }
+        self.parameters.update(app_reference_parameters(self.apps, self.registry_server))
         if any("helloworld" in self.parameters[key] for key in ("backendImage", "frontendImage")):
             raise ReleaseError("Cannot cut over from placeholder app images")
         configured = self.values.get("POSTGRES_ADMINISTRATOR_PASSWORD")

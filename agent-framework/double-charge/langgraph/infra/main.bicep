@@ -36,8 +36,14 @@ param langgraphSchema string = 'langgraph_app_cutover'
 @maxLength(63)
 param langgraphCheckpointSchema string = 'langgraph_checkpoints_cutover'
 
-@description('Optional release-operator IPv4 address for database migration access.')
-param operatorIp string = ''
+@description('Existing ACR login server, resolved and checked by read-only release discovery.')
+param registryEndpoint string
+
+@description('Existing backend managed identity client ID, verified against the deployed app.')
+param backendClientId string
+
+@description('Existing private backend ingress FQDN, verified against the same-origin proxy.')
+param backendHost string
 
 @description('Verified immutable backend image reference (registry/repository@sha256:digest).')
 param backendImage string
@@ -57,7 +63,6 @@ param tags object = {}
 var suffix = uniqueString(subscription().id, resourceGroup().id, namePrefix)
 var effectiveFoundryAccountName = foundryAccountName
 var registryName = take('${replace(namePrefix, '-', '')}${suffix}acr', 50)
-var logName = take('${namePrefix}-${suffix}-log', 63)
 var insightsName = take('${namePrefix}-${suffix}-appi', 64)
 var environmentName = take('${namePrefix}-${suffix}-cae', 32)
 var backendName = take('${namePrefix}-${suffix}-api', 32)
@@ -86,225 +91,33 @@ resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
   name: modelDeploymentName
 }
 
-resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
+resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: registryName
-  location: location
-  tags: tags
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    adminUserEnabled: false
-    publicNetworkAccess: 'Enabled'
-  }
 }
 
-resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
-  name: logName
-  location: location
-  tags: tags
-  properties: {
-    sku: {
-      name: 'PerGB2018'
-    }
-    retentionInDays: 30
-  }
-}
-
-resource insights 'Microsoft.Insights/components@2020-02-02' = {
+resource insights 'Microsoft.Insights/components@2020-02-02' existing = {
   name: insightsName
-  location: location
-  tags: tags
-  kind: 'web'
-  properties: {
-    Application_Type: 'web'
-    WorkspaceResourceId: logs.id
-    publicNetworkAccessForIngestion: 'Enabled'
-    publicNetworkAccessForQuery: 'Enabled'
-  }
 }
 
-resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
+resource environment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
   name: environmentName
-  location: location
-  tags: tags
-  properties: {
-    appLogsConfiguration: {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: logs.properties.customerId
-        sharedKey: logs.listKeys().primarySharedKey
-      }
-    }
-  }
 }
 
-resource backendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+resource backendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: backendIdentityName
-  location: location
-  tags: tags
 }
 
-resource frontendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+resource frontendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: frontendIdentityName
-  location: location
-  tags: tags
 }
 
-resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
+resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' existing = {
   name: postgresName
-  location: location
-  tags: tags
-  sku: {
-    name: 'Standard_B1ms'
-    tier: 'Burstable'
-  }
-  properties: {
-    administratorLogin: postgresAdministratorLogin
-    administratorLoginPassword: postgresAdministratorPassword
-    version: '16'
-    storage: {
-      storageSizeGB: 32
-    }
-    backup: {
-      backupRetentionDays: 7
-      geoRedundantBackup: 'Disabled'
-    }
-    highAvailability: {
-      mode: 'Disabled'
-    }
-    network: {
-      publicNetworkAccess: 'Enabled'
-    }
-    authConfig: {
-      activeDirectoryAuth: 'Disabled'
-      passwordAuth: 'Enabled'
-    }
-  }
 }
 
-resource azureServicesFirewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
-  parent: postgres
-  name: 'AllowAzureServices'
-  properties: {
-    startIpAddress: '0.0.0.0'
-    endIpAddress: '0.0.0.0'
-  }
-}
-
-resource operatorFirewall 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = if (!empty(operatorIp)) {
-  parent: postgres
-  name: 'ReleaseOperator'
-  properties: {
-    startIpAddress: operatorIp
-    endIpAddress: operatorIp
-  }
-}
-
-resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
+resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' existing = {
   parent: postgres
   name: postgresDatabaseName
-  properties: {
-    charset: 'UTF8'
-    collation: 'en_US.utf8'
-  }
-}
-
-resource acrPullRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  scope: subscription()
-  name: '7f951dda-4ed3-4680-a7ca-43fe172d538d'
-}
-
-resource openAiUserRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  scope: subscription()
-  name: '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
-}
-
-resource logAnalyticsReaderRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  scope: subscription()
-  name: '73c42c96-874c-492b-b04d-ab87d138a893'
-}
-
-resource backendAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(registry.id, backendIdentity.id, acrPullRole.id)
-  scope: registry
-  properties: {
-    roleDefinitionId: acrPullRole.id
-    principalId: backendIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource frontendAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(registry.id, frontendIdentity.id, acrPullRole.id)
-  scope: registry
-  properties: {
-    roleDefinitionId: acrPullRole.id
-    principalId: frontendIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource backendOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(foundryAccount.id, backendIdentity.id, openAiUserRole.id)
-  scope: foundryAccount
-  properties: {
-    roleDefinitionId: openAiUserRole.id
-    principalId: backendIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource projectOpenAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(foundryAccount.id, foundryProject.id, openAiUserRole.id)
-  scope: foundryAccount
-  properties: {
-    roleDefinitionId: openAiUserRole.id
-    principalId: foundryProject.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource projectApplicationInsightsReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(insights.id, foundryProject.id, logAnalyticsReaderRole.id)
-  scope: insights
-  properties: {
-    roleDefinitionId: logAnalyticsReaderRole.id
-    principalId: foundryProject.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource projectLogAnalyticsReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(logs.id, foundryProject.id, logAnalyticsReaderRole.id)
-  scope: logs
-  properties: {
-    roleDefinitionId: logAnalyticsReaderRole.id
-    principalId: foundryProject.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource projectApplicationInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = {
-  parent: foundryProject
-  name: 'ApplicationInsights'
-  properties: {
-    category: 'AppInsights'
-    target: insights.id
-    authType: 'ApiKey'
-    isSharedToAll: true
-    credentials: {
-      key: insights.properties.ConnectionString
-    }
-    metadata: {
-      ApiType: 'Azure'
-      ResourceId: insights.id
-    }
-  }
-  dependsOn: [
-    projectApplicationInsightsReader
-    projectLogAnalyticsReader
-  ]
 }
 
 resource backend 'Microsoft.App/containerApps@2024-03-01' = {
@@ -325,10 +138,16 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = {
         external: false
         targetPort: backendTargetPort
         transport: 'auto'
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
       }
       registries: [
         {
-          server: registry.properties.loginServer
+          server: registryEndpoint
           identity: backendIdentity.id
         }
       ]
@@ -380,7 +199,7 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'AZURE_CLIENT_ID'
-              value: backendIdentity.properties.clientId
+              value: backendClientId
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
@@ -444,10 +263,16 @@ resource frontend 'Microsoft.App/containerApps@2024-03-01' = {
         targetPort: 80
         transport: 'auto'
         allowInsecure: false
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
       }
       registries: [
         {
-          server: registry.properties.loginServer
+          server: registryEndpoint
           identity: frontendIdentity.id
         }
       ]
@@ -460,7 +285,7 @@ resource frontend 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             {
               name: 'BACKEND_HOST'
-              value: backend.properties.configuration.ingress.fqdn
+              value: backendHost
             }
             {
               name: 'NGINX_ENVSUBST_FILTER'
@@ -488,7 +313,7 @@ output foundryProjectEndpoint string = foundryProjectEndpoint
 output openAiEndpoint string = azureOpenAiEndpoint
 output modelDeploymentName string = modelDeployment.name
 output registryName string = registry.name
-output registryEndpoint string = registry.properties.loginServer
+output registryEndpoint string = registryEndpoint
 output backendName string = backend.name
 output frontendName string = frontend.name
 output frontendUrl string = 'https://${frontend.properties.configuration.ingress.fqdn}'

@@ -4,16 +4,12 @@ This directory is owned only by the LangGraph lane. It does not import deploymen
 modules, runtime code, identities, databases, images, or azd state from the MAF lane.
 
 `main.bicep` targets an existing resource group and requires the resolved location.
-The cutover release uses existing lane resources and references its existing
-Foundry account/project/model rather than provisioning another. The template manages:
-
-- ACR, Log Analytics, workspace-based Application Insights, and a Container Apps
-  environment;
-- an internal Python 3.12 FastAPI Container App and an external React/nginx
-  Container App;
-- PostgreSQL Flexible Server 16 with one lane-owned database;
-- user-assigned Container App identities with only ACR pull and backend model-use
-  roles, plus model-use access for the Foundry project identity.
+The cutover release references existing supporting resources and manages exactly
+two resources: the internal Python 3.12 FastAPI Container App and external React/nginx
+Container App. It does not rewrite PostgreSQL, ACR, managed environments, Foundry
+connections, identities, RBAC or firewall rules merely to update application code.
+Those resources remain independently owned by this lane, but foundation provisioning
+is outside this existing-environment release command.
 
 The public frontend proxies `/api`, `/health`, and `/ready` to the internal backend.
 The backend and hosted adapter use the same parameterized `langgraph_app_cutover`
@@ -51,6 +47,13 @@ revision readback. Existing stopped PostgreSQL must be explicitly started first;
 the script never changes its SKU or silently starts it. Fresh setup refuses either
 schema already existing. `--update-existing` instead verifies the deployed pair
 without DDL/reset.
+
+Full ARM previews are persisted privately before validation. Unmanaged `Ignore`
+entries are accepted only when before/after payloads are identical and contain no
+deltas. Managed-app Ignore, deletions, diagnostics, supporting-resource changes and
+unapproved runtime property changes fail closed. The two observed service-only
+omissions (`runningStatus=Running` and `exposedPort=0`) are narrowly accounted for;
+other omissions are not normalized away.
 
 Hosted deployment is separate: prepare the isolated source, set the same selected
 schema pair in azd, deploy this lane's Responses service and verify its actual
