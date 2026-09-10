@@ -487,3 +487,40 @@ See each application README for its current validation commands.
 - Ruff and all 210 shared/backend tests passed, including real PostgreSQL,
   machine-output handling, incomplete/undetermined-preview rejection, and
   protection against logging full resource payloads.
+
+## 2026-09-10 - Application cutover deployed; hosted rollout needs recovery
+
+- Source commit `c460769ae243f2b99fc4d4121262f98859a12737` passed the detailed
+  preview and was deployed from a clean feature-branch runtime snapshot.
+- The reviewed foundation applied with old images/schema preserved, followed by
+  the explicit baseline migration into `maf_double_charge_cutover`.
+- Immutable API/frontend images use tag
+  `c460769ae243f2b99fc4d4121262f98859a12737-06f843a1afb4`. Both application
+  revisions `0000004` are ready. The API remains private and uses the fresh schema.
+- Actual Azure public/proxied smoke, all seven API scenarios, and the browser E2E
+  passed, including explicit approval/resume, uncertain-refund recovery, failed
+  reads, verification mismatch, and the selected-run explanation.
+- The hosted `azd deploy` step returned exit 1; the existing version `3` is still
+  the azd-selected active version. Hosted recovery, new-version evaluation, and
+  telemetry acceptance remain pending. Do not rerun the full fresh-schema release
+  or reset already-migrated storage to retry this last deployment step.
+
+## 2026-09-10 - Hosted remote build cannot use the local package-feed mirror
+
+- Foundry version `4` was created but its authoritative per-version status is
+  failed. A direct version-4 invocation returned `agent_version_failed` with a
+  `CodeError` identifying dependency-install certificate/proxy failure.
+- The user supplied mirrors conditionally for blocked package downloads. They
+  solved local/container installs and the Azure ACR builds, but forcing that index
+  into Foundry's separate `remote_build` environment failed.
+- Hosted requirements now leave the platform's default PyPI index unchanged.
+  Critical package versions are unchanged; local/API and npm mirror settings
+  remain. No trusted-host exception, disabled TLS verification, firewall change,
+  runtime conversion, or dependency upgrade was introduced.
+- Version `4` is not an accepted release, and the existing azd-selected version `3`
+  is not evidence for the new code. Recovery will deploy only hosted source after
+  the corrected requirements pass local validation; existing app data is retained.
+- A fresh Python 3.13 public-PyPI installation resolved the exact same 94 package
+  versions as the previously validated hosted environment. Dependency compatibility,
+  isolated imports, logging without Uvicorn, packaged SQL, Ruff, and all 210
+  shared/backend tests passed.

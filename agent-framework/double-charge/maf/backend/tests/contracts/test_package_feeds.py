@@ -22,10 +22,11 @@ def test_frontend_build_loads_approved_npm_feed():
     assert dockerfile.index("frontend/.npmrc") < dockerfile.index("RUN npm ci")
 
 
-def test_hosted_install_declares_approved_python_feed():
+def test_hosted_install_preserves_platform_index_and_tls_validation():
     requirements = (
         LANE / "infra" / "foundry-hosted" / "agent" / "requirements.txt"
     ).read_text().splitlines()
-    assert [line for line in requirements if line.startswith("--index-url")] == [
-        "--index-url https://packagefeedproxy.microsoft.io/pypi/simple/"
-    ]
+    assert not any(
+        line.startswith(("--index-url", "--extra-index-url", "--trusted-host"))
+        for line in requirements
+    )

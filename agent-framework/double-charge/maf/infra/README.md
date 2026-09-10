@@ -15,6 +15,12 @@ The API's Azure Monitor distro is not installed as a competing hosted provider.
 The SDK content-capture flag is forced to `false` before host construction and is
 also declared in `azure.yaml`; inherited local settings cannot enable prompt capture.
 
+The local/API uv configuration and frontend builds use the approved Microsoft
+package-feed mirrors. Hosted `remote_build` requirements intentionally leave the
+platform's default PyPI index unchanged: the Foundry builder failed TLS resolution
+when forced through the mirror. Package versions remain pinned as above; TLS
+verification is never disabled.
+
 ## Local release gates and preview
 
 Run from the MAF lane, using the parent's reviewed, tested source commit. Supply
@@ -67,6 +73,11 @@ Captured CLI output is never dumped on failure. A failed gate stops the release;
 there is no automatic rollback, schema purge, or legacy checkpoint support.
 If migration succeeds but a later step fails, the operator must inspect that schema
 before a deliberate recovery; `--require-empty` intentionally rejects blind reruns.
+If only hosted deployment fails after the app rollout, inspect the actual attempted
+version with the Projects SDK; azd can still select the previous active version.
+Retry only the hosted deployment from a clean validated source snapshot, preserving
+the already-migrated schema and application images. A dependency-index-only hosted
+fix does not change the deployed API/frontend runtime source.
 
 ## Explicit acceptance
 
