@@ -83,6 +83,9 @@ opens connections and checks migration history; it does not create or upgrade sc
 on startup. The configured MAF schema can differ between local and deployed
 environments. The backend cutover starts with empty MAF state and new checkpoint type
 paths rather than providing legacy checkpoint readers or converting old records.
+Subsequent releases can explicitly update that already-versioned schema's runtime:
+the MAF release helper checks complete migration history and checksums read-only
+before deployment, with no schema adoption, DDL, or state reset.
 
 ## Event and UI boundary
 

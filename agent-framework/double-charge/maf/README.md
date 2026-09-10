@@ -181,23 +181,30 @@ release, evaluation, and telemetry boundaries.
 - Model: `gpt-5.6-sol` version `2026-07-09`, Global Standard
 - Region/resource group: `northcentralus` / `rg-model-harness`
 - Fresh application/checkpoint schema: `maf_double_charge_cutover`
-- API/frontend ready revisions: `0000004`, built from `c460769`
-- Hosted source: `29b81e7` (same runtime code; hosted package-index correction)
-- Hosted evaluation acceptance: **blocked**. Two four-case runs each returned
-  0 passed, 0 failed, and 4 scoring errors despite producing the agent responses.
+- API/frontend ready revisions: `0000005`, built from `6948226`
+- Hosted source: version 5 reused after exact 73-file/archive verification;
+  unchanged runtime bundle originally deployed from `29b81e7`
+- Hosted evaluation acceptance: **4 passed, 0 failed, 0 errored, 0 unscored**,
+  reproduced from repository configuration with pinned task-completion 19 and
+  relevance 12 evaluators.
 
 All seven API scenarios, all seven explicit hosted-command scenarios, and browser
 E2E passed. Read-only PostgreSQL checks verified approvals, checkpoint persistence,
 one matching refund where required, verification results, and no false-success
-notifications for 15 runs, including recovery after stopped hosted sessions.
-The evaluation service returned no per-item scoring reasons. A separate probe
-confirmed the configured judge rejects `temperature=0`; no model change or
-undocumented cloud-evaluator override was applied. See the
-[issue ledger](../../../docs/design/issues-changes-fixes.md) for retained run IDs
-and the unresolved acceptance gate. The feature branch is not merge-ready.
-Older hosted-version definitions and the old schema remain isolated from the new
-default deployment; retirement of those serving paths is deferred until acceptance.
-The new runtime does not read or convert old records/checkpoints.
+notifications for all 14 refreshed API/hosted scenario runs. The hosted rerun used
+the explicit `--transport sdk` acceptance option after intermittent local azd
+credential-subprocess failures; it executes the same commands without request
+retries. Native telemetry, cross-session correlation and scoped safety checks
+also passed. Historical scoring failures remain recorded, not relabeled.
+
+Failed version 4 was deleted without force. Versions 1-3 remain nondefault with
+ten idle teaching sessions: Foundry rejected nonforced deletion, and forcing it
+would cascade-delete their sessions/files. That destructive cleanup is deferred;
+the old SQL schema and audit records are retained. The new runtime neither reads
+nor converts old records/checkpoints. See the
+[issue ledger](../../../docs/design/issues-changes-fixes.md) for source hashes,
+evaluation IDs, evidence, and the cleanup limitation. Work remains on the feature
+branch; no push or merge to `main` has been performed.
 
 The deployment is educational and is not a production network or payment-system
 reference.

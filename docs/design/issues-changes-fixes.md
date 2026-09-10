@@ -4,10 +4,11 @@ This is a concise implementation ledger, not a release history.
 
 ## 2026-09-10 - Consolidated MAF refactor summary
 
-**Implemented and deployed; not merge-ready.** This summary records the verified
-checkpoint `8da8444` on `refactor/maf-backend-cutover`, not subsequent uncommitted
-edits. It supersedes earlier interim status statements below; the detailed entries
-remain as the issue/fix evidence. No feature-branch push or merge was performed.
+**Refreshed deployment and cloud acceptance passed; destructive legacy-session
+cleanup is held.** Applications run source `6948226` on
+`refactor/maf-backend-cutover`; identical hosted source remains version 5.
+This table supersedes historical interim blockers below, whose evidence is retained.
+No feature-branch push or merge was performed.
 
 | Task / area | Issue faced | Fix / completed outcome | Status |
 | --- | --- | --- | --- |
@@ -20,13 +21,17 @@ remain as the issue/fix evidence. No feature-branch push or merge was performed.
 | Local/container package downloads | npm and PyPI downloads failed TLS handshakes inside containers. | Used the approved Microsoft npm/PyPI mirrors without disabling TLS or changing locked versions. Recorded the NuGet feed for future use; this lane has no NuGet build step. | Complete |
 | Hosted build recovery | Forcing the same PyPI mirror into Foundry remote build caused version 4 to fail. | Removed only the hosted index override, verified the same 94 resolved package versions, and deployed hosted version 5 without resetting data or redeploying applications. | Complete |
 | Browser acceptance | A browser assertion required the fake model's exact explanation wording. | Asserted successful streaming and exact rendering of the actual nonempty explanation while preserving deterministic business-outcome checks. Real-model browser E2E passed. | Complete |
-| Azure preview and application rollout | PostgreSQL was stopped; ARM what-if emitted non-JSON output and coarse change classifications. | Started only the approved server with unchanged SKU; added `--no-pretty-print`, detailed internal change inspection, sanitized output, and fail-closed gates. Migrated `maf_double_charge_cutover` and deployed locked images to API/frontend revisions `0000004`, preserving ingress boundaries. | Complete |
+| Azure preview and application rollout | PostgreSQL was stopped; ARM what-if emitted non-JSON output and coarse change classifications. | Started only the approved server with unchanged SKU; added detailed machine-readable preview and fail-closed gates. Refreshed locked images to API/frontend revisions `0000005` from `6948226`, preserving private API/public frontend and the existing schema. | Complete |
+| Repeatable releases and source provenance | Fresh-cutover-only deployment could not safely update migrated data; identical hosted uploads can reuse a version. | Added explicit read-only `--update-existing` migration-history verification, with no migration/reset. Verify authoritative hosted status, exact environment, archive hash and all 73 prepared files before accepting either a new or reused version. | Complete |
 | Hosted command sessions | Unstopped sessions exhausted PostgreSQL connections; CLI rejected combining invocation `--version` with `--session-id`. | Create uniquely owned sessions bound to a version, invoke by session ID only, and stop in `finally`. Stopped 28 verified task-owned sessions; all seven hosted scenarios then passed without increasing database capacity. | Complete |
 | Native telemetry and correlation | Hosted commands used different instances; approval correlation could exist only in logs; classic KQL union types differed. | Joined request-scoped agent identity to logs/dependencies by operation ID, correlated commands through hashed case/run IDs, and normalized types. Observed native hierarchy and usage; scoped safety scans found no targeted leaks. Telemetry is not an exactly-once or complete-trace guarantee. | Complete |
 | Evaluation seed and generated caches | Approval seed expected null instead of `waiting_approval`; nested generated results/metadata were not Git-ignored. | Corrected the seed to the existing durable-pause contract and tested every seed expectation against the hosted adapter. Added scoped cache exclusions while keeping the reviewed seed tracked and historical results intact. | Complete |
-| Verification and cleanup | Local success alone did not establish deployed durability or source provenance; test resources needed scoped cleanup. | Recorded 217 passing shared/backend tests, seven deterministic evaluations, seven cloud API and seven hosted scenarios, browser E2E, read-only SQL evidence for 15 runs, locked image digests, and a 73-file hosted archive match. Removed task-owned local services/storage/images/temporary environments; retained evidence and running Azure resources. | Complete |
-| Foundry evaluation scoring | Two four-row jobs each returned 0 passed, 0 failed, and 4 scoring errors without reasons, although all eight agent responses matched expectations. | Verified catalog versions and query/response mappings; retained both full results. The judge rejects `temperature=0` but accepts default-temperature chat. This constraint does not prove the scoring root cause; no unsupported override or replacement model was applied. | Blocked |
-| Merge acceptance and old-version retirement | Passing workflow behavior does not satisfy the unresolved cloud scoring gate; older hosted versions remain recorded. | Kept work on the feature branch and documented the blocker. Resolve scoring through supported diagnostics/configuration, obtain passing evaluation evidence, then complete scoped old-version retirement and merge review. | Blocked / deferred |
+| Current deployed acceptance | Local success alone did not establish deployed durability or source provenance. | Public smoke, seven API scenarios, seven hosted scenarios, browser E2E, and read-only SQL assertions for all 14 refreshed scenario runs passed. Verified immutable image/source provenance, native telemetry, usage when supplied, and safe cross-command correlation. | Complete |
+| Hosted operator authentication | Intermittent local azd credential-subprocess kills interrupted the latest harness; token prewarming failed. | Added explicit SDK transport using documented version-pinned sessions and agent-bound Responses, preserving identical assertions, fresh conversations, finally-stop and no request retries. All seven scenarios passed without global auth changes or a runtime redeploy. | Complete |
+| Foundry evaluation scoring | Two four-row jobs had opaque scoring errors; restoring a historical configuration exposed one contradictory seed complaint. | Preserved failures; restored response-items/tool mappings and both judge initialization values, then clarified the requested bounded-failure behavior without weakening expectations. Pinned task-completion 19/relevance 12 produced 4 passed, 0 failed, 0 errors, 0 unscored. No model or threshold change. | Complete |
+| Old-version retirement | Foundry rejects deletion while retained sessions reference a version, even when their compute is idle. | Deleted unused failed version 4 without force. Versions 1-3 retain ten idle teaching sessions; `force` would cascade-delete sessions/files, so they remain nondefault pending explicit destructive approval. Current version 5 and both SQL schemas are preserved. | Cleanup held |
+| Reproducible evaluation setup | CLI defaults can silently reuse old criteria and ignore requested evaluator versions. | Added a tested setup helper that verifies catalog pins, creates a fresh group and emits a private agent-target MCP request. A new run using only this repository configuration passed all four cases and all eight evaluator decisions. | Complete |
+| Final verification and handoff | Cloud gates are not a substitute for regression and source-provenance checks. | All 280 shared/backend tests, seven deterministic evaluations, Ruff, shell checks and final hosted smoke passed. Synchronized release/architecture/structure documentation; final tooling changes do not alter deployed runtime code. No push or merge. | Complete |
 
 ## Initial implementation
 
@@ -688,3 +693,134 @@ See each application README for its current validation commands.
   dedicated PostgreSQL database, all seven deterministic evaluations, Ruff, four
   frontend tests, the production frontend build, Bicep compilation, and release
   shell syntax checks. Hosted source/SQL preparation completed.
+
+## 2026-09-10 - Refreshed apps and restored cloud evaluation scoring
+
+- The approved PostgreSQL server was stopped again at follow-up preflight. Starting
+  only that server restored readiness with the same SKU. The reviewed IaC update
+  preserved the existing schema, identities, firewall rules, and network boundary.
+  Commit `6948226` produced API/frontend revision `0000005`; public smoke, all seven
+  API scenarios, and browser E2E passed on those revisions.
+- The first hosted CLI deploy failed before registering a new version. A scoped
+  hosted-only retry succeeded. Foundry reused version `5` because the complete
+  hosted source was identical: all 73 files and archive hash still match. Added a
+  release gate that accepts either a new or reused version only after authoritative
+  status, environment, archive hash, and exact prepared-file verification.
+  A changed version number is not a substitute for those checks.
+- A historical evaluation definition was retrieved and its actual successful
+  result verified: `evalrun_bb44034286ee4a2486b4e42e04b5b90e` targeted version `2`,
+  not version `3`. It supplied both judge `deployment_name` and `model` and mapped
+  the response to `sample.output_items`. Reusing that configuration in a fresh
+  group restored real scoring without changing the judge or thresholds.
+- Diagnostic run `evalrun_442be10affd04ea7b22fb2052792ecdb` in
+  `eval_dce0330d3e4540218f41ebaf449ab449` returned 3 passed, 1 failed, and 0 errors.
+  Its remaining failure identified contradictory seed wording: the complaint
+  required investigation "even if billing reads are unavailable", whereas the
+  reviewed ground truth requires explicit bounded failure and no refund.
+- Clarified only that complaint to request the existing bounded-failure behavior.
+  The scenario, failed terminal status, no-refund expectation, ground truth, and
+  negative-path coverage remain unchanged. No fallback refund, invented evidence,
+  threshold reduction, dropped case, or runtime prompt change was used.
+- Final agent-target run `evalrun_4d35eb5713e94a4c8469631a52ed26df` in
+  `eval_ac18caecd4694ce4bd49e7f3380708ec` used pinned task-completion `19` and
+  relevance `12` evaluators: **4 passed, 0 failed, 0 errored, 0 unscored**.
+  All eight evaluator decisions and all four agent outputs were inspected.
+  Task completion scored 1 on every row; relevance scored 5, 4, 4, and 5.
+  The negative scenario still returns workflow status `failed` and no refund;
+  its passing grade means the requested safety behavior was fulfilled.
+- Restoring the historical configuration resolves the opaque-scoring blocker,
+  but does not establish that temperature alone caused the original errors.
+  No reasoning-model override, model deployment change, or SDK upgrade was needed.
+- Hosted harness follow-up also exposed intermittent local
+  `AzureDeveloperCLICredential: signal: killed` failures during token acquisition.
+  Those failures remain visible and owned-session cleanup still runs. The explicit
+  SDK acceptance transport below resolved the hosted verification gate, not the
+  underlying CLI defect.
+
+## 2026-09-10 - Final hosted acceptance, telemetry and safe retirement boundary
+
+- The installed Go credential's default ten-second subprocess deadline is consistent
+  with the local CLI failure, not proof of its cause. Delegated Azure CLI auth was
+  already enabled; token prewarming did not fix it. Added explicit
+  `hosted_harness.py --transport sdk` using documented Projects SDK sessions and
+  agent-bound Responses. It never silently retries/falls back between transports.
+  The selected version must be active; each command owns a version-pinned session
+  and fresh conversation, and stops compute in `finally`. HTTP retries are disabled,
+  clients/credentials close deterministically, and private SDK errors are not dumped.
+- All seven final hosted scenarios passed on version 5:
+  no duplicate `run-68a87c8fe665`, confirmed `run-5fbe5725d7fd`,
+  denied `run-168e8cab7163`, retry `run-7bf92842ae76`,
+  resumed approval `run-ba82ac26e070`, bounded failure `run-44a4fd047326`,
+  and verification mismatch `run-f8b3aa6184b8`.
+  Read-only SQL independently asserted the seven current API plus seven hosted
+  runs: approvals/checkpoints, one matching ledger refund where required, actual
+  verification, exact retry count, and no false-success notifications.
+  Rechecking the prior 15 accepted cutover runs also passed after the update,
+  demonstrating their durable records were not reset.
+- Application Insights shows real native workflow/executor/agent/chat parent-child
+  relationships for both runtimes. The final hosted retry run correlates three
+  successful operations across three sessions, with two workflow executions, one
+  retry, and model-supplied token usage. Approval correlation includes logs rather
+  than requiring nonexistent workflow spans. Scoped prohibited-attribute scans
+  returned no matches; selected application run IDs were hashed. Sampling still
+  prevents a claim of complete traces. The two final negative-path runs emitted
+  two `run.failed` events, two bounded `tool.call.failed` events on the read-failure
+  run, and one independent `refund.verification` event on the mismatch run.
+- Both apps remain Running at ready revision `0000005`, with the private API/public
+  frontend boundary unchanged. Locked image tag:
+  `6948226a3f3ac5c01741e88f708384cd4335c074-4591ddccd6c4`.
+  Backend digest:
+  `sha256:836750e74900e1459e2304369b7e79d9601c55362c88e8ef6ebe036d56fbb25c`;
+  frontend digest:
+  `sha256:ab24e11e3c20ff2664eb2fa49e6d68f93af898e6b426b2870457868ec391a745`.
+  Reused hosted archive:
+  `3064504d0bd63845c1122ce48fb55828e685f061528f537b12cf982695b21b52`.
+- Deleted failed hosted version 4 without force. Versions 1, 2 and 3 have respectively
+  five, two and three idle sessions; nonforced deletion returned HTTP 409. The SDK
+  explicitly documents that `force` cascade-deletes their sessions/files. Those
+  teaching artifacts were preserved rather than silently destroyed. Version 5 stays
+  current/active; all 81 listed version-5 sessions were idle after acceptance. The
+  old SQL schema/audit and current cutover data remain intact. Retiring all old
+  definitions is therefore a separately held destructive cleanup, not a passed gate.
+
+## 2026-09-10 - Reproducible pinned evaluation and final regression checkpoint
+
+- Added `scripts/prepare_hosted_eval.py` and declared evaluator versions in hosted
+  `eval.yaml`. The helper validates the selected deployment, all four reviewed
+  contracts and catalog versions before mutation; it creates one fresh group,
+  never a run, then writes a private exact `evaluation_agent_batch_eval_create`
+  request. It does not clone an old cloud group or read/write `LAST_EVAL_ID`.
+  Setup and response clients disable mutation retries and close deterministically.
+  The CLI user-agent marker remains caller-supplied, never persisted in code/config.
+- The installed beta12 CLI generates the working response-items/tool mappings and
+  both judge initialization values, but ignores evaluator-version/init overrides
+  and can reuse old environment criteria. Ordinary `azd eval run` and the old
+  binder are therefore not the pinned acceptance path. Their documentation/output
+  now direct pinned acceptance to the explicit setup helper.
+- Executed the repository helper against `maf-dev`/version 5, then submitted its
+  emitted request through the agent-target batch API:
+  group `eval_117e25f434094efbadb14b1e5b51d0c1`,
+  run `evalrun_36f2ca4232df4adc9642a91d7ee32734`.
+  **4 passed, 0 failed, 0 errored, 0 unscored.** All eight evaluator decisions were
+  inspected; task-completion scores were 1/1/1/1 and relevance 4/4/3/5, using
+  unchanged default thresholds. Every typed seed expectation was independently
+  asserted against the actual output. The approval case remains paused and the
+  bounded-read case remains failed with no refund; neither was relabeled as
+  completed business work. Earlier diagnostic and passing results are retained.
+- Final full regression: **280 shared/backend tests passed**, including the
+  dedicated loopback PostgreSQL integration suite; Ruff and shell checks passed.
+  All seven deterministic evaluations also ran successfully. Frontend tests/build,
+  browser E2E and Bicep checks from the deployed-source checkpoint remain valid:
+  final changes affect only release/acceptance tooling, reviewed evaluation intent,
+  tests and documentation, not API/frontend/shared runtime or IaC templates.
+  The final typed-session SDK smoke passed as `run-f844320e26e4`.
+- Authoritative readback still shows version 5 active with the exact 73-file
+  archive/environment match, API/frontend Running on `0000005`, and public
+  same-origin readiness returning `ready`. Application image provenance remains
+  `6948226`; the final local tooling/documentation commit is not a new cloud image.
+- The final evaluation's four operations were trace-correlated to one owned hosted
+  session. Stopped only that session's compute, retaining filesystem and SQL state;
+  all 83 current-version sessions are now idle. Removed the verified task-owned
+  local PostgreSQL container and its anonymous volume after the full test run.
+  Local dependency environments, retained evaluation reports and running Azure
+  apps/database were left intact.

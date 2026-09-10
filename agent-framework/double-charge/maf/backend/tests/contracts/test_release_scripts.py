@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import io
 import json
 import os
 import stat
 import subprocess
 import sys
 import tomllib
+import zipfile
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -85,6 +88,62 @@ def test_pending_hosted_versions_are_not_success(modules):
         with pytest.raises(release.ReleaseError):
             release.active_agent({"status": status, "version": "4"})
     assert release.active_agent({"status": "active", "version": "4"}) == "4"
+
+
+@pytest.mark.parametrize("version", ["5", "6"])
+def test_hosted_wait_verifies_source_even_when_version_is_reused(modules, monkeypatch, version):
+    release, *_ = modules
+    runner = Mock()
+    runner.json.return_value = {"status": "active", "version": version}
+    subject = release.Release(release.parser().parse_args([]), runner)
+    subject.old_version = "5"
+    verify = Mock()
+    monkeypatch.setattr(subject, "verify_hosted_source", verify)
+    assert subject.wait_hosted() == version
+    verify.assert_called_once_with(version)
+    verify.side_effect = release.ReleaseError("source mismatch")
+    with pytest.raises(release.ReleaseError, match="source mismatch"):
+        subject.wait_hosted()
+
+
+@pytest.mark.parametrize(
+    "mismatch",
+    [None, "hash", "source", "missing", ".env", ".foundry/result.json", "extra.py", "duplicate"],
+)
+def test_hosted_archive_requires_exact_prepared_source(modules, tmp_path, mismatch):
+    release, *_ = modules
+    names = [
+        "main.py",
+        "requirements.txt",
+        "maf_double_charge/__init__.py",
+        "model_to_harness_shared/__init__.py",
+    ]
+    for name in names:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(name)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for name in names:
+            if mismatch != "missing" or name != "main.py":
+                archive.writestr(name, name)
+        if mismatch in {".env", ".foundry/result.json", "extra.py"}:
+            archive.writestr(mismatch, "excluded")
+        if mismatch == "duplicate":
+            with pytest.warns(UserWarning, match="Duplicate name"):
+                archive.writestr("main.py", "main.py")
+        archive.writestr(".agentignore", ".env")
+    content = buffer.getvalue()
+    digest = hashlib.sha256(content).hexdigest()
+    if mismatch == "hash":
+        digest = "0" * 64
+    if mismatch == "source":
+        (tmp_path / "main.py").write_text("changed")
+    if mismatch:
+        with pytest.raises(release.ReleaseError):
+            release.verify_code_archive(tmp_path, content, digest)
+    else:
+        assert release.verify_code_archive(tmp_path, content, f"sha256:{digest}") == digest
 
 
 def test_existing_update_requires_the_current_maf_schema(modules):

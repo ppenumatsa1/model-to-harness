@@ -56,8 +56,9 @@ def main() -> None:
             {
                 "version": actual,
                 "config": str(output),
-                "next": "Run azd ai agent eval run --config <config> in the selected environment; "
-                "then retrieve and inspect every result row. No evaluation job was created.",
+                "next": "For pinned acceptance use scripts/prepare_hosted_eval.py. "
+                "Ordinary azd eval run may ignore evaluator version pins and reuse LAST_EVAL_ID. "
+                "No evaluation job was created.",
             },
             indent=2,
         )

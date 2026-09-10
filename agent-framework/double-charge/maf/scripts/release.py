@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
+import io
 import ipaddress
 import json
 import os
@@ -13,6 +15,7 @@ import subprocess
 import sys
 import tarfile
 import time
+import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -122,6 +125,43 @@ def active_agent(document: dict[str, Any]) -> str:
     if not version:
         raise ReleaseError("Hosted status lacks the actual deployed version")
     return str(version)
+
+
+def verify_code_archive(root: Path, content: bytes, expected_hash: str) -> str:
+    digest = hashlib.sha256(content).hexdigest()
+    if digest != expected_hash.removeprefix("sha256:"):
+        raise ReleaseError("Hosted archive does not match the service content hash")
+    expected = [root / "main.py", root / "requirements.txt"]
+    for package in ("maf_double_charge", "model_to_harness_shared"):
+        directory = root / package
+        if not directory.is_dir():
+            raise ReleaseError("Prepared hosted package is missing")
+        expected.extend(
+            path
+            for path in directory.rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+        )
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            if any(
+                ".foundry" in Path(name).parts
+                or any(part.startswith(".env") for part in Path(name).parts)
+                for name in archive.namelist()
+            ):
+                raise ReleaseError("Hosted archive contains excluded configuration/cache files")
+            files = [item.filename for item in archive.infolist() if not item.is_dir()]
+            names = set(files)
+            if len(names) != len(files):
+                raise ReleaseError("Hosted archive contains duplicate file entries")
+            expected_names = {path.relative_to(root).as_posix() for path in expected}
+            if names - {".agentignore"} != expected_names:
+                raise ReleaseError("Hosted archive file set differs from the prepared source")
+            for path in expected:
+                if archive.read(path.relative_to(root).as_posix()) != path.read_bytes():
+                    raise ReleaseError("Hosted archive differs from the prepared source")
+    except (KeyError, OSError, zipfile.BadZipFile):
+        raise ReleaseError("Hosted archive or prepared source cannot be verified") from None
+    return digest
 
 
 class Release:
@@ -382,10 +422,57 @@ class Release:
                 raise ReleaseError("Hosted deployment failed")
             if status in {"active", "deployed"}:
                 version = active_agent(result)
-                if version != self.old_version:
-                    return version
+                self.verify_hosted_source(version)
+                return version
             time.sleep(5)
-        raise ReleaseError("Timed out waiting for a new active hosted version")
+        raise ReleaseError("Timed out waiting for a verified active hosted version")
+
+    def verify_hosted_source(self, version: str) -> None:
+        from azure.ai.projects import AIProjectClient
+        from azure.core.exceptions import AzureError
+        from azure.identity import DefaultAzureCredential
+
+        try:
+            with (
+                DefaultAzureCredential() as credential,
+                AIProjectClient(
+                    endpoint=self.parameters["foundryProjectEndpoint"], credential=credential
+                ) as project,
+            ):
+                actual = project.agents.get_version(
+                    agent_name=SERVICE, agent_version=version
+                ).as_dict()
+                if actual.get("status") != "active":
+                    raise ReleaseError("Authoritative hosted version is not active")
+                environment = actual["definition"]["environment_variables"]
+                expected = {
+                    "DATABASE_SCHEMA": self.schema,
+                    "DATABASE_URL": self.database_url,
+                    "FOUNDRY_PROJECT_ENDPOINT": self.parameters["foundryProjectEndpoint"],
+                    "FOUNDRY_MODEL": self.parameters["modelDeploymentName"],
+                    "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "false",
+                }
+                if any(environment.get(key) != value for key, value in expected.items()):
+                    raise ReleaseError("Hosted version configuration differs from this release")
+                content = b"".join(
+                    project.agents.download_code(agent_name=SERVICE, agent_version=version)
+                )
+                digest = verify_code_archive(
+                    LANE / "infra/foundry-hosted/agent",
+                    content,
+                    actual["definition"]["code_configuration"]["content_hash"],
+                )
+        except (AzureError, KeyError, TypeError):
+            raise ReleaseError("Cannot verify the deployed hosted source/configuration") from None
+        print(
+            json.dumps(
+                {
+                    "verified_hosted_version": version,
+                    "archive_sha256": digest,
+                    "reused_identical_version": version == self.old_version,
+                }
+            )
+        )
 
     def build(self, commit: str, tag: str) -> None:
         with private_workspace(self.workspace) as directory:
@@ -554,7 +641,7 @@ class Release:
         )
         self.runner.run([sys.executable, str(LANE / "scripts/prepare_hosted.py")])
         self.source_commit()
-        print("Deploying hosted direct Python source; waiting for a new active version.")
+        print("Deploying hosted direct Python source; verifying the active version and archive.")
         self.runner.run(
             azd_args(self.args.environment, "deploy", SERVICE, "--no-prompt"),
             env=migration_env,

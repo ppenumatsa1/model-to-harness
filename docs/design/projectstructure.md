@@ -56,13 +56,15 @@ Each lane's deployment source is also local to that lane:
 
 - `azure.yaml`: Foundry Hosted Agent declaration.
 - `infra/`: lane-owned Bicep, container images, nginx proxy, and hosted entrypoint.
-- `scripts/deploy_azure.sh`: lane-owned provisioning and rollout automation.
+- `scripts/deploy_azure.sh`: lane-owned deployment entrypoint; MAF previews and
+  updates the existing environment rather than implicitly provisioning another.
 - `scripts/smoke_azure.sh`: lane-owned public deployment smoke.
 - `infra/foundry-hosted/agent/eval.yaml`: deployed-agent evaluation intent.
 - `.foundry/`: metadata, datasets, suites, evaluators, and results only.
 
-Generated hosted `_packages/` copies are deployment artifacts, not another source of
-truth.
+Generated hosted package copies are deployment artifacts, not another source of
+truth. MAF copies `maf_double_charge/` and `model_to_harness_shared/` into its hosted
+agent root, with authoritative SQL packaged under `maf_double_charge/_migrations/`.
 
 ## MAF backend boundaries
 
@@ -84,3 +86,8 @@ startup checks the installed schema rather than applying DDL. The cutover uses n
 MAF state and new checkpoint type paths, without compatibility shims for old modules
 or stored checkpoints. This internal organization is not a template imposed on the
 independent LangGraph lane.
+
+After the fresh MAF cutover, `scripts/deploy_azure.sh --update-existing` verifies
+the current schema's migration history read-only before updating the deployment.
+It preserves workflow records and checkpoints and never runs migrations or resets
+state. Future SQL changes still require an explicit reviewed migration.

@@ -71,7 +71,10 @@ AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
    lock those images against overwrite/deletion.
 6. Apply new app images/schema and await successful, ready revisions.
 7. Set the nonsecret hosted schema/project endpoint, prepare source plus SQL
-   resources, run `azd deploy model-harness-maf`, and await a **new active version**.
+   resources, run `azd deploy model-harness-maf`, and verify the authoritative active
+   version, environment, archive hash, and prepared package contents. Foundry can
+   reuse an existing version when the uploaded source is identical; a version
+   number alone is not source verification.
 
 Restricted ARM parameter files (0600 in 0700 directories) and source archives live
 under ignored `.azure/release/` and are removed even on failure. Secrets are passed
@@ -105,9 +108,10 @@ AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
   --source-commit "$(git rev-parse HEAD)" --schema maf_double_charge_cutover
 ```
 
-The remaining source, IaC, immutable-image, private-ingress, readiness, and hosted
-version gates are unchanged. Preview is still read-only; apply creates new image
-tags and a new hosted version, preserving all workflow records and checkpoints.
+The remaining source, IaC, immutable-image, private-ingress, and readiness gates
+are unchanged. Preview is still read-only; apply creates new image tags and deploys
+the hosted bundle, preserving all workflow records and checkpoints. Identical-code
+version reuse is accepted only after archive and environment verification.
 
 ## Explicit acceptance
 
@@ -118,7 +122,7 @@ scripts/e2e-browser.sh --base-url https://THE-EXISTING-MAF-FRONTEND
 AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
   .venv/bin/python scripts/hosted_harness.py --environment maf-dev --version ACTUAL_VERSION
 AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
-  .venv/bin/python scripts/bind_hosted_eval.py --environment maf-dev --version ACTUAL_VERSION
+  .venv/bin/python scripts/prepare_hosted_eval.py --environment maf-dev --version ACTUAL_VERSION
 ```
 
 Cloud browser mode never starts a local API or Vite server. API and hosted harnesses
@@ -142,10 +146,75 @@ The raw framing was checked against installed CLI help and the public
 [Responses invoke writer](https://github.com/Azure/azure-dev/blob/main/cli/azd/extensions/azure.ai.agents/internal/cmd/invoke_raw.go):
 HTTP headers are followed by decoded body bytes, not HTTP transfer-chunk framing.
 
-The evaluation binder retains seed intent, adds unique IDs and writes an ignored
-config bound to the verified active version. It **does not create evaluation jobs**.
-Run the emitted config with `azd ai agent eval run --config PATH --environment maf-dev`,
-then retrieve every result row with `scripts/download_eval_results.py`. The
-single-turn suite tests no-refund, durable approval pause and explicit failure;
-only the multi-command harness tests approval/refund completion. Neither gate
-substitutes for browser or telemetry verification.
+### Explicit SDK acceptance transport
+
+If the local azd extension cannot acquire its token, select the documented
+[Projects SDK session lifecycle](https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-sessions?pivots=python)
+and agent-bound Responses client explicitly:
+
+```bash
+AZURE_TOKEN_CREDENTIALS=AzureCliCredential \
+AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
+  .venv/bin/python scripts/hosted_harness.py \
+  --environment maf-dev --version ACTUAL_VERSION --transport sdk
+```
+
+This is not an automatic fallback or a retry of an uncertain business command.
+The same seven assertions run against the same deployed hosted entrypoint.
+The SDK verifies the selected active version, creates a version-pinned owned
+session and a new conversation per command, and stops the session in `finally`.
+SDK HTTP retries are disabled; session-readiness polling does not invoke commands.
+Clients and credentials close deterministically. The local credential choice does
+not modify azd's global authentication settings or the deployed managed identity.
+
+The installed azd agent extension intermittently failed with
+`AzureDeveloperCLICredential: signal: killed`. Its Go credential has a default
+10-second subprocess deadline when no caller deadline exists; that mechanism is
+consistent with the symptom, not a proven root cause. Delegated Azure CLI auth was
+already enabled and token prewarming did not fix it. The explicit Python transport
+avoids that nested azd credential path without upgrading tools, weakening TLS, or
+changing application code.
+
+### Pinned hosted evaluation acceptance
+
+`scripts/prepare_hosted_eval.py` is the pinned acceptance setup path. It reads the
+selected azd environment as JSON, verifies the requested active hosted version
+with the Projects SDK `agents.get_version`, and verifies both catalog versions
+before creating **one fresh evaluation group only**. It never starts an evaluation
+run, invokes the agent, updates `LAST_EVAL_ID`, or reuses a historical group ID.
+The context-managed `DefaultAzureCredential` supports local credential selection;
+SDK mutation retries are disabled.
+
+The reviewed `agent/eval.yaml` pins task completion 19 and relevance 12. The helper
+uses short criterion names, `builtin.*` evaluator names, and both `model` and
+`deployment_name` from `options.eval_model`. It maps query to `{{item.query}}`,
+response to `{{sample.output_items}}`, and includes the tool-call/tool-definition
+mappings. Its permissive custom source schema (`item_schema: {}`,
+`include_sample_schema: true`) matches the validated cloud configuration; strict
+local checks retain all four reviewed case contracts before any cloud mutation.
+Only case and idempotency IDs are freshly allocated. Complaints, ground truth,
+expected outcomes, and default evaluator thresholds are not rewritten.
+
+Setup prints only a safe summary and the path to a private `batch-request.json`
+under ignored `.azure/release/hosted-eval-*` (directory 0700, files 0600). That file
+contains the exact arguments for **`evaluation_agent_batch_eval_create`**, including
+the new `evaluationId`, verified `agentVersion`, and all four `inputData` rows.
+Submit that request through the Foundry MCP tool; setup itself does not submit it.
+The same directory retains the definition, input data, and group receipt. Treat
+these as private operational artifacts: never paste their prompts into public
+reports or commit them. If setup fails after group creation, inspect the receipt
+before retrying; a client error does not prove that no group was created.
+
+The installed azd agent extension beta12 parses evaluator objects but its
+[`eval run` builder](https://github.com/Azure/azure-dev/blob/azd-ext-azure-ai-agents_1.0.0-beta.12/cli/azd/extensions/azure.ai.agents/internal/pkg/agents/eval_api/eval_config.go)
+ignores evaluator versions and initialization overrides. Noninteractive runs may
+also reuse the environment's `LAST_EVAL_ID` without updating its criteria.
+Therefore neither `azd ai agent eval run` nor the older no-job
+`bind_hosted_eval.py` is the pinned acceptance path.
+
+After the MCP run, retrieve every result row with
+`scripts/download_eval_results.py`, passing `--expected-items 4`; a completed run
+alone is not a pass. The four-case single-turn suite covers two no-refund
+complaints, a durable approval pause, and explicit bounded-read failure. Only the
+multi-command harness tests approval/refund completion. Neither gate substitutes
+for browser or telemetry verification.

@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Any
+import time
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from e2e import SCENARIOS
-from release import SERVICE, ReleaseError, Runner, active_agent, azd_args
+from release import SERVICE, ReleaseError, Runner, active_agent, azd_args, environment_values
+
+if TYPE_CHECKING:
+    from azure.ai.projects import AIProjectClient
+    from openai import OpenAI
 
 
 def response_result(raw: str) -> dict[str, Any]:
@@ -110,26 +116,51 @@ def invoke(runner: Runner, environment: str, version: str, command: dict[str, An
             raise ReleaseError(f"Failed to stop owned hosted session {session_id}") from error
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--environment", default="maf-dev")
-    parser.add_argument(
-        "--version", required=True, help="Actual active version returned after deploy"
-    )
-    parser.add_argument("--smoke", action="store_true", help="Only check no-duplicate")
-    args = parser.parse_args()
-    runner = Runner()
-    actual = active_agent(
-        runner.json(azd_args(args.environment, "ai", "agent", "show", SERVICE, "--output", "json"))
-    )
-    if actual != args.version:
-        raise SystemExit("Requested version does not match the active deployment")
-    for scenario, decision, terminal in SCENARIOS[:1] if args.smoke else SCENARIOS:
+def invoke_sdk(
+    project: AIProjectClient, client: OpenAI, version: str, command: dict[str, Any]
+) -> dict[str, Any]:
+    from azure.ai.projects.models import VersionRefIndicator
+    from azure.core.exceptions import AzureError
+
+    session_id = f"maf-check-{uuid4().hex}"
+    try:
+        session = project.agents.create_session(
+            agent_name=SERVICE,
+            version_indicator=VersionRefIndicator(agent_version=version),
+            agent_session_id=session_id,
+        )
+        deadline = time.monotonic() + 300
+        while session.status == "creating" and time.monotonic() < deadline:
+            time.sleep(2)
+            session = project.agents.get_session(agent_name=SERVICE, session_id=session_id)
+        if (
+            session.agent_session_id != session_id
+            or not isinstance(session.version_indicator, VersionRefIndicator)
+            or session.version_indicator.agent_version != version
+            or session.status not in {"active", "idle"}
+        ):
+            raise ReleaseError("Hosted session is not ready on the requested version")
+        conversation = client.conversations.create()
+        response = client.responses.create(
+            input=json.dumps(command),
+            conversation=conversation.id,
+            stream=False,
+            extra_body={"agent_session_id": session_id},
+        )
+        return response_result(response.model_dump_json())
+    finally:
+        try:
+            project.agents.stop_session(agent_name=SERVICE, session_id=session_id)
+        except AzureError:
+            raise ReleaseError(f"Failed to stop owned hosted session {session_id}") from None
+
+
+def run_scenarios(
+    send: Callable[[dict[str, Any]], dict[str, Any]], version: str, *, smoke: bool = False
+) -> None:
+    for scenario, decision, terminal in SCENARIOS[:1] if smoke else SCENARIOS:
         identifier = f"maf-hosted-{uuid4().hex}"
-        result = invoke(
-            runner,
-            args.environment,
-            args.version,
+        result = send(
             {
                 "action": "start",
                 "scenario_id": scenario,
@@ -143,10 +174,7 @@ def main() -> None:
             assert result["status"] == "paused" and result["approval_required"]
             assert result["refund_status"] == "not_requested"
             command = {"run_id": result["run_id"], "checkpoint_id": result["checkpoint_id"]}
-            recorded = invoke(
-                runner,
-                args.environment,
-                args.version,
+            recorded = send(
                 {
                     **command,
                     "action": "approval",
@@ -155,7 +183,7 @@ def main() -> None:
                 },
             )
             assert recorded["status"] == "paused" and recorded["refund_status"] == "not_requested"
-            result = invoke(runner, args.environment, args.version, {**command, "action": "resume"})
+            result = send({**command, "action": "resume"})
             if terminal == "completed_refunded":
                 assert result["outcome"]["refund_id"]
                 assert result["refund_status"] == "verified"
@@ -167,12 +195,78 @@ def main() -> None:
                 {
                     "scenario": scenario,
                     "run_id": result["run_id"],
-                    "version": args.version,
+                    "version": version,
                     "terminal_status": terminal,
                 }
             )
         )
     print("Hosted explicit-command harness passed")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--environment", default="maf-dev")
+    parser.add_argument(
+        "--version", required=True, help="Actual active version returned after deploy"
+    )
+    parser.add_argument("--smoke", action="store_true", help="Only check no-duplicate")
+    parser.add_argument(
+        "--transport",
+        choices=("azd", "sdk"),
+        default="azd",
+        help="Explicit transport selection; never automatically retry on another transport",
+    )
+    args = parser.parse_args()
+    runner = Runner()
+    if args.transport == "azd":
+        actual = active_agent(
+            runner.json(
+                azd_args(args.environment, "ai", "agent", "show", SERVICE, "--output", "json")
+            )
+        )
+        if actual != args.version:
+            raise SystemExit("Requested version does not match the active deployment")
+        run_scenarios(
+            lambda command: invoke(runner, args.environment, args.version, command),
+            actual,
+            smoke=args.smoke,
+        )
+        return
+
+    from azure.ai.projects import AIProjectClient
+    from azure.core.exceptions import AzureError
+    from azure.identity import DefaultAzureCredential
+    from openai import OpenAIError
+
+    values = environment_values(runner, args.environment)
+    if values["AGENT_MODEL_HARNESS_MAF_VERSION"] != args.version:
+        raise SystemExit("Requested version does not match the selected deployment")
+    try:
+        with (
+            DefaultAzureCredential(process_timeout=60) as credential,
+            AIProjectClient(
+                endpoint=values["FOUNDRY_PROJECT_ENDPOINT"],
+                credential=credential,
+                allow_preview=True,
+                retry_total=0,
+            ) as project,
+            project.get_openai_client(
+                agent_name=SERVICE,
+                max_retries=0,
+                timeout=300,
+            ) as client,
+        ):
+            deployed = project.agents.get_version(agent_name=SERVICE, agent_version=args.version)
+            actual = active_agent(deployed.as_dict())
+            if actual != args.version:
+                raise ReleaseError("Requested version does not match the active deployment")
+            run_scenarios(
+                lambda command: invoke_sdk(project, client, actual, command),
+                actual,
+                smoke=args.smoke,
+            )
+    except (AzureError, OpenAIError) as error:
+        raise SystemExit(f"Hosted SDK request failed ({type(error).__name__}); no retry") from None
 
 
 if __name__ == "__main__":
