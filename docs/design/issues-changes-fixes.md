@@ -358,9 +358,9 @@ See each application README for its current validation commands.
   and rollout; deployed smoke, API/browser/hosted E2E, actual new-version Foundry
   evaluation results, and observed Application Insights ingestion.
 - Read-only Azure discovery found the existing MAF PostgreSQL server stopped. After
-  local/review gates, the authorized rollout must explicitly start it, wait for
-  readiness, and use the fresh MAF-only schema. No Azure resource mutations have
-  occurred during this cutover.
+  local/review gates, the authorized rollout started that verified server and
+  confirmed it Ready with the existing Burstable `Standard_B1ms` SKU. Application
+  and hosted-agent cutover have not yet occurred.
 - Next sequence: resolve package downloads, finish/review release artifacts, rerun
   affected local gates, commit the validated feature-branch source, preview/apply the
   MAF-only release, and verify actual cloud behavior before the merge handoff.
@@ -443,3 +443,47 @@ See each application README for its current validation commands.
   deterministic; model wording is not treated as a fixed UI contract. The corrected
   real-model browser run passed, including refund completion, selected-run explanation,
   and switching to a no-duplicate case.
+
+## 2026-09-10 - Azure what-if requires the stopped MAF PostgreSQL server to start
+
+- The reviewed, locally validated cutover source was committed on the feature branch
+  as `b9ddab2`; no push or merge was performed.
+- Read-only Azure preview resolved the expected MAF resources and active hosted
+  version 3, but ARM returned `DeploymentWhatIfResourceError` with
+  `ServerStoppedError` for the existing MAF PostgreSQL server.
+- This blocks the provider's what-if operation itself, not just migration or app
+  startup. Local/review gates are complete, so the approved existing-environment
+  rollout must start that verified server before repeating the preview.
+- No schema reset, new infrastructure, password rotation, or deployment occurred
+  during the failed previews.
+- The authorized server start completed successfully; state is Ready and the
+  existing SKU is unchanged.
+
+## 2026-09-10 - ARM what-if needs its explicit machine-output flag
+
+- After PostgreSQL became Ready, the what-if command succeeded but its output was
+  not valid JSON. Azure CLI's what-if formatter overrides `-o json` unless
+  `--no-pretty-print` is supplied.
+- The release preview now includes that documented flag. A regression covers both
+  preview and apply argument lists, ensuring the preview-only flag does not leak
+  into ordinary deployment commands.
+- The coarse `ResourceIdOnly` result classifies resources as `Deploy`, which cannot
+  support the release's create/delete and foundation-change gates. Preview now
+  requests `FullResourcePayloads` internally while printing only resource IDs and
+  change types. Incomplete results and undetermined change types fail closed.
+- Actual detailed preview succeeded with no creates or deletes, unchanged MAF
+  database/firewall/identity resources, and LangGraph resources ignored. The
+  existing MAF resources marked Modify still require property-level review before
+  apply; full resource payloads are not written to public logs.
+- The release remained fail-closed: no migration, image upload, application rollout,
+  or hosted deployment was attempted after the parse failure.
+- Property-level review confirmed the existing region, Basic registry, Burstable
+  PostgreSQL SKU, 32 GB storage, backup/HA settings, and network boundaries remain
+  unchanged. Role differences are unresolved references to unchanged identities;
+  other provider-default omissions were checked against live settings.
+- A read-only connection to `model_harness_maf` succeeded using the existing
+  operator access. `maf_double_charge_cutover` is absent, ready for the explicit
+  fresh-schema migration. No firewall broadening was needed.
+- Ruff and all 210 shared/backend tests passed, including real PostgreSQL,
+  machine-output handling, incomplete/undetermined-preview rejection, and
+  protection against logging full resource payloads.

@@ -297,11 +297,15 @@ class Release:
                 f"@{path}",
             )
             if preview:
-                args.extend(["--result-format", "ResourceIdOnly"])
+                args.extend(["--result-format", "FullResourcePayloads", "--no-pretty-print"])
             result = self.runner.json(args)
         if not preview and result.get("properties", {}).get("provisioningState") != "Succeeded":
             raise ReleaseError("ARM deployment did not finish Succeeded")
-        if preview and (result.get("error") or result.get("status") not in {None, "Succeeded"}):
+        if preview and (
+            result.get("error")
+            or result.get("status") != "Succeeded"
+            or not isinstance(result.get("changes"), list)
+        ):
             raise ReleaseError("ARM what-if did not finish successfully")
         return result
 
@@ -450,6 +454,10 @@ class Release:
         ]
         print(json.dumps({"what_if": changes}, indent=2))
         for change in changes:
+            if change["changeType"] not in {"Create", "Delete", "Modify", "NoChange", "Ignore"}:
+                raise ReleaseError(
+                    "ARM what-if could not determine resource changes; inspect before applying"
+                )
             if change["changeType"] == "Delete":
                 raise ReleaseError("Cutover does not authorize resource deletion")
             if change["changeType"] == "Create" and re.search(

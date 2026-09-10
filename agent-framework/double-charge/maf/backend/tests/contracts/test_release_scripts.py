@@ -86,6 +86,42 @@ def test_pending_hosted_versions_are_not_success(modules):
     assert release.active_agent({"status": "active", "version": "4"}) == "4"
 
 
+@pytest.mark.parametrize("preview", [True, False])
+def test_arm_output_uses_machine_json_without_pretty_print_for_preview(modules, tmp_path, preview):
+    release, *_ = modules
+    runner = Mock()
+    runner.json.return_value = {
+        "status": "Succeeded",
+        "changes": [],
+        "properties": {"provisioningState": "Succeeded"},
+    }
+    subject = release.Release(release.parser().parse_args([]), runner)
+    subject.subscription = "subscription"
+    subject.group = "group"
+    subject.workspace = tmp_path
+    subject.deploy_parameters({}, preview=preview)
+    arguments = runner.json.call_args.args[0]
+    assert ("--no-pretty-print" in arguments) is preview
+    assert arguments[arguments.index("-o") + 1] == "json"
+    if preview:
+        assert arguments[arguments.index("--result-format") + 1] == "FullResourcePayloads"
+
+
+@pytest.mark.parametrize(
+    "result", [{}, {"status": "Succeeded"}, {"status": "Succeeded", "changes": {}}]
+)
+def test_preview_rejects_incomplete_arm_result(modules, tmp_path, result):
+    release, *_ = modules
+    runner = Mock()
+    runner.json.return_value = result
+    subject = release.Release(release.parser().parse_args([]), runner)
+    subject.subscription = "subscription"
+    subject.group = "group"
+    subject.workspace = tmp_path
+    with pytest.raises(release.ReleaseError, match="what-if"):
+        subject.deploy_parameters({}, preview=True)
+
+
 def test_subprocess_failures_never_reveal_credentials(modules, monkeypatch):
     release, *_ = modules
     invoke = Mock(return_value=Mock(returncode=1, stdout="password-secret", stderr="token-secret"))
@@ -254,6 +290,23 @@ def test_preview_never_builds_migrates_or_deploys(modules, monkeypatch, capsys):
     assert "secret" not in capsys.readouterr().out
 
 
+def test_preview_never_logs_full_resource_payloads(modules, monkeypatch, capsys):
+    release, *_ = modules
+    subject, operations = configured_release(release, monkeypatch)
+    change = {
+        "resourceId": "/subscriptions/sub/resourceGroups/rg/resource",
+        "changeType": "Modify",
+        "before": {"credentials": {"key": "private-before-value"}},
+        "after": {"credentials": {"key": "private-after-value"}},
+    }
+    monkeypatch.setattr(subject, "deploy_parameters", lambda *args, **kwargs: {"changes": [change]})
+    subject.execute()
+    output = capsys.readouterr().out
+    assert "private-before-value" not in output
+    assert "private-after-value" not in output
+    assert operations == []
+
+
 def test_apply_orders_foundation_migration_rollout_and_hosted(modules, monkeypatch):
     release, *_ = modules
     subject, operations = configured_release(release, monkeypatch, apply=True, foundation=True)
@@ -305,6 +358,20 @@ def test_preview_rejects_replacement_topology_or_deletion(modules, monkeypatch, 
     subject, operations = configured_release(release, monkeypatch, apply=True)
     monkeypatch.setattr(subject, "deploy_parameters", lambda *args, **kwargs: {"changes": [change]})
     with pytest.raises(release.ReleaseError):
+        subject.execute()
+    assert operations == []
+
+
+@pytest.mark.parametrize("change_type", ["Deploy", "Unsupported", None, "Unknown"])
+def test_preview_rejects_undetermined_changes_before_mutations(modules, monkeypatch, change_type):
+    release, *_ = modules
+    subject, operations = configured_release(release, monkeypatch, apply=True)
+    change = {
+        "resourceId": "/subscriptions/sub/resourceGroups/rg/resource",
+        "changeType": change_type,
+    }
+    monkeypatch.setattr(subject, "deploy_parameters", lambda *args, **kwargs: {"changes": [change]})
+    with pytest.raises(release.ReleaseError, match="could not determine"):
         subject.execute()
     assert operations == []
 
