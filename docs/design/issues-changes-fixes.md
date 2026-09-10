@@ -125,6 +125,14 @@ app omissions are accepted; deletion, managed-app Ignore, diagnostics, supportin
 resource changes and meaningful baseline deltas still fail closed. The final
 immutable-image/schema preview remains mandatory before migration or rollout.
 
+The first apply built both immutable images but correctly stopped before schema
+setup or rollout when final-preview environment comparison differed. Inspection
+showed Azure CLI adds empty `value` fields beside secret references and empty CORS,
+while ARM omits those fields. Comparison now normalizes only empty string `value`
+fields; nonempty values, secret-reference changes, ordering and other properties
+remain exact. Regression coverage rejects meaningful differences. The failure did
+not change application revisions or create cutover schemas.
+
 ## 2026-09-10 - Consolidated MAF refactor summary
 
 **Functional deployment acceptance, hosted per-operation trace completeness and

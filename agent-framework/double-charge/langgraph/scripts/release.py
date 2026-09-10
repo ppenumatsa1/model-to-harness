@@ -460,6 +460,16 @@ def app_reference_parameters(
     }
 
 
+def canonical_environment(items: Any) -> list[dict[str, Any]]:
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        raise ReleaseError("Container environment must be an array of objects")
+    # ARM omits empty values, including CLI-added empty values beside secretRef.
+    return [
+        {key: value for key, value in item.items() if key != "value" or value != ""}
+        for item in items
+    ]
+
+
 def validate_what_if(
     result: dict[str, Any],
     app_ids: set[str],
@@ -506,7 +516,14 @@ def validate_what_if(
             raise ReleaseError("ARM proposed an unexpected container topology")
         actual = containers[0]
         wanted = expected[resource] if rollout and expected is not None else {}
-        if rollout and any(actual.get(key) != value for key, value in wanted.items()):
+        if rollout and any(
+            (
+                canonical_environment(actual.get(key)) != canonical_environment(value)
+                if key == "env"
+                else actual.get(key) != value
+            )
+            for key, value in wanted.items()
+        ):
             raise ReleaseError("ARM runtime payload differs from the reviewed image/environment")
         deltas = change.get("delta")
         if not isinstance(deltas, list) or not deltas:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import importlib.util
 import io
@@ -431,6 +432,41 @@ def test_rollout_requires_exact_environment_and_narrow_delta():
     result["changes"][0]["delta"] = [{"path": "properties.configuration.ingress.external"}]
     with pytest.raises(release.ReleaseError):
         release.validate_what_if(result, {"/api", "/web"}, rollout=True, expected=expected)
+
+
+def test_rollout_normalizes_only_observed_empty_environment_values():
+    environment = [
+        {"name": "DATABASE_URL", "secretRef": "database-url"},
+        {"name": "CORS_ORIGINS"},
+        {"name": "LANGGRAPH_SCHEMA", "value": "langgraph_app_cutover"},
+    ]
+    payload = {
+        "properties": {"template": {"containers": [{"image": "digest", "env": environment}]}}
+    }
+    result = what_if(
+        "Modify",
+        before=payload,
+        after=payload,
+        delta=[{"path": "properties.template.containers[0].image"}],
+    )
+    expected = {
+        "/api": {
+            "image": "digest",
+            "env": [
+                {"name": "DATABASE_URL", "secretRef": "database-url", "value": ""},
+                {"name": "CORS_ORIGINS", "value": ""},
+                {"name": "LANGGRAPH_SCHEMA", "value": "langgraph_app_cutover"},
+            ],
+        }
+    }
+    release.validate_what_if(result, {"/api", "/web"}, rollout=True, expected=expected)
+    for key, value in (("secretRef", "different-secret"), ("value", "nonempty")):
+        changed = copy.deepcopy(result)
+        changed["changes"][0]["after"]["properties"]["template"]["containers"][0]["env"][0][key] = (
+            value
+        )
+        with pytest.raises(release.ReleaseError, match="runtime payload"):
+            release.validate_what_if(changed, {"/api", "/web"}, rollout=True, expected=expected)
 
 
 def test_identical_unmanaged_ignore_is_not_an_arm_mutation():
