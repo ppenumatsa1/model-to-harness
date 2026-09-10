@@ -23,6 +23,10 @@ def main() -> None:
         REPOSITORY_ROOT / "shared" / "src" / "model_to_harness_shared",
         AGENT_ROOT / "model_to_harness_shared",
     )
+    sync_package(
+        LANE_ROOT / "backend" / "migrations",
+        AGENT_ROOT / "maf_double_charge" / "_migrations",
+    )
     print(f"Prepared hosted source in {AGENT_ROOT}")
 
 

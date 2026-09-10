@@ -10,10 +10,15 @@ param modelDeploymentName string
 param postgresAdministratorPassword string
 param postgresAdministratorLogin string = 'mthadmin'
 param postgresDatabaseName string = 'model_harness_maf'
+@description('Existing MAF PostgreSQL server. Never creates a replacement server during cutover.')
+param postgresServerName string
+@minLength(1)
+@maxLength(63)
+param postgresSchema string = 'maf_double_charge_cutover'
 param operatorIp string
-param backendImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
-param backendTargetPort int = 80
-param frontendImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+param backendImage string
+param backendTargetPort int = 8010
+param frontendImage string
 
 var suffix = uniqueString(subscription().id, resourceGroup().id, namePrefix)
 var registryName = take('${replace(namePrefix, '-', '')}${suffix}acr', 50)
@@ -24,8 +29,8 @@ var backendName = take('${namePrefix}-${suffix}-api', 32)
 var frontendName = take('${namePrefix}-${suffix}-web', 32)
 var backendIdentityName = take('${namePrefix}-${suffix}-api-mi', 128)
 var frontendIdentityName = take('${namePrefix}-${suffix}-web-mi', 128)
-var postgresName = take('${replace(namePrefix, '-', '')}${suffix}pg', 63)
-var databaseUrl = 'postgresql://${postgresAdministratorLogin}:${postgresAdministratorPassword}@${postgresName}.postgres.database.azure.com:5432/${postgresDatabaseName}?sslmode=require'
+var postgresName = postgresServerName
+var databaseUrl = 'postgresql://${uriComponent(postgresAdministratorLogin)}:${uriComponent(postgresAdministratorPassword)}@${postgresName}.postgres.database.azure.com:5432/${postgresDatabaseName}?sslmode=require'
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: registryName
@@ -314,7 +319,7 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'DATABASE_SCHEMA'
-              value: 'maf_double_charge'
+              value: postgresSchema
             }
             {
               name: 'FOUNDRY_PROJECT_ENDPOINT'
@@ -437,4 +442,4 @@ output frontendName string = frontend.name
 output frontendUrl string = 'https://${frontend.properties.configuration.ingress.fqdn}'
 output postgresHost string = '${postgres.name}.postgres.database.azure.com'
 output applicationInsightsName string = insights.name
-output applicationInsightsConnectionString string = insights.properties.ConnectionString
+output postgresSchema string = postgresSchema

@@ -9,16 +9,19 @@ description = "Teaching-focused durable double-charge workflow built with Micros
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "agent-framework-core>=1.16.0,<2",
-  "agent-framework-foundry>=1.11.0,<2",
+  "agent-framework-core==1.16.0",
+  "agent-framework-foundry==1.11.0",
   "ag-ui-protocol>=0.1.22,<0.2",
   "azure-identity>=1.25.1,<2",
+  "azure-monitor-opentelemetry==1.8.10",
   "fastapi>=0.121,<1",
   "httpx>=0.28,<1",
   "model-to-harness-shared>=0.1.0",
-  "opentelemetry-api>=1.38,<2",
-  "opentelemetry-sdk>=1.38,<2",
-  "opentelemetry-exporter-otlp-proto-http>=1.38,<2",
+  "opentelemetry-api>=1.44,<1.45",
+  "opentelemetry-sdk>=1.44,<1.45",
+  "opentelemetry-exporter-otlp-proto-http>=1.44,<1.45",
+  "opentelemetry-instrumentation-fastapi==0.65b0",
+  "opentelemetry-instrumentation-logging==0.65b0",
   "psycopg[binary,pool]>=3.2,<4",
   "pydantic>=2.12,<3",
   "pydantic-settings>=2.11,<3",
@@ -29,6 +32,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "anyio>=4.11,<5",
+  "azure-ai-projects>=2.3,<3",
+  "PyYAML>=6,<7",
   "pytest>=8.4,<9",
   "pytest-asyncio>=1.2,<2",
   "pytest-cov>=7,<8",
@@ -38,9 +43,18 @@ dev = [
 [project.scripts]
 maf-double-charge = "maf_double_charge.main:run"
 maf-double-charge-eval = "maf_double_charge.evaluation:main"
+maf-double-charge-migrate = "maf_double_charge.infrastructure.persistence.migrations:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend/src/maf_double_charge"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"backend/migrations" = "maf_double_charge/_migrations"
+
+[[tool.uv.index]]
+name = "microsoft-package-feed"
+url = "https://packagefeedproxy.microsoft.io/pypi/simple/"
+default = true
 
 [tool.uv.sources]
 model-to-harness-shared = { path = "../../../shared", editable = true }

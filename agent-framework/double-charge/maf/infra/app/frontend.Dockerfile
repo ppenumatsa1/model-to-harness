@@ -1,7 +1,7 @@
 FROM node:24-alpine AS build
 
 WORKDIR /app
-COPY agent-framework/double-charge/maf/frontend/package*.json ./
+COPY agent-framework/double-charge/maf/frontend/package*.json agent-framework/double-charge/maf/frontend/.npmrc ./
 RUN npm ci
 COPY agent-framework/double-charge/maf/frontend/ ./
 RUN npm run build

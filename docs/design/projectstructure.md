@@ -7,7 +7,7 @@ application layers.
 model-to-harness/
 ├── README.md, LICENSE, .env.example, compose.yaml
 ├── docs/
-│   ├── articles/                  series articles and Part 2 outline
+│   ├── articles/                  series articles and framework comparison
 │   ├── design/                    canonical implementation documentation
 │   └── diagrams/                  focused Mermaid views
 ├── shared/
@@ -63,3 +63,24 @@ Each lane's deployment source is also local to that lane:
 
 Generated hosted `_packages/` copies are deployment artifacts, not another source of
 truth.
+
+## MAF backend boundaries
+
+Within `agent-framework/double-charge/maf/backend/src/maf_double_charge/`:
+
+- `api/` owns the app factory, routers, HTTP schemas, and injected dependencies.
+- `application/` owns commands, authoritative records, service ports, refunds,
+  outcomes, and durable audit writing.
+- `maf/` owns model clients, agent definitions and prompts, grouped native executors,
+  workflow composition, native events, and checkpoint-based execution.
+- `infrastructure/` implements persistence, migrations, simulator adapters, logging,
+  and telemetry.
+- `projections/` owns browser-safe event, selected-run, and graph views.
+- `testing/` contains explicitly selected test doubles used by tests and local evals.
+- `bootstrap.py` constructs and closes a MAF runtime for its transport entrypoint.
+
+The existing `backend/migrations/` directory is the SQL source of truth. Application
+startup checks the installed schema rather than applying DDL. The cutover uses new
+MAF state and new checkpoint type paths, without compatibility shims for old modules
+or stored checkpoints. This internal organization is not a template imposed on the
+independent LangGraph lane.

@@ -11,3 +11,8 @@
 **/*.pyc
 **/test-results
 report.*.json
+agent-framework/double-charge/maf/.env
+agent-framework/double-charge/maf/.env.*
+agent-framework/double-charge/maf/.foundry
+agent-framework/double-charge/maf/infra/foundry-hosted/agent/maf_double_charge
+agent-framework/double-charge/maf/infra/foundry-hosted/agent/model_to_harness_shared

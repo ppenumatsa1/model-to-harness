@@ -116,7 +116,7 @@ Availability and APIs vary. A checkpointer stored only in process memory does no
 
 The implementations fan out to deterministic billing and policy checks. They are not two autonomous agents.
 
-In the [MAF workflow](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/workflow.py), this is a fragment of the fluent `WorkflowBuilder` chain:
+In the [MAF workflow](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/workflows/double_charge.py), this is a fragment of the fluent `WorkflowBuilder` chain:
 
 ```python
 .add_fan_out_edges(prepare_validation, [billing_validation, policy_validation])
@@ -149,7 +149,7 @@ Both applications keep business state and audit records in PostgreSQL. Framework
 
 MAF uses an application-owned PostgreSQL adapter for its checkpoint interface. LangGraph uses its PostgreSQL checkpointer, separately namespaced from application audit data.
 
-The MAF approval executor requests typed external input:
+The [MAF approval executor](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/executors/approval.py) requests typed external input:
 
 ```python
 await ctx.request_info(
@@ -165,7 +165,7 @@ await ctx.request_info(
 )
 ```
 
-This excerpt omits preceding validation and persistence. `ApprovalRequest` and `ApprovalResponse` are application types; the executor's response handler processes the typed response. The [orchestrator](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/orchestrator.py) records approval separately, then supplies the persisted decision through `responses` when resuming the workflow from its checkpoint.
+This excerpt omits preceding validation and persistence. `ApprovalRequest` and `ApprovalResponse` are application-defined types; the executor's response handler processes the typed response. The [application service](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/application/service.py) records approval separately. The [MAF runner](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/runner.py) supplies that persisted decision through `responses` when resuming the workflow from its checkpoint.
 
 LangGraph's node instead calls `interrupt`:
 
@@ -228,7 +228,7 @@ outcome = (await service3.get_case(started.case_id)).outcome
 assert outcome and outcome.refund_status == "verified"
 ```
 
-Its setup reconstructs services around a refund breakpoint while retaining in-memory stores. That is useful recovery evidence, but not itself proof of database durability. Separate [MAF](../../agent-framework/double-charge/maf/backend/tests/test_postgres.py) and [LangGraph](../../agent-framework/double-charge/langgraph/backend/tests/test_postgres_integration.py) PostgreSQL integration tests cover persistent reconstruction.
+Its setup reconstructs services around a refund breakpoint while retaining in-memory stores. That is useful recovery evidence, but not itself proof of database durability. Separate [MAF](../../agent-framework/double-charge/maf/backend/tests/integration/test_postgres.py) and [LangGraph](../../agent-framework/double-charge/langgraph/backend/tests/test_postgres_integration.py) PostgreSQL integration tests cover persistent reconstruction.
 
 Retries also need classification. A temporary billing-read failure can receive bounded retries. Policy rejection, invalid input, and a conflicting approval require different routes; they are not transient transport errors.
 
@@ -280,7 +280,7 @@ flowchart TB
 
 This is a configurable design pattern, not a claim that the example implements every box. Framework state can carry data between steps; application code or a configured context provider decides what enters the model input. Retrieval, summarization, filtering, and token budgets require deliberate choices.
 
-The actual [MAF model boundary](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/model_client.py) and [LangGraph adapter](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/model_adapter.py) are intentionally narrow:
+The actual [MAF model boundary](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/clients.py) and [LangGraph adapter](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/model_adapter.py) are intentionally narrow:
 
 | Model operation | MAF input data | LangGraph input data |
 |---|---|---|

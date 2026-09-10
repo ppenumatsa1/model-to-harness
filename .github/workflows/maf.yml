@@ -22,13 +22,13 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: model_to_harness
+          POSTGRES_USER: mafdev
           POSTGRES_PASSWORD: local-development-only
-          POSTGRES_DB: model_to_harness
+          POSTGRES_DB: maf_cutover_tests
         ports:
-          - 5432:5432
+          - 5434:5432
         options: >-
-          --health-cmd "pg_isready -U model_to_harness -d model_to_harness"
+          --health-cmd "pg_isready -U mafdev -d maf_cutover_tests"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -36,31 +36,80 @@ jobs:
       run:
         working-directory: agent-framework/double-charge/maf
     env:
-      DATABASE_URL: postgresql://model_to_harness:local-development-only@localhost:5432/model_to_harness
-      TEST_DATABASE_URL: postgresql://model_to_harness:local-development-only@localhost:5432/model_to_harness
+      DATABASE_URL: postgresql://mafdev:local-development-only@127.0.0.1:5434/maf_cutover_tests
+      TEST_DATABASE_URL: postgresql://mafdev:local-development-only@127.0.0.1:5434/maf_cutover_tests
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            agent-framework/double-charge/maf/uv.lock
+            shared/pyproject.toml
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: agent-framework/double-charge/maf/frontend/package-lock.json
       - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ../../../shared -e ".[dev]"
+        run: uv sync --frozen --extra dev
       - name: Validate backend
         run: |
-          ruff check backend evals scripts
-          pytest ../../../shared/tests
-          pytest backend/tests
-          python evals/run.py
+          uv run --frozen ruff check backend evals scripts
+          uv run --frozen python -m pytest -c pyproject.toml ../../../shared/tests backend/tests
+          uv run --frozen python evals/run.py
+      - name: Verify installed wheels outside the checkout
+        run: |
+          uv build --wheel --out-dir "$RUNNER_TEMP/maf-wheel"
+          uv build ../../../shared --wheel --out-dir "$RUNNER_TEMP/maf-wheel"
+          uv export --frozen --no-dev --no-emit-local \
+            --output-file "$RUNNER_TEMP/maf-constraints.txt" > /dev/null
+          uv venv --python 3.12 "$RUNNER_TEMP/maf-wheel-env"
+          uv pip install --python "$RUNNER_TEMP/maf-wheel-env/bin/python" \
+            --constraint "$RUNNER_TEMP/maf-constraints.txt" "$RUNNER_TEMP/maf-wheel/"*.whl
+          cd "$RUNNER_TEMP"
+          DATABASE_SCHEMA=maf_ci_wheel "$RUNNER_TEMP/maf-wheel-env/bin/maf-double-charge-migrate" \
+            --require-empty
+          DATABASE_SCHEMA=maf_ci_wheel "$RUNNER_TEMP/maf-wheel-env/bin/maf-double-charge-migrate"
+          LOG_LEVEL=WARNING "$RUNNER_TEMP/maf-wheel-env/bin/maf-double-charge-eval"
       - name: Validate frontend
         run: |
           npm --prefix frontend ci
           npm --prefix frontend test
           npm --prefix frontend run build
+
+  hosted-package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent-framework/double-charge/maf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: agent-framework/double-charge/maf/infra/foundry-hosted/agent/requirements.txt
+      - name: Install declared hosted dependencies
+        run: python -m pip install -r infra/foundry-hosted/agent/requirements.txt
+      - name: Verify isolated hosted source bundle
+        run: |
+          python scripts/prepare_hosted.py
+          hosted="$PWD/infra/foundry-hosted/agent"
+          cd "$RUNNER_TEMP"
+          PYTHONPATH="$hosted" python - <<'PY'
+          from importlib.resources import files
+
+          import main
+          import maf_double_charge.bootstrap
+          import maf_double_charge.maf.runner
+          from maf_double_charge.infrastructure.logging import configure_logging
+
+          configure_logging("WARNING")
+          assert files("maf_double_charge").joinpath(
+              "_migrations", "001_maf_double_charge.sql"
+          ).is_file()
+          PY

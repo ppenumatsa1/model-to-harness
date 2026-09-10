@@ -1,0 +1,91 @@
+// Run each query independently in the existing linked Application Insights resource.
+// Replace identity, version, UTC window and safe hashes with ACTUAL release evidence.
+// Application Insights classic table names are used (not workspace AppRequests aliases).
+let releaseStart = datetime(2026-01-01T00:00:00Z);
+let releaseEnd = datetime(2026-01-01T01:00:00Z);
+let hostedRoleName = "REPLACE_WITH_OBSERVED_HOSTED_ROLE";
+let hostedRoleInstance = "REPLACE_WITH_OBSERVED_HOSTED_INSTANCE";
+let hostedRequests = materialize(
+    requests
+    | where timestamp between (releaseStart .. releaseEnd)
+    | where cloud_RoleName == hostedRoleName and cloud_RoleInstance == hostedRoleInstance
+    | project requestTime=timestamp, operation_Id, requestId=id, requestName=name,
+        requestSuccess=success, requestDuration=duration, application_Version,
+        case_id=tostring(customDimensions.case_id),
+        run_id=tostring(customDimensions.run_id),
+        conversation_id=tostring(customDimensions.conversation_id)
+);
+let downstream = union
+    (dependencies
+        | where timestamp between (releaseStart .. releaseEnd)
+        | project timestamp, operation_Id, parentId=operation_ParentId, spanId=id,
+            name, itemType="dependency", duration, success, customDimensions),
+    (traces
+        | where timestamp between (releaseStart .. releaseEnd)
+        | project timestamp, operation_Id, parentId=operation_ParentId, spanId="",
+            name=tostring(customDimensions.event_type), itemType="log",
+            duration=timespan(null), success=bool(null), customDimensions),
+    (exceptions
+        | where timestamp between (releaseStart .. releaseEnd)
+        | project timestamp, operation_Id, parentId=operation_ParentId, spanId="",
+            name=type, itemType="exception", duration=timespan(null),
+            success=false, customDimensions);
+hostedRequests
+| join kind=leftouter downstream on operation_Id
+| project requestTime, requestId, requestName, requestSuccess, application_Version,
+    timestamp, operation_Id, parentId, spanId, itemType, name, duration, success,
+    case_id, run_id, conversation_id,
+    executor=tostring(customDimensions["executor.id"]),
+    edgeGroup=tostring(customDimensions["edge_group.type"]),
+    causalLinks=todynamic(customDimensions["_MS.links"]),
+    model=tostring(customDimensions["gen_ai.response.model"]),
+    inputTokens=tolong(customDimensions["gen_ai.usage.input_tokens"]),
+    outputTokens=tolong(customDimensions["gen_ai.usage.output_tokens"])
+| order by requestTime asc, timestamp asc
+;
+
+// Separate start/approval/resume requests join via pseudonymous business correlation.
+// The API role/version are independent of the platform-owned hosted role/version.
+let releaseStart = datetime(2026-01-01T00:00:00Z);
+let releaseEnd = datetime(2026-01-01T01:00:00Z);
+let apiRoleName = "REPLACE_WITH_ACTUAL_API_ROLE";
+let apiReleaseVersion = "REPLACE_WITH_ACTUAL_API_BUILD_VERSION";
+let hostedRoleName = "REPLACE_WITH_OBSERVED_HOSTED_ROLE";
+let hostedRoleInstance = "REPLACE_WITH_OBSERVED_HOSTED_INSTANCE";
+let safeRunId = "sha256:REPLACE_WITH_RUN_ID_SHA256";
+let safeConversationId = "sha256:REPLACE_WITH_CONVERSATION_ID_SHA256";
+requests
+| where timestamp between (releaseStart .. releaseEnd)
+| where (cloud_RoleName == apiRoleName and application_Version == apiReleaseVersion)
+    or (cloud_RoleName == hostedRoleName and cloud_RoleInstance == hostedRoleInstance)
+| extend case_id=tostring(customDimensions.case_id), run_id=tostring(customDimensions.run_id),
+    conversation_id=coalesce(tostring(customDimensions.conversation_id),
+        tostring(customDimensions["gen_ai.conversation.id"])),
+    response_id=coalesce(tostring(customDimensions.response_id),
+        tostring(customDimensions["gen_ai.response.id"]))
+| where run_id == safeRunId or conversation_id == safeConversationId
+| project timestamp, cloud_RoleName, cloud_RoleInstance, application_Version,
+    operation_Id, id, name, success, resultCode, duration,
+    case_id, run_id, conversation_id, response_id
+| order by timestamp asc
+;
+
+// Safety gate: report prohibited KEY NAMES/counts only, never suspect payload values.
+let releaseStart = datetime(2026-01-01T00:00:00Z);
+let releaseEnd = datetime(2026-01-01T01:00:00Z);
+let hostedRoleName = "REPLACE_WITH_OBSERVED_HOSTED_ROLE";
+let hostedRoleInstance = "REPLACE_WITH_OBSERVED_HOSTED_INSTANCE";
+let selectedOperations =
+    requests
+    | where timestamp between (releaseStart .. releaseEnd)
+    | where cloud_RoleName == hostedRoleName and cloud_RoleInstance == hostedRoleInstance
+    | distinct operation_Id;
+union requests, dependencies, traces, exceptions
+| where timestamp between (releaseStart .. releaseEnd)
+| where operation_Id in (selectedOperations)
+| mv-expand attributeKey=bag_keys(customDimensions)
+| extend attributeKey=tostring(attributeKey)
+| where attributeKey matches regex
+    @"(?i)(complaint|prompt|input\.messages|output\.messages|system_instructions|checkpoint[._]body|idempotency[._]key|password|credential|connection[._]?string|tool\.call\.(arguments|result)|exception\.(message|stacktrace)|db\.statement|url\.(full|query))"
+| summarize records=count() by itemType, attributeKey
+| order by records desc

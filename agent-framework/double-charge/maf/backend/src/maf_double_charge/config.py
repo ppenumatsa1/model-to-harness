@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     foundry_model: str | None = None
     applicationinsights_connection_string: str | None = None
     otel_exporter_otlp_endpoint: str | None = None
+    otel_service_name: str | None = None
+    otel_service_version: str | None = None
     max_tool_attempts: int = Field(default=3, ge=1, le=5)
 
     @property

@@ -1,5 +1,15 @@
-.env
+.env*
+.azure/
+.git/
+.foundry/
+.agentserver/
 .venv/
 __pycache__/
 *.pyc
 tests/
+.pytest_cache/
+.ruff_cache/
+*.log
+eval.yaml
+!maf_double_charge/_migrations/
+!maf_double_charge/_migrations/*.sql

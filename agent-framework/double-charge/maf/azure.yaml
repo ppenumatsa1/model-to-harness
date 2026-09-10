@@ -35,9 +35,11 @@ services:
               version: 2.0.0
         env:
             APP_ENV: production
-            DATABASE_SCHEMA: maf_double_charge
+            DATABASE_SCHEMA: ${DATABASE_SCHEMA}
             DATABASE_URL: ${DATABASE_URL}
+            FOUNDRY_PROJECT_ENDPOINT: ${FOUNDRY_PROJECT_ENDPOINT}
             FOUNDRY_MODEL: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
             OTEL_SERVICE_NAME: model-harness-maf
+            OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
 infra:
     provider: microsoft.foundry

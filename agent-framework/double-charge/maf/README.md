@@ -30,16 +30,14 @@ prompts, credentials, unrestricted tool payloads, or raw checkpoint contents.
 From this `maf/` folder:
 
 ```bash
-python3.12 -m venv .venv
-. .venv/bin/activate
-python -m pip install -e "../../../shared"
-python -m pip install -e ".[dev]"
+uv sync --extra dev
 cp .env.example .env
 ```
 
-The root shared package is deliberately installed separately. It owns only the
-framework-neutral domain, fixtures, evaluation contracts, and deterministic
-simulators. This app never imports LangGraph or another app's code.
+The lane's package configuration installs the root shared package as an explicit
+local dependency. It owns only framework-neutral domain records, fixtures,
+evaluation contracts, and deterministic simulators. This app never imports LangGraph
+or another app's code.
 
 Start PostgreSQL using the repository-level developer dependency when available,
 then initialize this app's schema and run the services:
@@ -53,6 +51,31 @@ npm --prefix frontend run dev
 
 The MAF UI uses port `5174` by default so it can run beside the independent
 comparison app.
+
+Schema changes are applied explicitly from `backend/migrations/`, not by API or
+hosted-agent startup. The migration runner records applied versions and checksums.
+Use an empty MAF-owned schema for this cutover: old unversioned schemas and serialized
+checkpoints are intentionally unsupported. Never reset the shared PostgreSQL database
+or a LangGraph schema to initialize MAF.
+
+## Source map
+
+The installable package remains `backend/src/maf_double_charge/`:
+
+| Area | Responsibility |
+| --- | --- |
+| `api/` | FastAPI factory, HTTP contracts, routers, and dependency injection |
+| `application/` | Commands, authoritative records, service interfaces, refunds, and audit |
+| `maf/` | Agent definitions, prompts, native executors, graph composition, and resume |
+| `infrastructure/` | PostgreSQL/checkpoint adapters, migrations, simulators, and telemetry |
+| `projections/` | Browser-safe AG-UI, selected-run facts, and workflow visualization |
+| `testing/` | Explicit test doubles; never an automatic production fallback |
+| `bootstrap.py` | MAF-local runtime construction and resource lifecycle |
+
+Start with `maf/workflows/double_charge.py` for the graph,
+`maf/executors/approval.py` for its durable pause, and `application/refunds.py` for
+idempotency and verification. SQL source remains outside the package in
+`backend/migrations/`; installed and hosted bundles contain generated resource copies.
 
 Real local runs require:
 
@@ -111,23 +134,42 @@ overlay.
 ## Validation
 
 ```bash
-.venv/bin/ruff check backend
-.venv/bin/pytest
-.venv/bin/python evals/run.py
+uv run ruff check backend evals scripts
+uv run pytest
+uv run python evals/run.py
 npm --prefix frontend test
 npm --prefix frontend run build
 ```
 
+PostgreSQL integration tests require a dedicated disposable database, not the
+ordinary application database. CI uses this same loopback-only test contract:
+
+```bash
+docker run --name maf-integration-db --rm -d \
+  -p 127.0.0.1:5434:5432 \
+  -e POSTGRES_USER=mafdev \
+  -e POSTGRES_PASSWORD=local-development-only \
+  -e POSTGRES_DB=maf_cutover_tests postgres:16-alpine
+docker exec maf-integration-db pg_isready -U mafdev -d maf_cutover_tests
+export TEST_DATABASE_URL='postgresql://mafdev:local-development-only@127.0.0.1:5434/maf_cutover_tests'
+uv run pytest -c pyproject.toml ../../../shared/tests backend/tests
+```
+
+Wait for `pg_isready` to report accepting connections before running tests. The
+fixtures create and remove unique test schemas; they reject other database targets.
+Without `TEST_DATABASE_URL`, these PostgreSQL tests are skipped. Stop only the
+container created above when finished: `docker stop maf-integration-db`.
+
 With the API running:
 
 ```bash
-.venv/bin/python scripts/smoke.py
-.venv/bin/python scripts/e2e.py
+uv run python scripts/smoke.py
+uv run python scripts/e2e.py
 ./scripts/e2e-browser.sh
 ```
 
 See `observability/README.md`, `infra/README.md`, and `.foundry/README.md` for
-operational boundaries and safe future-hosting placeholders.
+release, evaluation, and telemetry boundaries.
 
 ## Deployed teaching environment
 

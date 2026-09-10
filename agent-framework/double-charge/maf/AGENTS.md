@@ -1,7 +1,7 @@
 # Agent guidance
 
-This project was built with the `microsoft-foundry` skill. Before changing or
-answering questions about Foundry agents, read that skill first.
+This project was built with the microsoft-foundry skill. Before working on or
+answering questions about foundry agents, read the microsoft-foundry skill first.
 
 ## Workspace boundaries
 
@@ -17,6 +17,12 @@ answering questions about Foundry agents, read that skill first.
   durable command boundary, not a blocking wait or a decision inferred from chat.
 - PostgreSQL remains authoritative for workflow state, approval commands, refunds,
   and durable audit records. MAF checkpoints remain framework-owned.
+- Keep HTTP code in `api/`, business commands and ports in `application/`, native
+  framework execution in `maf/`, and concrete adapters in `infrastructure/`.
+  Runtime construction belongs in `bootstrap.py`; imports must not open resources.
+- Apply versioned SQL from `backend/migrations/` before starting either runtime.
+  This is a fresh-state cutover: do not add legacy imports, checkpoint readers, or
+  automatic database resets.
 - Keep frontend traffic same-origin through the nginx `/api` proxy. Do not expose the
   internal backend Container App directly.
 - Treat root `eval.yaml` as evaluation intent and `evals/run.py` as the
@@ -42,8 +48,8 @@ From this lane, run:
 
 ```bash
 uv run pytest
-uv run ruff check backend/src backend/tests
-./scripts/smoke.sh
+uv run ruff check backend evals scripts
+uv run python scripts/smoke.py
 ```
 
 For deployment changes, also compile `infra/app/main.bicep`, run `bash -n` on changed

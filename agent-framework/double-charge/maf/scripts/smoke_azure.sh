@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-RESOURCE_GROUP="${AZURE_RESOURCE_GROUP:-rg-model-harness}"
-FRONTEND_URL="$(az deployment group show \
-  --resource-group "$RESOURCE_GROUP" \
-  --name model-harness-maf-app \
-  --query properties.outputs.frontendUrl.value \
-  -o tsv)"
-
-curl -fsS "$FRONTEND_URL/api/scenarios" >/dev/null
-curl -fsS "$FRONTEND_URL/api/workflow/graph" >/dev/null
-curl -fsS "$FRONTEND_URL/health/ready" >/dev/null
-printf 'MAF frontend and FastAPI proxy are ready: %s\n' "$FRONTEND_URL"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+if [[ "${1:-}" == "--base-url" ]]; then
+  export MAF_BASE_URL="${2:?--base-url requires the deployed same-origin frontend URL}"
+  shift 2
+fi
+: "${MAF_BASE_URL:?Set MAF_BASE_URL or pass --base-url; never infer another Azure target}"
+exec "${PYTHON_BIN:-.venv/bin/python}" scripts/smoke.py --base-url "$MAF_BASE_URL" "$@"

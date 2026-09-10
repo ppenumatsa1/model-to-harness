@@ -78,6 +78,12 @@ PostgreSQL is authoritative for application state and audit history. Model conte
 and UI projections are temporary views. Reading stored events is replay; running from
 a checkpoint again is re-execution and may repeat model or tool work.
 
+MAF applies SQL migrations explicitly before either runtime starts. Its repository
+opens connections and checks migration history; it does not create or upgrade schema
+on startup. The configured MAF schema can differ between local and deployed
+environments. The backend cutover starts with empty MAF state and new checkpoint type
+paths rather than providing legacy checkpoint readers or converting old records.
+
 ## Event and UI boundary
 
 Each backend first records native durable events, then maps allowlisted records to an

@@ -29,12 +29,14 @@ This is a concise implementation ledger, not a release history.
 - LangGraph database initialization uses Python and Psycopg, so a host `psql`
   executable is not an undeclared prerequisite.
 
-## Known validation limitations
+## Initial validation limitations (historical)
+
+These describe the initial implementation, not the latest MAF cutover checks below.
 
 - Shared package tests and documentation-link checks run without external services.
-- Compose syntax can be checked statically, but Docker was unavailable in the current
-  validation environment. PostgreSQL reconstruction tests are included and wired to
-  the independent CI workflows through `TEST_DATABASE_URL`, but were skipped locally.
+- Compose syntax was checked statically, but Docker was unavailable in the initial
+  validation environment. PostgreSQL reconstruction tests were included and wired to
+  the independent CI workflows through `TEST_DATABASE_URL`, but were skipped then.
 - Model-backed smoke runs require caller-supplied Foundry configuration and identity;
   no cloud credentials or resource values are stored in the repository.
 - Browser end-to-end suites require the framework-local frontend dependencies and
@@ -321,3 +323,123 @@ See each application README for its current validation commands.
   files now document independence, durable
   approval, PostgreSQL authority, Foundry packaging, telemetry safety, and required
   validation commands.
+
+## 2026-09-10 - MAF direct-cutover implementation and verification status
+
+- Work is on `refactor/maf-backend-cutover`, based on the local `e1299ba` checkpoint.
+  Source has passed local acceptance and independent review. Nothing has been pushed,
+  merged, or deployed during this cutover. `main` is unchanged.
+- Replaced the flat MAF backend with application, native MAF workflow/executor,
+  persistence, API, projection, and explicit testing boundaries. Removed superseded
+  root modules rather than retaining compatibility shims or old checkpoint readers.
+  LangGraph and shared runtime code remain unchanged.
+- `backend/migrations/` is now authoritative: version/checksum tracking, transactional
+  advisory locking, repeatable application, a locked `--require-empty` release guard,
+  and rejection of unversioned legacy storage. Runtime startup validates schema
+  readiness without migrating or resetting it.
+- Integrated explicit API/hosted runtime lifecycle, safe telemetry/provider ownership,
+  packaged SQL, release harnesses, independent hosted dependencies, and publication
+  links. Native approval remains a separate persisted command before resume.
+
+| Completed check | Evidence |
+| --- | --- |
+| Backend/shared integration | Final consolidated suite: 200 tests passed, including real PostgreSQL migrations, checkpoint reconstruction, refund invariants, CI/feed contracts, and telemetry tests; Ruff passed |
+| Deterministic evaluations | All seven fixture scenarios passed |
+| Frontend | Four unit tests, production build, container build, and nginx entrypoint/configuration check passed |
+| Local API/browser | Final real-model PostgreSQL-backed smoke, all seven command scenarios, and browser approval/resume/outcome/CopilotKit flow passed |
+| Installed wheels | SQL migration apply/repeat and all seven evaluations passed outside the checkout with locked dependencies |
+| Python 3.13 hosted package | Final declared SDK dependencies, common logging startup without Uvicorn, import/resources, compatibility checks, and all seven real-model Responses command scenarios passed |
+| Real model and restart | Production API smoke passed; real hosted Responses start and approval paused durably, then a fresh server process resumed to a verified refund also visible through the API |
+
+- Integration fixes included explicit MAF pytest configuration when combining shared
+  tests, repository-backed in-memory checkpoint views, isolated telemetry test log
+  levels, current browser selectors, and unique browser case/idempotency identifiers.
+- **Pending:** Azure IaC preview
+  and rollout; deployed smoke, API/browser/hosted E2E, actual new-version Foundry
+  evaluation results, and observed Application Insights ingestion.
+- Read-only Azure discovery found the existing MAF PostgreSQL server stopped. After
+  local/review gates, the authorized rollout must explicitly start it, wait for
+  readiness, and use the fresh MAF-only schema. No Azure resource mutations have
+  occurred during this cutover.
+- Next sequence: resolve package downloads, finish/review release artifacts, rerun
+  affected local gates, commit the validated feature-branch source, preview/apply the
+  MAF-only release, and verify actual cloud behavior before the merge handoff.
+- **Current distance to deployment:** local acceptance and targeted review are
+  complete; the next step is the reviewed Azure rollout. Both images now build, and common logging
+  starts correctly in the isolated hosted environment. Hosted client pins and
+  supplied-ID correlation are implemented. Real-model local execution is not a
+  substitute for testing a newly deployed Foundry-hosted version; that cloud
+  verification is still pending.
+
+## 2026-09-10 - Container package downloads require approved package feeds
+
+- Both backend and frontend image builds failed during package downloads:
+  Python downloads from `files.pythonhosted.org` and npm tarballs from
+  `registry.npmjs.org` returned TLS handshake failures inside containers. Host
+  downloads succeeded; using Docker host networking did not resolve the failure.
+  This is a package-download environment blocker, not a workflow test failure.
+- The user supplied these approved repository feeds:
+
+| Ecosystem | Approved feed |
+| --- | --- |
+| npm | `https://packagefeedproxy.microsoft.io/npm/` |
+| PyPI | `https://packagefeedproxy.microsoft.io/pypi/simple/` |
+| NuGet | `https://packagefeedproxy.microsoft.io/nuget/v3/index.json` |
+
+- Container probes reached the npm and PyPI mirrors successfully, including an actual
+  npm tarball download. The MAF frontend
+  now declares its registry in `.npmrc`, copied before Docker's `npm ci`; the MAF
+  Python project declares the approved default uv index. Its lockfile now uses that
+  index with all 105 package versions unchanged; feed/workspace contracts passed.
+  The frontend image rebuilt successfully through the mirror, and its actual nginx
+  entrypoint/configuration check passed. This closes the frontend download blocker.
+  The backend image also built successfully and passed all seven evaluations plus
+  packaged SQL/tested-SDK checks inside the image. Hosted requirements now explicitly
+  select the approved PyPI index. Package-download blockers are resolved.
+- NuGet is recorded for future applicable work; this MAF lane has no NuGet
+  installation step, so no unused .NET configuration is added.
+- TLS verification remained enabled throughout; no certificate or transport safety
+  checks were disabled.
+
+## 2026-09-10 - Independent MAF review found CI and access-logging regressions
+
+- The independent review reproduced two release blockers despite the passing local
+  suite. No Azure rollout occurred.
+- **CI database mismatch:** the workflow still provisioned the original database
+  and port, while the integration fixture intentionally accepts only the dedicated
+  `mafdev` / `maf_cutover_tests` database at `127.0.0.1:5434`. CI service settings,
+  health checks, and URLs are now aligned; a contract invokes the actual fixture
+  guard using CI configuration. The local test setup is documented in the MAF README.
+  The remote-database restriction is retained. The CI contract and complete
+  PostgreSQL integration directory passed 27 tests; lint and whitespace checks passed.
+- **Uvicorn access logging:** safe log filtering cleared the argument tuple required
+  by Uvicorn's access formatter, causing logging tracebacks on requests. A safe JSON
+  formatter and three real-Uvicorn regressions now retain only allowlisted
+  method/status and correlation fields; the full suite passed 192 tests.
+- Isolated Python 3.13 startup then caught an API-only `uvicorn` import introduced
+  by that fix: the hosted server uses Hypercorn and does not depend on Uvicorn.
+  Formatter detection now checks already-loaded classes without importing Uvicorn,
+  including subclasses. Isolated hosted logging startup passed with Uvicorn absent.
+  The actual restarted Uvicorn API retained method/status, omitted a sensitive query
+  sentinel, and produced no logging traceback. The isolated hosted CI gate now
+  executes common logging setup, not just imports, to catch startup regressions.
+- Both fixes passed focused verification and independent follow-up before Azure rollout.
+- The independent follow-up confirmed both original findings resolved, with no
+  additional release/packaging blockers. A final narrow hosted refinement loads
+  authoritative case/run state before approval/resume correlation; its two new
+  contracts pass, and the consolidated suite now passes 200 tests. The reviewer also
+  examined that final refinement and found no blocker.
+
+## 2026-09-10 - Browser acceptance assumed the fake model's exact wording
+
+- Final real-model API smoke and all seven command scenarios passed, but browser
+  acceptance required the literal fake-model phrase `Current status is`. The real
+  model returned an accurate explanation using different wording.
+- The browser test now verifies successful CopilotKit/AG-UI completion, a nonempty
+  streamed explanation, and exact rendering of that returned explanation. It reuses
+  the existing SSE parser and still checks the authoritative outcome, absence of
+  assistant errors, and that no direct assistant command path was used.
+- Production UI and model behavior are unchanged. Business-result assertions remain
+  deterministic; model wording is not treated as a fixed UI contract. The corrected
+  real-model browser run passed, including refund completion, selected-run explanation,
+  and switching to a no-duplicate case.
