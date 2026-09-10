@@ -9,7 +9,10 @@ from uuid import uuid4
 from azure.ai.agentserver.responses import ResponsesAgentServerHost, TextResponse
 from maf_double_charge.application.commands import ApprovalCommand, ResumeCommand, ScenarioInput
 from maf_double_charge.bootstrap import Runtime, create_runtime
-from maf_double_charge.infrastructure.telemetry import telemetry_context
+from maf_double_charge.infrastructure.telemetry import (
+    apply_hosted_instrumentation_policy,
+    telemetry_context,
+)
 
 _lock = asyncio.Lock()
 _active_runtime: Runtime | None = None
@@ -187,6 +190,7 @@ async def response_handler(
 def create_host() -> ResponsesAgentServerHost:
     os.environ["OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"] = "false"
     host = ResponsesAgentServerHost()
+    apply_hosted_instrumentation_policy()
     host.response_handler(response_handler)
     return host
 

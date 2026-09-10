@@ -5,9 +5,10 @@ This is a concise implementation ledger, not a release history.
 ## 2026-09-10 - Consolidated MAF refactor summary
 
 **Functional deployment acceptance and hosted per-operation trace completeness
-passed; destructive legacy-session cleanup is held.** Applications run source
-`6948226` on `refactor/maf-backend-cutover`. Hosted version 6 retains version 5's
-runtime archive, with the sampling-only configuration fix from `092f284`.
+passed; SDK-noise reduction is being verified and destructive legacy-session
+cleanup is held.** Applications run source `6948226` on
+`refactor/maf-backend-cutover`. Hosted version 7 retains version 5's runtime archive,
+with fixed sampling from `092f284` and instrumentation flags from `4afca7d`.
 This table supersedes historical interim blockers below, whose evidence is retained.
 No feature-branch push or merge was performed.
 
@@ -960,6 +961,36 @@ See each application README for its current validation commands.
   approval-only commands remain visible; the workflow hierarchy is not filtered.
 - Added a real Azure Projects client regression covering method-tracing opt-out
   and unchanged native parentage, plus manifest contract coverage. Local tests
-  passed (101 tests); the configuration-only rollout and live noise checks are
-  pending. Existing API/frontend images, workflow source, database and LangGraph
-  remain outside this change.
+  passed (101 tests), followed by Ruff. Deployed configuration commit `4afca7d`
+  as hosted version **7**. Authoritative readback verified active status, exact
+  instrumentation flags, unchanged schema and the same runtime archive hash.
+  Existing API/frontend images, workflow source, database and LangGraph remain
+  outside this change.
+- Live comparison confirms `AIProjectClient.get_openai_client` spans fell from
+  **17 on version 6 to zero on version 7**. HTTP spans fell from **212 to 12**
+  in the current observation: ten retained POSTs belong to actual hosted command
+  operations; two standalone GETs remain under investigation. These residual
+  spans are not evidence that the disabled generic instrumentors were the only
+  telemetry source. Do not drop command children just to achieve zero HTTP spans.
+- The command-only query was executed successfully against all 17 version-6
+  commands, retaining all five approval-only commands and excluding standalone
+  SDK/HTTP/log operations. Version-7 final hierarchy/noise acceptance and
+  documentation readback are still in progress. No push or merge was performed.
+- All seven version-7 hosted scenarios subsequently passed. Further inspection
+  found why residual HTTP spans survived: Microsoft distro 1.3.9 resolves the
+  environment opt-outs into a separate Azure Monitor configuration object, but
+  its later `_setup_instrumentations` pass reads the original options and enables
+  HTTP instrumentors by default. Inspecting only the configuration resolver was
+  insufficient; a real instrumentation-pass reproduction confirmed the defect.
+- Added a narrow hosted startup correction: after the SDK creates its provider
+  and before clients/handlers execute, honor the declared HTTP opt-outs using
+  each registered instrumentor's public `uninstrument()` API. Only five explicitly
+  allowed outgoing-HTTP instrumentors are eligible. Native MAF, inbound request
+  instrumentation, sampling, provider/exporter ownership and logs are untouched.
+  Already-disabled or absent optional instrumentors are no-ops; failed disablement
+  raises explicitly instead of silently claiming the noise policy is applied.
+- Verified the real pinned SDK pass enables HTTP despite the environment flag,
+  then verified the startup correction disables it while native MAF remains
+  enabled. Added idempotence, scope, failure and startup-order coverage.
+  All 105 focused tests and Ruff passed. This follow-up runtime change still
+  requires a new hosted version and fresh live acceptance.

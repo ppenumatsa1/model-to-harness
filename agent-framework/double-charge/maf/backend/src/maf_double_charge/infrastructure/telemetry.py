@@ -6,7 +6,7 @@ import re
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from importlib.metadata import version
+from importlib.metadata import entry_points, version
 from threading import Event as ThreadEvent
 from threading import RLock, Thread
 from time import monotonic
@@ -478,6 +478,24 @@ def _configure_azure(settings: Settings, processor: SafetySpanProcessor) -> Tele
     meter = metrics.get_meter_provider()
     logs = get_logger_provider()
     return TelemetryHandle("azure_monitor", (meter, tracer, logs), tracer, meter)
+
+
+def apply_hosted_instrumentation_policy() -> None:
+    """Honor HTTP opt-outs after the hosted distro's separate instrumentation pass."""
+    disabled = {
+        name.strip()
+        for name in os.environ.get("OTEL_PYTHON_DISABLED_INSTRUMENTATIONS", "").split(",")
+    } & {"httpx", "httpx2", "requests", "urllib", "urllib3"}
+    if not disabled:
+        return
+    for entry in entry_points(group="opentelemetry_instrumentor"):
+        if entry.name not in disabled:
+            continue
+        instrumentor = entry.load()()
+        if instrumentor.is_instrumented_by_opentelemetry:
+            instrumentor.uninstrument()
+            if instrumentor.is_instrumented_by_opentelemetry:
+                raise RuntimeError(f"Hosted HTTP instrumentation opt-out failed: {entry.name}")
 
 
 def configure_telemetry(settings: Settings, *, host: str = "api") -> TelemetryHandle:

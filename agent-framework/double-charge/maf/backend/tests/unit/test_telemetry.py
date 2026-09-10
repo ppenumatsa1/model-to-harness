@@ -327,6 +327,48 @@ async def test_sdk_setup_tracing_opt_out_preserves_native_parentage(
     assert executor.parent.span_id == workflow.context.span_id
 
 
+def test_hosted_http_policy_only_uninstruments_enabled_declared_transports(monkeypatch):
+    monkeypatch.setenv(
+        "OTEL_PYTHON_DISABLED_INSTRUMENTATIONS", " httpx ,requests,agent_framework,flask"
+    )
+    entries = []
+    instrumentors = {}
+    for name in ("httpx", "requests", "agent_framework", "flask"):
+        instrumentor = Mock(is_instrumented_by_opentelemetry=name != "requests")
+        instrumentors[name] = instrumentor
+        entry = Mock()
+        entry.name = name
+        entry.load.return_value.return_value = instrumentor
+        entries.append(entry)
+    active = instrumentors["httpx"]
+    active.uninstrument.side_effect = lambda: setattr(
+        active, "is_instrumented_by_opentelemetry", False
+    )
+    discover = Mock(return_value=entries)
+    monkeypatch.setattr(telemetry, "entry_points", discover)
+    telemetry.apply_hosted_instrumentation_policy()
+    telemetry.apply_hosted_instrumentation_policy()
+    discover.assert_called_with(group="opentelemetry_instrumentor")
+    active.uninstrument.assert_called_once()
+    instrumentors["requests"].uninstrument.assert_not_called()
+    for entry in entries[2:]:
+        entry.load.assert_not_called()
+
+
+@pytest.mark.parametrize("raises", [False, True])
+def test_hosted_http_policy_surfaces_failed_opt_out(monkeypatch, raises):
+    monkeypatch.setenv("OTEL_PYTHON_DISABLED_INSTRUMENTATIONS", "httpx")
+    instrumentor = Mock(is_instrumented_by_opentelemetry=True)
+    if raises:
+        instrumentor.uninstrument.side_effect = RuntimeError("instrumentor failed")
+    entry = Mock()
+    entry.name = "httpx"
+    entry.load.return_value.return_value = instrumentor
+    monkeypatch.setattr(telemetry, "entry_points", Mock(return_value=[entry]))
+    with pytest.raises(RuntimeError, match="instrumentor failed|opt-out failed: httpx"):
+        telemetry.apply_hosted_instrumentation_policy()
+
+
 def test_safe_log_exporter_drops_body_extras_and_retains_trace_correlation():
     exporter = InMemoryLogRecordExporter()
     provider = LoggerProvider(shutdown_on_exit=False)

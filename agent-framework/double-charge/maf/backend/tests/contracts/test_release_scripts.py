@@ -747,6 +747,23 @@ def test_hosted_manifest_disables_only_sdk_and_transport_instrumentation():
     assert environment["AZURE_TRACING_ENABLED"] == "false"
 
 
+def test_hosted_noise_policy_runs_after_sdk_setup_before_handler_registration(monkeypatch):
+    adapter, host = load_hosted_adapter(monkeypatch)
+    order = []
+
+    def construct():
+        order.append("sdk")
+        return host
+
+    monkeypatch.setattr(adapter, "ResponsesAgentServerHost", construct)
+    monkeypatch.setattr(
+        adapter, "apply_hosted_instrumentation_policy", lambda: order.append("policy")
+    )
+    host.response_handler.side_effect = lambda handler: order.append("handler")
+    assert adapter.create_host() is host
+    assert order == ["sdk", "policy", "handler"]
+
+
 @pytest.mark.asyncio
 async def test_hosted_adapter_executes_explicit_workflow_commands(
     modules, monkeypatch, repository, model, settings

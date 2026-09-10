@@ -206,11 +206,19 @@ screenshots will continue to show incomplete historical data.
 The hosted manifest disables redundant `azure_sdk`, `httpx`, `httpx2`, `requests`,
 `urllib` and `urllib3` auto-instrumentation through
 `OTEL_PYTHON_DISABLED_INSTRUMENTATIONS`, and disables Azure SDK method tracing with
-`AZURE_TRACING_ENABLED=false`. The pinned hosted distro supports these controls.
+`AZURE_TRACING_ENABLED=false`. Azure SDK setup honors these controls, but Microsoft
+distro 1.3.9's separate HTTP instrumentation pass does not carry forward its
+environment-resolved options. The hosted adapter therefore calls
+`apply_hosted_instrumentation_policy()` **after** SDK provider construction and
+**before** creating clients or serving commands. It uses the registered outgoing
+HTTP instrumentors' public `uninstrument()` API and verifies disablement. Only
+the five named HTTP instrumentors can be affected; native MAF and incoming
+request instrumentation are not candidates.
+
 This removes SDK bookkeeping such as `AIProjectClient.get_openai_client` and
-low-level transport spans; it does **not** randomly sample native spans or change
-the platform provider/exporter. MAF workflow, executor, agent/model, usage and
-message instrumentation remains enabled at 100% retention.
+generic low-level transport instrumentation; it does **not** randomly sample native
+spans or change the platform provider/exporter. MAF workflow, executor, agent/model,
+usage and message instrumentation remains enabled at 100% retention.
 
 The tradeoff is intentional: low-level HTTP/SDK spans, including their transport
 error details, are no longer captured. Native model/workflow failure status and
