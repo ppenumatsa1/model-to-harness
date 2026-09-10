@@ -423,10 +423,44 @@ def test_hosted_command_has_explicit_version_and_new_conversation(modules):
         }
     )
     hosted.invoke(runner, "maf-dev", "4", {"action": "resume", "run_id": "run"})
-    command = runner.run.call_args.args[0]
+    created, command, stopped = [call.args[0] for call in runner.run.call_args_list]
+    session_id = created[created.index("--session-id") + 1]
+    assert created[created.index("--version") + 1] == "4"
+    assert session_id.startswith("maf-check-")
     assert command[command.index("--version") + 1] == "4"
-    assert "--new-conversation" in command and "--new-session" in command
+    assert command[command.index("--session-id") + 1] == session_id
+    assert "--new-conversation" in command and "--new-session" not in command
     assert "--output" in command and "raw" in command
+    assert stopped[stopped.index("stop") + 1] == session_id
+
+
+@pytest.mark.parametrize("failure_index", [0, 1, 2])
+def test_hosted_session_cleanup_is_attempted_and_failures_are_explicit(
+    modules, monkeypatch, failure_index
+):
+    release, hosted, *_ = modules
+    runner = Mock()
+    responses: list[str | Exception] = ["", "", ""]
+    responses[failure_index] = release.ReleaseError("command failed")
+    runner.run.side_effect = responses
+    monkeypatch.setattr(hosted, "response_result", lambda _: {"run_id": "run"})
+    with pytest.raises(release.ReleaseError):
+        hosted.invoke(runner, "maf-dev", "5", {"action": "start"})
+    commands = [call.args[0] for call in runner.run.call_args_list]
+    session_id = commands[0][commands[0].index("--session-id") + 1]
+    assert commands[-1][commands[-1].index("stop") + 1] == session_id
+
+
+def test_invalid_hosted_response_still_stops_its_session(modules):
+    release, hosted, *_ = modules
+    runner = Mock()
+    runner.run.return_value = "incomplete response"
+    with pytest.raises(release.ReleaseError):
+        hosted.invoke(runner, "maf-dev", "5", {"action": "start"})
+    commands = [call.args[0] for call in runner.run.call_args_list]
+    assert len(commands) == 3
+    session_id = commands[0][commands[0].index("--session-id") + 1]
+    assert commands[-1][commands[-1].index("stop") + 1] == session_id
 
 
 def test_eval_binding_does_not_change_seed_intent(modules):

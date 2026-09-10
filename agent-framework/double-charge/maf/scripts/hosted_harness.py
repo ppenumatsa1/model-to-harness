@@ -54,25 +54,62 @@ def response_result(raw: str) -> dict[str, Any]:
 
 
 def invoke(runner: Runner, environment: str, version: str, command: dict[str, Any]):
-    raw = runner.run(
-        azd_args(
-            environment,
-            "ai",
-            "agent",
-            "invoke",
-            SERVICE,
-            json.dumps(command),
-            "--protocol",
-            "responses",
-            "--version",
-            version,
-            "--new-session",
-            "--new-conversation",
-            "--output",
-            "raw",
+    session_id = f"maf-check-{uuid4().hex}"
+    try:
+        runner.run(
+            azd_args(
+                environment,
+                "ai",
+                "agent",
+                "sessions",
+                "create",
+                "--agent-name",
+                SERVICE,
+                "--version",
+                version,
+                "--session-id",
+                session_id,
+                "--output",
+                "json",
+            )
         )
-    )
-    return response_result(raw)
+        raw = runner.run(
+            azd_args(
+                environment,
+                "ai",
+                "agent",
+                "invoke",
+                SERVICE,
+                json.dumps(command),
+                "--protocol",
+                "responses",
+                "--version",
+                version,
+                "--session-id",
+                session_id,
+                "--new-conversation",
+                "--output",
+                "raw",
+            )
+        )
+        return response_result(raw)
+    finally:
+        try:
+            runner.run(
+                azd_args(
+                    environment,
+                    "ai",
+                    "agent",
+                    "sessions",
+                    "stop",
+                    session_id,
+                    "--agent-name",
+                    SERVICE,
+                    "--no-prompt",
+                )
+            )
+        except ReleaseError as error:
+            raise ReleaseError(f"Failed to stop owned hosted session {session_id}") from error
 
 
 def main() -> None:

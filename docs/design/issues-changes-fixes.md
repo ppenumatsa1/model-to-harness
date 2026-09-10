@@ -524,3 +524,25 @@ See each application README for its current validation commands.
   versions as the previously validated hosted environment. Dependency compatibility,
   isolated imports, logging without Uvicorn, packaged SQL, Ruff, and all 210
   shared/backend tests passed.
+
+## 2026-09-10 - Hosted harness sessions exhausted PostgreSQL connection slots
+
+- Corrected hosted source deployed successfully as version `5`. The downloaded
+  source archive matched all 60 expected source/SQL files and its recorded SHA-256;
+  it uses the fresh schema and the same instance identity.
+- Two harness attempts completed four and six scenarios respectively before a new
+  session failed readiness. Exact failed-session logs showed PostgreSQL pool
+  initialization timing out. A separate read-only connection attempt confirmed
+  exhausted connection slots, not a password or network timeout.
+- The harness was leaving every new command session running, retaining its
+  PostgreSQL pool. It now creates uniquely named owned sessions explicitly and
+  stops their compute in `finally`, including command/response failures. Stop
+  failures remain visible with the owned session ID.
+- No PostgreSQL SKU/connection-limit increase, pool-policy change, hidden command
+  retry, schema reset, or application redeployment is needed for this harness fix.
+  Full hosted acceptance remains pending scoped cleanup and rerun.
+- All 214 shared/backend tests passed. Twenty-eight test-owned sessions were
+  positively identified through request-to-native-trace correlation and durable
+  test records, then stopped without deleting workflow data or old teaching
+  sessions. Stopping the first verified completed session restored operator
+  database access; the existing server still has its original 50-connection limit.

@@ -95,6 +95,11 @@ They cover no duplicate, approval/refund, denial, retry, resumed approval, failu
 and manual review. The hosted harness parses the installed CLI's raw HTTP/Responses
 JSON or completed SSE response, never assumes command startup means success, and
 uses explicit versions and new sessions/conversations.
+Each hosted command creates a uniquely named harness-owned session and stops its
+compute in a `finally` block, including failed invocations. This releases its
+PostgreSQL pool instead of accumulating live sessions until the small teaching
+server runs out of connections. Workflow state survives in PostgreSQL; approval
+and resume still run in separate fresh sessions.
 The hosted adapter binds SDK conversation/response IDs and workflow case/run IDs
 through the MAF-local safe telemetry context. It hashes telemetry join keys
 and annotates the existing platform span without introducing another span/provider.
