@@ -1,0 +1,29 @@
+// Select a verified deployed version; empty data is not acceptance.
+let TargetVersion = "<agent-version>";
+let Since = ago(24h);
+let Workers = dependencies
+| where timestamp > Since and name == "foundry.responses.invoke"
+| where tostring(customDimensions["gen_ai.agent.name"]) == "model-harness-langgraph"
+    and tostring(customDimensions["gen_ai.agent.version"]) == TargetVersion
+| distinct worker=strcat(cloud_RoleName,":",cloud_RoleInstance);
+let Scope = materialize(union requests,dependencies,traces,exceptions
+| where timestamp > Since
+| where (tostring(customDimensions["gen_ai.agent.name"]) == "model-harness-langgraph"
+        and tostring(customDimensions["gen_ai.agent.version"]) == TargetVersion)
+    or strcat(cloud_RoleName,":",cloud_RoleInstance) in (Workers)
+| extend spanType=tostring(column_ifexists("type","")),
+    scanText=strcat(tostring(customDimensions)," ",tostring(column_ifexists("message","")),
+        " ",tostring(column_ifexists("details",""))));
+let Keys = Scope
+| mv-expand attributeKey=bag_keys(customDimensions)
+| extend attributeKey=tostring(attributeKey)
+| where attributeKey matches regex @"(?i)(^|[._])(prompt|complaint|password|secret|connection[._]string|access[._]token|authorization|checkpoint[._]payload|tool[._](arguments|result)|input[._]messages|output[._]messages|system[._]instructions|inputs|outputs|content)([._]|$)";
+let ForbiddenKeys=toscalar(Keys | count);
+let WorkerCount=toscalar(Workers | count);
+Scope
+| summarize rows=count(),httpSpans=countif(spanType == "HTTP"),
+    forbiddenContent=countif(scanText matches regex
+        @"(?i)(postgres(?:ql)?(?:\+\w+)?://|Bearer\s+eyJ|channel_values|channel_versions|Normalize the support complaint|Draft a brief customer update|two captured charges)")
+| extend workers=WorkerCount,forbiddenKeys=ForbiddenKeys
+| extend passed=rows > 0 and workers > 0 and httpSpans == 0
+    and forbiddenContent == 0 and forbiddenKeys == 0

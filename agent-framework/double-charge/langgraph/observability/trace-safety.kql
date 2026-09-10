@@ -4,5 +4,5 @@ union requests, dependencies, traces
 | where timestamp > ago(24h) and operation_Id == TargetOperation
 | mv-expand attributeKey = bag_keys(customDimensions)
 | extend attributeKey = tostring(attributeKey)
-| where attributeKey matches regex @"(?i)(^|[._])(prompt|complaint|password|secret|connection_string|access_token|authorization|checkpoint_payload|tool_arguments|tool_result|input_messages|output_messages|content)([._]|$)"
+| where attributeKey matches regex @"(?i)(^|[._])(prompt|complaint|password|secret|connection[._]string|access[._]token|authorization|checkpoint[._]payload|tool[._](arguments|result)|input[._]messages|output[._]messages|system[._]instructions|inputs|outputs|content)([._]|$)"
 | summarize occurrences = count() by attributeKey

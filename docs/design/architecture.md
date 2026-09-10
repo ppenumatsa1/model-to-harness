@@ -136,6 +136,13 @@ Insights resources. Hosted code runs on Python 3.13; application containers and 
 development use Python 3.12. Both deploy `gpt-5.6-sol` version `2026-07-09` with the
 Global Standard SKU in `northcentralus`.
 
+LangGraph hosted startup verifies storage and closes that verification runtime.
+Each explicit hosted command then owns a fresh runtime context and closes its
+application pool, native saver and model clients before responding. Durable
+PostgreSQL/native checkpoints, not idle hosted process memory or connections,
+carry approval/resume across commands. Its SDK telemetry provider remains
+SDK-owned. This lifecycle is lane-local, not a shared MAF/LangGraph abstraction.
+
 The deployments intentionally retain public Foundry/PostgreSQL service access and
 Azure-services firewall rules for teaching simplicity. They are not a production
 network-security reference.

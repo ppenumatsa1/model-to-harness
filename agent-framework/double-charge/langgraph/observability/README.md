@@ -46,6 +46,20 @@ requiring every graph node in every operation. `trace-safety.kql` returns only
 prohibited attribute key names, never unrestricted attributes. `command-traces.kql`
 indexes actual commands, including failed and approval-only commands, without
 promoting standalone SDK setup or log operations into workflow runs.
+In `release-privacy.kql`, replace `<agent-version>` with the deployed version and
+select the release time window. It scopes that version and its worker instances, including
+startup records, and returns only counts of transport spans, prohibited keys and
+tested content signatures. It rejects empty data. Incoming API request parents
+can be outside this resource; verify all internal parents up to the HTTP boundary
+without inventing or detaching external caller context.
+
+The final v15 hosted matrix verified 17 command operations, 12 workflows, 70 node
+executions and 10 native model calls with actual usage. Every command matched its
+expected branch/retry count and parents; HTTP transport spans were zero. The API
+matrix independently verified 12 workflows, 70 nodes and 10 models with complete
+internal parents. The observed release privacy window covered 1,299 records and
+20 worker instances, with zero prohibited keys/tested content signatures.
+These are scoped release observations, not a guarantee for future SDK upgrades.
 
 Resolve the exact project, version, App Insights resource and time window before
 querying; display the KQL before execution and never claim aggregate counts prove

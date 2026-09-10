@@ -10,7 +10,10 @@ saver table is created in `public`; checkpoint internals are never exposed.
 
 The backend separates `api`, `application`, native `graph`, `infrastructure`,
 `projections`, and explicit `testing` doubles. `bootstrap.open_runtime()` owns
-composition and cleanup for API and hosted entrypoints. Old flat-module imports are
+composition and cleanup for API and hosted entrypoints. Hosted startup verifies
+storage, then each explicit command owns and releases its own database/model
+resources; idle hosted compute retains no application pool or native saver
+connection. Old flat-module imports are
 removed without aliases. This is a fresh-state cutover, not a legacy-data migration.
 
 ## Local setup
@@ -161,7 +164,28 @@ four reviewed cases and catalog pins, verifies the selected version, creates a f
 group and emits a private batch-evaluation request. `scripts/download_eval_results.py`
 persists every result and fails on missing, failed, errored or unscored decisions.
 
-### Pre-cutover deployed baseline
+### Verified cutover release - 2026-09-10
+
+| Surface | Verified release / evidence |
+| --- | --- |
+| API / frontend | Source `901634a`, revisions `0000014` / `0000009`; private API and public frontend retained. |
+| Foundry | Agent/project `model-harness-langgraph`, hosted version **15**, source `1e99986`; downloaded archive, Python 3.13 runtime and environment attested. |
+| End-to-end | Seven API and seven hosted scenarios, direct PostgreSQL evidence and deployed browser approval/resume passed. |
+| Cloud judges | v15: **4/4 passed**, zero failed/errored/unscored; task-completion 19 and relevance 12. |
+| Telemetry | Hosted matrix: 17 commands, 12 workflows, 70 node executions and 10 native model calls. Exact branches, retries, usage, internal parents and complete retention verified; zero HTTP transport spans. API internal hierarchy independently verified. |
+| Privacy / cleanup | Release-window key/content-signature checks passed; all 46 task-owned sessions idle, without deleting persisted state. |
+
+Public app:
+<https://mth-lg-2vq7rokaqwhae-web.mangodune-3886db41.northcentralus.azurecontainerapps.io>.
+App Insights: `mth-lg-2vq7rokaqwhae-appi`.
+Final evaluation: `eval_8cdf767bc2994123822a531d8414fa4e` /
+`evalrun_83c0674c78af4e1488263f7646318db0`.
+See the [implementation ledger](../../../docs/design/issues-changes-fixes.md) for
+immutable image/archive digests, incident evidence and remaining teaching
+constraints. No legacy-data migration, destructive cleanup, push or merge was
+part of this cutover.
+
+### Historical pre-cutover baseline
 
 - Public application:
   <https://mth-lg-2vq7rokaqwhae-web.mangodune-3886db41.northcentralus.azurecontainerapps.io>

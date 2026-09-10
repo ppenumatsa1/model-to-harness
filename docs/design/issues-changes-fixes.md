@@ -2,30 +2,68 @@
 
 This is a concise implementation ledger, not a release history.
 
-## LangGraph direct cutover - implementation in progress
+## LangGraph direct cutover - completed
 
-### Current progress checkpoint
+### Final verified checkpoint - 2026-09-10
 
-**Ten of thirteen work packages are complete; corrective hosted deployment and
-cloud acceptance are active, and final handoff is pending.** Implementation is committed locally as
-`a27cb6e`, with subsequent release/startup corrections through `901634a`, on
+**The approved implementation, IaC, deployment, smoke, E2E, evaluation, telemetry
+and documentation gates are complete.** API/frontend run source `901634a`;
+Foundry hosted version **15** runs source `1e99986`. Work remains local on
 `refactor/maf-backend-cutover`; no push or merge occurred.
 
 | Area | Current evidence / remaining work | Status |
 | --- | --- | --- |
 | Backend and storage cutover | Independent package boundaries, explicit application/native-checkpoint setup, verify-only startup, durable approval/resume and recovery are implemented. No legacy-data migration. | Complete |
 | Independent review | The checkpoint-evidence restart defect is fixed and covered at both pre-validation restart boundaries; reviewer finding closed. | Complete |
-| Local acceptance | 182 tests with PostgreSQL and no skips; seven deterministic evaluations and seven API scenarios; frontend tests/build/browser; wheel and isolated Python 3.13 hosted package gates passed. | Complete |
-| Telemetry implementation | Real execution spans, safe correlation, full-retention policy and KQL positive/negative gates are implemented and locally checked. Fresh deployed hierarchy, noise and privacy still need verification. | Local complete; cloud pending |
-| Existing infrastructure | Corrected API revision `0000014` and frontend revision `0000009` are ready on immutable `901634a` images. Foundry version 14 is active; runtime, environment and downloaded source archive are verified. | Deployed |
-| Release gate | Strict app-only previews and immutable rollout checks passed. Recovery verified existing cutover storage read-only. Corrective hosted resource-lifecycle/transport edits are now in the worktree, not yet validated or deployed. | Corrective release active |
-| Cloud acceptance and handoff | Seven API scenarios, direct SQL evidence, browser approval/resume, hosted v14 smoke and all four cloud evaluation items passed. Both full hosted matrix attempts stopped after four scenarios. Final hosted E2E, ancestry/noise/privacy proof and evidence sync remain. | Active; not complete |
+| Local acceptance | Initial 182-test PostgreSQL run had no skips. Final focused telemetry/lifecycle/release regression: 146 passed, two PostgreSQL-only skips in that separate run. Deterministic evaluations, frontend/browser, installed-wheel and isolated hosted package gates passed. | Complete |
+| Telemetry | Hosted matrix: 17 commands, 12 workflow executions, 70 node executions and 10 native model calls, checked per command against exact branches/retries and parentage. API matrix independently has 12 workflows, 70 nodes and 10 models with complete internal parents. Full retention and zero HTTP transport spans on both. | Verified live |
+| Infrastructure and deployment | API revision `0000014`, frontend revision `0000009`, hosted version **15**. Immutable images and downloaded hosted archive, Python runtime, argv and environment verified. Existing cutover schemas were verified read-only during recovery. | Complete |
+| Business acceptance | Seven API and seven hosted scenarios passed, including separate approval/resume, denial, bounded failure, retry-safe refund and verification mismatch. Both matrices passed direct PostgreSQL outcome/refund/approval/checkpoint checks. Deployed browser flow passed. | Complete |
+| Cloud evaluation | Final hosted v15: **4 passed, 0 failed, 0 errored, 0 unscored**; every item inspected for both pinned evaluator decisions. | Complete |
+| Privacy and cleanup | Final observed release window: 1,299 telemetry rows across 20 worker instances, zero prohibited keys/tested content signatures and zero HTTP transport spans. Safe failed-command indexing passed. All 46 task-owned hosted sessions are idle; no hosted sessions or legacy schemas deleted. | Complete |
 
-Core implementation has stopped and its owned test resources were cleaned up.
-Parent-owned disposable PostgreSQL was also removed after acceptance. MAF runtime,
+Owned local test resources, including disposable PostgreSQL, were cleaned up after
+acceptance. MAF runtime,
 shared package and deployed MAF resources remain unchanged.
 
-### Partial rollout: API startup blocks revision readiness
+### Immutable release evidence
+
+| Artifact | Verified identity |
+| --- | --- |
+| Backend image | `mthlg2vq7rokaqwhaeacr.azurecr.io/model-harness-langgraph-backend@sha256:3c9e23c70050fbafa09c207be0ee73338408a3f145aeed3d6a71a66622b54500` |
+| Frontend image | `mthlg2vq7rokaqwhaeacr.azurecr.io/model-harness-langgraph-frontend@sha256:100679e26797b38c6c7d692c75a0d71e63c6d2c87019f1bebb37ae904fa01fda` |
+| Hosted v15 archive SHA-256 | `eca2d0b56c2fe62857964b2d6881fa56c1e31fd54d18a8d578be61b88bccbb96` |
+| Final evaluation group | `eval_8cdf767bc2994123822a531d8414fa4e` |
+| Final evaluation run | `evalrun_83c0674c78af4e1488263f7646318db0` |
+| Evaluators | `builtin.task_completion` 19 and `builtin.relevance` 12 |
+| Foundry project / agent | `model-harness-langgraph` / `model-harness-langgraph` |
+| App Insights | `mth-lg-2vq7rokaqwhae-appi`, app ID `d5f711b6-7b70-4864-b76e-691925025505` |
+| Representative v15 no-duplicate operation | `10ed92924d4bcb7c023d2f7ae7c54eda` |
+
+Final per-command checks include five approval-only operations without invented
+workflow executions. A separate missing-case resume returned only the expected
+safe error and produced one failed command span with `CaseNotFoundError`.
+Application HTTP boundaries can reference incoming parents outside this telemetry
+resource; all in-service workflow/node/tool/model parents were verified. Do not
+discard incoming context or invent caller spans to make an all-table join pass.
+
+The command-scoped hosted runtime eliminated connection accumulation in the full
+matrix: **7 database client connections before, 6 after**, against 35 ordinary
+slots. The earlier failure's SQLSTATE was unavailable; the measured headroom,
+repeated failure, retained session-lifetime connections and successful corrected
+matrix are the evidence, not a fabricated server error code.
+
+Privacy acceptance covers the observed pinned release and worker startup/command
+window, not every future SDK or hosting condition. Empty data, broken ancestry,
+broken model parents and prohibited dotted/underscored keys remain fail-closed.
+Public Foundry/PostgreSQL access, simulator-backed refunds and the small database
+SKU remain intentional teaching constraints, not production payment-system or
+network-security certification. Destructive legacy cleanup remains separate.
+
+The incident sections below preserve the facts and gate statuses at the time;
+the final checkpoint above supersedes their historical pending states.
+
+### Historical incident: API startup blocked revision readiness
 
 The `d6b0d09` release passed explicit fresh storage setup and ARM deployment, then
 timed out waiting for the latest API revision to become ready. Read-only checks
@@ -78,7 +116,7 @@ checkpoints. Deployed browser approval/resume and version-pinned hosted smoke
 also passed. These results do not substitute for the remaining hosted matrix,
 cloud judges or native trace/privacy gates.
 
-### Latest report: cloud judges passed; hosted lifecycle and tracing remain open
+### Historical v14 checkpoint: cloud judges passed; hosted lifecycle and tracing remained open
 
 Foundry v14 evaluation `eval_580d7544add645a780f4fc7d5d70604d`, run
 `evalrun_0a8102b049284b8a88b4561305b27a43`, completed with **4 passed, 0 failed,
@@ -113,6 +151,8 @@ The hosted SDK constructor-time telemetry window is an **unverified coverage
 limitation**, not a confirmed leak: the offline detector probe did not exercise its
 metadata transport. Request-path cleanup and native spans passed, but live startup
 and command privacy/noise checks must close that gap before final acceptance.
+
+### Historical implementation baseline
 
 The approved scope includes backend organization, explicit storage setup, native
 execution tracing, packaging/CI, IaC, deployment, smoke, E2E, cloud evaluations and

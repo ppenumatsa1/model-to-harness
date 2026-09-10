@@ -336,3 +336,32 @@ def test_otlp_only_hosted_runtime_requires_initialized_complete_sampler(monkeypa
         telemetry.configure_telemetry(hosted=True)
     provider.sampler = ALWAYS_ON
     assert telemetry.configure_telemetry(hosted=True).providers == ()
+
+
+@pytest.mark.parametrize(
+    "key,prohibited",
+    [
+        ("gen_ai.input.messages", True),
+        ("gen_ai.output_messages", True),
+        ("gen_ai.system.instructions", True),
+        ("tool.arguments", True),
+        ("tool_result", True),
+        ("db.connection_string", True),
+        ("http.request.header.authorization", True),
+        ("checkpoint.payload", True),
+        ("langchain.outputs", True),
+        ("gen_ai.usage.input_tokens", False),
+        ("gen_ai.usage.output_tokens", False),
+        ("workflow.error_type", False),
+    ],
+)
+def test_privacy_query_key_contract_covers_dotted_and_underscored_fields(key, prohibited):
+    import re
+    from pathlib import Path
+
+    directory = Path(__file__).resolve().parents[2] / "observability"
+    for name in ("trace-safety.kql", "release-privacy.kql"):
+        query = (directory / name).read_text()
+        pattern = re.search(r'attributeKey matches regex @"([^"]+)"', query)
+        assert pattern is not None
+        assert bool(re.search(pattern[1], key)) is prohibited

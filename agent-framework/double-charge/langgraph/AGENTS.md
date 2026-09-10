@@ -34,7 +34,13 @@ This project was built with the microsoft-foundry skill. Before working on or an
   providers; verify complete sampling and opt-outs against the pinned hosted stack.
 - `bootstrap.open_runtime()` owns API/hosted composition. The API entrypoint is
   `model_to_harness_langgraph.api.app:create_app --factory`; old flat module paths
-  are removed, not retained as aliases.
+  are removed, not retained as aliases. Hosted startup verifies and closes its
+  resources; each explicit command opens its own runtime context and closes it
+  before responding. Do not retain database pools/saver connections in idle hosted
+  sessions or overlap full hosted matrices with cloud evaluation on the small SKU.
+- Retain real LangChain graph/route callback spans and verify node ancestry through
+  them. Disable only redundant Azure SDK/request/urllib3/HTTPX transport tracing,
+  not framework/model callbacks or the SDK-owned telemetry provider.
 - `backend/migrations/` is authoritative application SQL. Explicit setup runs
   application migrations and native saver setup separately; runtime startup only
   verifies. Keep `langgraph_app_cutover` and `langgraph_checkpoints_cutover`
