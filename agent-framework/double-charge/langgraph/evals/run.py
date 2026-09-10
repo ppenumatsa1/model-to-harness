@@ -7,10 +7,10 @@ from typing import Any
 
 from httpx import ASGITransport, AsyncClient
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.app import create_app
-from model_to_harness_langgraph.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.api.app import create_app
 from model_to_harness_langgraph.config import Settings
-from model_to_harness_langgraph.domain_gateway import SharedDomainGateway
+from model_to_harness_langgraph.infrastructure.domain_gateway import SharedDomainGateway
+from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
 
 
 def _shared_cases() -> list[Any]:
@@ -23,10 +23,7 @@ class EvaluationModel:
         return complaint.strip()
 
     async def draft_notification(self, facts: dict[str, str]) -> str:
-        return (
-            f"Case {facts['case_id']} completed with refund status "
-            f"{facts['refund_status']}."
-        )
+        return f"Case {facts['case_id']} completed with refund status {facts['refund_status']}."
 
 
 async def main() -> None:
@@ -63,11 +60,7 @@ async def main() -> None:
                 response.raise_for_status()
                 started = response.json()
                 if started["status"] == "paused":
-                    decision = (
-                        "deny"
-                        if str(fixture.approval_decision) == "denied"
-                        else "approve"
-                    )
+                    decision = "deny" if str(fixture.approval_decision) == "denied" else "approve"
                     response = await client.post(
                         f"/api/cases/{started['case_id']}/approval",
                         json={
@@ -77,9 +70,7 @@ async def main() -> None:
                         },
                     )
                     response.raise_for_status()
-                    response = await client.post(
-                        f"/api/cases/{started['case_id']}/resume"
-                    )
+                    response = await client.post(f"/api/cases/{started['case_id']}/resume")
                     response.raise_for_status()
                 response = await client.get(f"/api/cases/{started['case_id']}")
                 response.raise_for_status()
@@ -93,16 +84,10 @@ async def main() -> None:
                     "terminal_status",
                     "failure_code",
                 )
-                mismatches = [
-                    key for key in keys if expected.get(key) != actual.get(key)
-                ]
+                mismatches = [key for key in keys if expected.get(key) != actual.get(key)]
                 if mismatches:
                     failures.append(f"{case['fixture_id']}: {', '.join(mismatches)}")
-                print(
-                    json.dumps(
-                        {"scenario": case["fixture_id"], "mismatches": mismatches}
-                    )
-                )
+                print(json.dumps({"scenario": case["fixture_id"], "mismatches": mismatches}))
     if failures:
         raise SystemExit("Evaluation failures:\n" + "\n".join(failures))
 

@@ -14,11 +14,10 @@ class Settings(BaseSettings):
     app_env: str = "local"
     log_level: str = "INFO"
     database_url: str = (
-        "postgresql://model_to_harness:local-development-only"
-        "@localhost:5432/model_to_harness"
+        "postgresql://model_to_harness:local-development-only@localhost:5432/model_to_harness"
     )
-    langgraph_schema: str = "langgraph_app"
-    langgraph_checkpoint_schema: str = "langgraph_checkpoints"
+    langgraph_schema: str = "langgraph_app_cutover"
+    langgraph_checkpoint_schema: str = "langgraph_checkpoints_cutover"
     cors_origins: str = "http://localhost:5173"
     azure_openai_endpoint: str | None = None
     azure_openai_deployment: str | None = None

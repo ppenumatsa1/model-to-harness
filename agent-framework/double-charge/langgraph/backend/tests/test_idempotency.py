@@ -1,15 +1,15 @@
 import pytest
-from fakes import FakeDomainGateway, FakeModel
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.audit import (
+from model_to_harness_langgraph.application.ports import (
     ApprovalCommandConflictError,
-    InMemoryAuditRepository,
     RefundIdempotencyConflictError,
 )
-from model_to_harness_langgraph.contracts import ApprovalRequest, StartCaseRequest
-from model_to_harness_langgraph.domain_gateway import SharedDomainGateway
-from model_to_harness_langgraph.service import InvalidCommandError, WorkflowService
-from model_to_harness_langgraph.workflow import DoubleChargeWorkflow
+from model_to_harness_langgraph.application.records import ApprovalRequest, StartCaseRequest
+from model_to_harness_langgraph.application.service import InvalidCommandError, WorkflowService
+from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
+from model_to_harness_langgraph.infrastructure.domain_gateway import SharedDomainGateway
+from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.testing.fakes import FakeDomainGateway, FakeModel
 
 APPROVAL = {
     "checkpoint_id": "checkpoint-1",
@@ -99,13 +99,9 @@ async def test_in_memory_refund_is_insert_once_with_fingerprint_conflict():
     assert await repository.record_refund(refund) == refund
     assert await repository.record_refund(refund) == refund
     with pytest.raises(RefundIdempotencyConflictError):
-        await repository.record_refund(
-            {**refund, "request_fingerprint": "fingerprint-b"}
-        )
+        await repository.record_refund({**refund, "request_fingerprint": "fingerprint-b"})
     with pytest.raises(RefundIdempotencyConflictError):
-        await repository.record_refund(
-            {**refund, "idempotency_key": "other-key"}
-        )
+        await repository.record_refund({**refund, "idempotency_key": "other-key"})
     assert len(repository.refunds) == 1
 
 

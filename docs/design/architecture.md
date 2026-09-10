@@ -71,8 +71,9 @@ ownership remains application-local:
 
 - MAF stores runs, execution events, approvals, outcomes, selected memory, and MAF
   checkpoints in `maf_double_charge`.
-- LangGraph stores application audit records in `langgraph_app` and isolates native
-  saver tables in `langgraph_checkpoints`.
+- LangGraph isolates application audit records and native saver tables in separate
+  configured schemas. Its direct cutover selects fresh `langgraph_app_cutover` and
+  `langgraph_checkpoints_cutover` defaults, without reading or converting old data.
 
 PostgreSQL is authoritative for application state and audit history. Model context
 and UI projections are temporary views. Reading stored events is replay; running from
@@ -86,6 +87,14 @@ paths rather than providing legacy checkpoint readers or converting old records.
 Subsequent releases can explicitly update that already-versioned schema's runtime:
 the MAF release helper checks complete migration history and checksums read-only
 before deployment, with no schema adoption, DDL, or state reset.
+
+LangGraph's cutover applies the same ownership rule independently: authoritative
+application SQL and dependency-owned native saver setup are explicit release steps;
+runtime startup only verifies readiness. The two stores are not one atomic
+transaction. Recovery must reconcile interrupted application/checkpoint writes,
+and replayed nodes must protect side effects with idempotency and verification.
+No legacy readers or old-data migration are required. Deletion of obsolete storage
+is separate from the new implementation's acceptance.
 
 ## Event and UI boundary
 

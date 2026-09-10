@@ -1,9 +1,13 @@
-from fakes import FakeDomainGateway, FakeModel, NoDuplicateGateway
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.audit import InMemoryAuditRepository
-from model_to_harness_langgraph.contracts import ApprovalRequest, StartCaseRequest
-from model_to_harness_langgraph.service import WorkflowService
-from model_to_harness_langgraph.workflow import DoubleChargeWorkflow
+from model_to_harness_langgraph.application.records import ApprovalRequest, StartCaseRequest
+from model_to_harness_langgraph.application.service import WorkflowService
+from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
+from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.testing.fakes import (
+    FakeDomainGateway,
+    FakeModel,
+    NoDuplicateGateway,
+)
 
 
 def make_service(gateway: FakeDomainGateway | None = None):

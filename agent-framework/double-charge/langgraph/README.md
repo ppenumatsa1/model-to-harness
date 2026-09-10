@@ -4,9 +4,14 @@ An independent Python 3.12/FastAPI + React/Vite teaching app. It uses an idiomat
 `StateGraph`, conditional routes, parallel billing/policy branches, reducer-backed
 evidence, bounded retry routes, and `interrupt()`/`Command(resume=...)` with a
 PostgreSQL checkpointer. Application audit records live in separate
-`langgraph_app.*` tables. Checkpointer migrations run through a psycopg connection
-whose `search_path` is pinned to `langgraph_checkpoints`, so no saver table is created
-in `public`; checkpoint internals are never exposed.
+`langgraph_app_cutover.*` tables. Checkpointer migrations run through a psycopg
+connection whose `search_path` is pinned to `langgraph_checkpoints_cutover`, so no
+saver table is created in `public`; checkpoint internals are never exposed.
+
+The backend separates `api`, `application`, native `graph`, `infrastructure`,
+`projections`, and explicit `testing` doubles. `bootstrap.open_runtime()` owns
+composition and cleanup for API and hosted entrypoints. Old flat-module imports are
+removed without aliases. This is a fresh-state cutover, not a legacy-data migration.
 
 ## Local setup
 
@@ -43,16 +48,20 @@ cd frontend && npm install && npm test && npm run build
 Playwright, and cleans up both processes. Install the Playwright Chromium binary once
 with `cd frontend && npx playwright install chromium`.
 
-Database setup and reset use the application virtual environment plus Psycopg; they
-do not require a host `psql` executable:
+Database setup uses the application virtual environment plus Psycopg; it does not
+require a host `psql` executable. Application SQL is authoritative in
+`backend/migrations/` and packaged in the wheel. Native saver migrations remain
+framework-owned. Run explicit setup before serving, then use read-only verification:
 
 ```bash
 PYTHONPATH=backend/src python scripts/setup_db.py
-PYTHONPATH=backend/src python scripts/reset_db.py
+PYTHONPATH=backend/src python scripts/setup_db.py --verify-only
 ```
 
 Set `TEST_DATABASE_URL` to a dedicated PostgreSQL database to run reconstruction,
 durable-refund, and schema-isolation integration coverage.
+Use fresh paired schemas instead of dropping application records while retaining
+unrelated checkpoints. Runtime startup never applies DDL or silently selects a fake.
 
 ## API flow
 
@@ -79,7 +88,7 @@ and `runId`, then discards arbitrary messages, state, tools, context, and
 `forwardedProps`. It reads allowlisted durable events and cannot start, approve, or
 resume a workflow. Those operations remain explicit case command endpoints.
 
-Refund simulator results are persisted in `langgraph_app.refunds` before an uncertain
+Refund simulator results are persisted in the configured application schema's `refunds` table before an uncertain
 response is surfaced. The idempotency key is unique and bound to a deterministic
 request fingerprint, allowing reconstruction to return exactly one refund or reject a
 conflicting request.
@@ -102,10 +111,10 @@ deployment scripts. Nothing is shared with the MAF deployment.
 - Local development and the FastAPI Container App remain on Python 3.12.
 - The Foundry hosted agent uses direct-code `codeConfiguration` with
   `python_3_13` and the Responses `2.0.0` protocol.
-- `infra/main.bicep` defaults to `northcentralus` and creates the lane's Foundry
-  account/project, `gpt-5.6-sol` `2026-07-09` GlobalStandard deployment, ACR,
-  Container Apps, PostgreSQL Flexible Server, Log Analytics, Application Insights,
-  a Foundry project monitoring connection, identities, and role assignments.
+- `infra/main.bicep` uses the resolved existing region and references the lane's
+  Foundry account/project and model deployment. It manages ACR, Container Apps,
+  PostgreSQL Flexible Server, Log Analytics, Application Insights, a project
+  monitoring connection, identities and role assignments with reviewed update gates.
 - The frontend is the only public Container App. nginx serves React and proxies
   `/api`, `/health`, and `/ready` to the internal FastAPI app.
 
@@ -122,27 +131,37 @@ operation. Responses contain case status, normalized outcome, and allowlisted ev
 summaries; they omit prompts, reasoning, workflow state, event data, tool payloads,
 credentials, and checkpoint internals.
 
-Before deployment, select an azd environment and provide the subscription. The
-resource group must already exist:
+Release tooling discovers the existing lane environment and previews ARM changes
+without mutation by default. Local validation and independent review precede apply.
+The selected existing PostgreSQL server must be running, and apply requires clean,
+committed lane source:
 
 ```bash
-export AZURE_SUBSCRIPTION_ID="<subscription-id>"
-export AZURE_RESOURCE_GROUP="rg-model-harness"
-export AZURE_LOCATION="northcentralus"
-export POSTGRES_ADMINISTRATOR_PASSWORD="<strong-password>" # optional on the first run
-./scripts/deploy_azure.sh
-./scripts/smoke_azure.sh
+./scripts/deploy_azure.sh --environment langgraph
+./scripts/deploy_azure.sh --environment langgraph --apply
 ```
 
-`deploy_azure.sh` performs Azure operations and is intentionally not part of local
-validation. It bootstraps resources, uses ACR remote builds (no local Docker
-required), deploys release-specific image tags, prepares the self-contained hosted
-source, and runs `azd deploy` only for this lane's hosted agent. When the PostgreSQL
-password is omitted after the first deployment, the script reuses the value in the
-selected azd environment rather than rotating it. Set `SMOKE_HOSTED_AGENT=1` when
-running the smoke script to add a billable remote hosted-agent invocation.
+Apply uses allowlisted source staging, ACR remote builds and verified immutable image
+digests, a final what-if gate, explicit fresh paired-schema setup and healthy app
+rollout verification. `--update-existing` verifies the already-deployed schema pair
+without migrations or resets. Foundry direct-code deployment remains a separate
+explicit step after setting the same schema pair in the selected azd environment.
+Prepare with `python scripts/prepare_hosted.py`; verify the actual hosted
+version/environment/archive with `scripts/verify_hosted_package.py`.
 
-### Current deployed environment
+`scripts/api_harness.py --base-url URL` covers seven case-command scenarios;
+`scripts/hosted_harness.py --environment langgraph --version VERSION --transport sdk`
+uses fresh conversations and owned version-pinned sessions, stopping compute in
+`finally` without deleting state. Both accept `--smoke`. Transport selection is
+explicit and never an automatic retry of a potentially mutating command.
+
+The deterministic suite is `python evals/run.py`. Hosted intent lives at
+`infra/foundry-hosted/agent/eval.yaml`; `scripts/prepare_hosted_eval.py` validates the
+four reviewed cases and catalog pins, verifies the selected version, creates a fresh
+group and emits a private batch-evaluation request. `scripts/download_eval_results.py`
+persists every result and fails on missing, failed, errored or unscored decisions.
+
+### Pre-cutover deployed baseline
 
 - Public application:
   <https://mth-lg-2vq7rokaqwhae-web.mangodune-3886db41.northcentralus.azurecontainerapps.io>
@@ -156,10 +175,13 @@ The public FastAPI smoke and remote Hosted Agent test both completed separate st
 approval, and resume commands. The retry-safe case produced one PostgreSQL refund
 ledger row and one distinct refund ID before notification.
 
-Application Insights now shows `foundry.responses.invoke` followed by
+The historical version-13 Application Insights implementation showed `foundry.responses.invoke` followed by
 `workflow.run`, framework-local `workflow.node.*` spans, the model dependency, and
 safe deterministic tool spans. Start, approval, and resume remain separate operations
 linked by conversation, case, and run identifiers. Node and deterministic tool spans
 are projected from durable audit timestamps; the real model dependency remains
 auto-instrumented. Prompts, complaint text, checkpoint bodies, tool arguments/results,
-and credentials are not recorded.
+and credentials were excluded. The cutover replaces those reconstructed node/tool
+spans with real execution spans and hashes cross-command identifiers. This historical
+deployment/evaluation evidence is not acceptance of the new cutover; see the
+[implementation ledger](../../../docs/design/issues-changes-fixes.md) for current gates.

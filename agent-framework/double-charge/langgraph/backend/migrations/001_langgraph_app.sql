@@ -1,6 +1,6 @@
-CREATE SCHEMA IF NOT EXISTS langgraph_app;
+CREATE SCHEMA IF NOT EXISTS __schema__;
 
-CREATE TABLE IF NOT EXISTS langgraph_app.runs (
+CREATE TABLE IF NOT EXISTS __schema__.runs (
   run_id text PRIMARY KEY,
   case_id text UNIQUE NOT NULL,
   customer_id text NOT NULL,
@@ -14,11 +14,11 @@ CREATE TABLE IF NOT EXISTS langgraph_app.runs (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS langgraph_app.events (
+CREATE TABLE IF NOT EXISTS __schema__.events (
   sequence bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   event_id uuid NOT NULL UNIQUE,
   case_id text NOT NULL,
-  run_id text NOT NULL REFERENCES langgraph_app.runs(run_id),
+  run_id text NOT NULL REFERENCES __schema__.runs(run_id),
   event_type text NOT NULL,
   event_time timestamptz NOT NULL DEFAULT now(),
   node text,
@@ -30,10 +30,10 @@ CREATE TABLE IF NOT EXISTS langgraph_app.events (
 );
 
 CREATE INDEX IF NOT EXISTS langgraph_events_run_sequence
-  ON langgraph_app.events(run_id, sequence);
+  ON __schema__.events(run_id, sequence);
 
-CREATE TABLE IF NOT EXISTS langgraph_app.approvals (
-  run_id text PRIMARY KEY REFERENCES langgraph_app.runs(run_id),
+CREATE TABLE IF NOT EXISTS __schema__.approvals (
+  run_id text PRIMARY KEY REFERENCES __schema__.runs(run_id),
   checkpoint_id text NOT NULL,
   decision text NOT NULL CHECK (decision IN ('approve', 'deny')),
   reviewer_id text NOT NULL,
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS langgraph_app.approvals (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS langgraph_app.selected_memory (
+CREATE TABLE IF NOT EXISTS __schema__.selected_memory (
   customer_id text NOT NULL,
   case_id text NOT NULL,
   facts jsonb NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS langgraph_app.selected_memory (
   PRIMARY KEY (customer_id, case_id)
 );
 
-CREATE TABLE IF NOT EXISTS langgraph_app.refunds (
+CREATE TABLE IF NOT EXISTS __schema__.refunds (
   idempotency_key text PRIMARY KEY,
   request_fingerprint text NOT NULL,
   refund_id text NOT NULL UNIQUE,
@@ -59,6 +59,3 @@ CREATE TABLE IF NOT EXISTS langgraph_app.refunds (
   customer_id text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-
--- LangGraph checkpoint tables are created separately in langgraph_checkpoints by
--- AsyncPostgresSaver.setup() with a psycopg search_path connection option.

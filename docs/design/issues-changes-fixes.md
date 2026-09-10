@@ -2,6 +2,79 @@
 
 This is a concise implementation ledger, not a release history.
 
+## LangGraph direct cutover - implementation in progress
+
+The approved scope includes backend organization, explicit storage setup, native
+execution tracing, packaging/CI, IaC, deployment, smoke, E2E, cloud evaluations and
+documentation. Work continues on `refactor/maf-backend-cutover`; no push or merge is
+authorized. An independent post-implementation rubber-duck review precedes rollout.
+MAF's deployment and runtime remain unchanged.
+
+| Area | Observed issue / clarification | Action and acceptance boundary | Status |
+| --- | --- | --- | --- |
+| Old data | Retaining unused storage could be mistaken for a migration requirement. MAF started in a fresh schema; it did not convert legacy records or checkpoints. | LangGraph likewise starts with fresh application and native checkpoint schemas. No legacy readers, conversion, copying or preservation work; obsolete-storage deletion is separate cleanup. | Scope clarified |
+| Backend ownership | Flat modules mix graph composition, persistence, command authority, runtime startup and projections. | Separate responsibilities inside the existing LangGraph package, preserving its public contracts and native graph behavior without compatibility shims. | In progress |
+| Storage setup | Application SQL is a reference while startup executes embedded application and native saver DDL. | Make application migrations authoritative; keep framework migrations native and explicit. Runtime readiness must verify both selected schemas without creating or changing them. | In progress |
+| Native tracing | Node/tool spans reconstructed from audit timestamps do not prove actual execution parentage. | Instrument real graph/node/model execution and verify the actual LangGraph SDK stack, async branches, usage and privacy; do not blindly copy MAF-specific fixes. | In progress |
+| Delivery evidence | Existing CI already runs PostgreSQL integration, but that does not prove immutable artifacts, installed packaging, release ordering or deployed acceptance. | Preserve working coverage and add independent wheel/hosted, migration, source/digest/archive, smoke/E2E/eval and trace gates. Record actual versions/results only after execution. | In progress |
+| Existing cloud baseline | The selected `langgraph` azd environment identifies active hosted version 13, but the lane's PostgreSQL server is stopped. | Verified the independent existing project/resources and model deployment read-only. Database start is deferred to approved rollout; do not mistake active hosted metadata for business readiness or change the server SKU. | Rollout pending |
+| Hosted evaluation intent | The hosted YAML still pinned agent version 5 while the selected deployment is version 13; only two no-duplicate cases were present and evaluator versions were implicit. | Removed the stale target pin in favor of mandatory deployed-version verification, independently verified task-completion 19/relevance 12 in the LangGraph catalog, and extended reviewed inputs with explicit approval pause and bounded-read failure. Added fresh-group preparation and private per-item result handling; no new evaluation result claimed yet. | Implemented; acceptance pending |
+| Native transport contracts | MAF and LangGraph expose different command payloads, result envelopes and health routes. | LangGraph acceptance uses `/health`, `/ready`, case-based commands and `{ok, case, events}` Responses results. It does not impose MAF's run routes or flattened results. Each hosted command owns a version-pinned session and stops it without deletion. | Implemented; acceptance pending |
+| Approval-pause contract | Unlike MAF's pending outcome, LangGraph intentionally exposes `outcome: null` while paused. Copying MAF's `waiting_approval` evaluation assertion would reject correct native behavior. | Bound the hosted seed and harness to the existing LangGraph service contract: paused status, explicit checkpoint/approval state and no terminal outcome. Terminal outcome checks follow separate resume; PostgreSQL acceptance proves absence of premature side effects. | Corrected before cloud execution |
+| Native saver lifecycle | `AsyncPostgresSaver.from_conn_string()` could be mistaken for another pool. | Inspected pinned checkpoint-postgres 3.1.2: it owns one async connection with autocommit, no prepared statements and dictionary rows. Keep this lifecycle separate from the audit pool and dependency-owned migrations. | Verified |
+| Hosted dependency reproducibility | Hosted ranges did not identify the stack actually exercised by local gates. | Independently hash-pinned agentserver 2.1.0, Projects 2.6.0, Microsoft OTel 1.3.8, Azure Monitor 1.8.9 and OTel 1.43.0. Installed-wheel SQL and isolated Python 3.13 Responses start/approve/resume passed outside the checkout. Official PyPI worked; no mirror override required. | Local packaging verified |
+| Refund receipt verification | A count of one could still refer to the wrong refund ID. | Require the verified identifier to match the durable receipt, not only its count; mismatch remains manual review rather than success. | Implemented; final matrix pending |
+| Approval crash window | Consuming approval before durable result persistence could strand a reconstructed run. | Persist results before consuming approval and reconcile with native snapshots after interruption. Keep separate store ownership rather than claiming an atomic cross-store transaction. | Implemented; final matrix pending |
+| Concurrent checkpoint setup | A blocking advisory-lock query retained a snapshot while native `CREATE INDEX CONCURRENTLY` waited for it, creating a deadlock. | Use bounded `pg_try_advisory_lock` polling with fully consumed autocommit queries; preserve the session lock across native setup. Release preflight likewise uses autocommit and fails immediately on contention. Interrupted diagnostic runs are not passes. | Corrected; concurrency verification pending |
+| Command-lock starvation | Nine concurrent commands could occupy all eight audit-pool connections while guarded writes waited for the same pool. | Use dedicated command-lock connections rather than holding audit-pool slots during graph execution. Add real PostgreSQL concurrency/nonstarvation coverage. | Implemented; final matrix pending |
+
+Current local evidence: 18 harness/seed contract tests passed, including actual
+four-case native hosted dispatch; seven deterministic evaluations and seven API
+command scenarios passed; 13 PostgreSQL migration/recovery/concurrency tests passed
+on a task-owned disposable database. A further seven-scenario hosted-dispatch to
+read-only SQL evidence test passed. Frontend seven tests, production build and one
+browser E2E passed. Installed-wheel imports and SQL checksums passed outside checkout.
+The integrated suite exposed an obsolete workspace/Bicep assertion, and the
+documented hosted-package command exposed an interpreter-selection problem; these
+remain explicit integration fixes, not cloud acceptance. Read-only release discovery
+also needs a more specific safe diagnostic for its initial Azure CLI failure.
+The independent rubber-duck review is now active; cloud mutation remains gated.
+
+### Independent review: checkpointed validation must not depend on process memory
+
+The reviewer reproduced a restart immediately after `detect_duplicate` using the
+real shared-domain adapter, a retained native saver and a fresh service/gateway.
+The checkpoint contained `duplicate_evidence`, but billing/policy validation read
+only the new gateway's empty process-local cache and raised `AttributeError`.
+Recovery resumes pending validation rather than rerunning duplicate detection, so
+ordinary approval-breakpoint coverage did not reveal this window.
+
+The required fix is to pass checkpointed duplicate evidence explicitly into both
+validation operations and reconstruct the neutral evidence model at the adapter
+boundary. A restart regression at this exact pre-validation boundary is required
+before deployment.
+
+The fix now removes the gateway evidence cache entirely. Both validation operations
+require checkpointed evidence and validate it as the neutral evidence model.
+PostgreSQL restart regressions cover breaks after both `detect_duplicate` and
+`dispatch_validations`, with fresh gateway/model instances that reject repeated
+detection or normalization. The independent reviewer confirmed that this addresses
+the root cause; the parent-run integrated matrix passed **182 tests with PostgreSQL
+enabled and no skips**.
+
+All integrated Python lint and whitespace checks passed. The documented
+`package_smoke.py --hosted` command now resolves an isolated Python 3.13.12
+environment from hash-pinned requirements rather than accidentally using the caller's
+Python 3.12 interpreter; all 121 installed dependencies were compatible and actual
+offline Responses start/approval/resume plus native sampler checks passed.
+The KQL completeness gate was executed against the selected LangGraph App Insights:
+empty input failed, a complete synthetic parent tree passed, and a missing model
+parent failed. These are query-validation results, not deployed cutover trace proof.
+
+**Implementation/review and local acceptance are complete.** Cloud rollout,
+fresh source/version/archive verification, smoke/E2E, actual cloud evaluation rows
+and fresh native trace acceptance remain separate pending gates. No push or merge.
+
 ## 2026-09-10 - Consolidated MAF refactor summary
 
 **Functional deployment acceptance, hosted per-operation trace completeness and
@@ -1025,3 +1098,58 @@ See each application README for its current validation commands.
   query links and exact evidence. The existing reviewed evaluation suite remains
   unchanged; latest cloud judge results are still explicitly the prior version-5
   4/4 result, not an unexecuted version-8 judge run. No push or merge was performed.
+
+## 2026-09-10 - Lessons and prevention checklist
+
+The functional release was already complete before the screenshot-driven trace
+repairs and noise cleanup. Those follow-ups required three hosted rollouts
+(versions 6-8). Repeating the full seven-scenario harness at every iteration added
+avoidable session-startup, model-call and ingestion time. The following rules
+capture both the technical lessons and a faster verification approach; they are
+guidance for future work, not additional pending tasks.
+
+| Learning | Rule for the next change |
+| --- | --- |
+| Successful requests and aggregate span counts hid missing parents. | Require a fresh, single-operation parent-completeness check and the branch's actual executed nodes. A chain in another run is not evidence for the selected run. Keep negative controls: the old broken trace and empty telemetry must fail the gate. |
+| An unset ARM sampling percentage did not mean the SDK retained every span. | Inspect the pinned runtime's actual sampler and inherited-context behavior. Reproduce changing-rate decisions locally before changing cloud settings. Keep fixed 100% native sampling for this low-volume teaching environment; review ingestion cost separately rather than accepting broken trees. |
+| A configuration resolver accepted flags that a later instrumentation pass ignored. | Exercise the complete pinned initialization path, not only parsed configuration or mocks. Supply a real SDK tracer provider in the reproduction. Verify instrumentor state after host construction and before clients/requests execute. Retest this seam when upgrading the SDK; do not assume its behavior is permanent. |
+| Generic suppression did not cover Azure Core method tracing. | Verify each SDK's supported controls. Use the narrow public APIs already implemented and fail explicitly if they cannot apply the policy. Do not replace the hosted provider, patch private SDK behavior, or drop arbitrary spans to hide noise. |
+| Noise reduction and trace sampling solve different problems. | Disable only the intended SDK/HTTP instrumentation and preserve native workflow, executor, agent/model, usage and message spans. Keep operational logs and failure evidence available; use a request-scoped index for a clean list. Document the loss of low-level transport diagnostics. |
+| Old screenshots and 24-hour views continued to show historical problems. | Record the actual deployed version, source/archive hash, operation ID and UTC window. Compare equivalent fresh scenarios. Historical noise and sampling warnings are not proof that a new deployment regressed; a deployment cannot repair old records. |
+| Span labels were mistaken for transport selection. | Verify the actual host class, manifest protocol and SDK call path. `invoke_agent` and `chat` labels do not imply the Invocations API. Do not change the working Responses protocol to address a display problem. |
+| Repeating broad acceptance slowed narrow telemetry iterations. | Use focused local tests and one affected cloud scenario between candidates. Add approval/resume or failure coverage when that boundary is affected. Run the complete relevant scenario matrix after the candidate stabilizes, not automatically after every diagnostic edit. |
+| Completion boundaries were not communicated clearly enough. | Report **Completed / Active / Blocked**, identify the next concrete gate, and explain why another rollout or broad rerun is needed. Distinguish a completed functional release from newly requested telemetry follow-ups. Once the requested gates pass, close the task instead of inventing more work. |
+
+### Staged verification for future hosted telemetry changes
+
+1. **Define the defect and acceptance criteria first.** Select the existing MAF
+   environment, affected version and one representative operation. Separate
+   missing hierarchy, redundant instrumentation and list-view filtering.
+2. **Reproduce locally before deploying.** Use the pinned SDK initialization path,
+   focused telemetry/hosted-contract tests, and privacy/provider-ownership checks.
+   Confirm that the proposed control changes runtime behavior, not merely config.
+3. **Use a small intermediate cloud gate.** Freeze the candidate source, deploy
+   only the affected hosted service, verify its actual active version/archive and
+   run the existing hosted harness with explicit `--environment <selected>`,
+   `--transport sdk`, `--version <actual>` and `--smoke`.
+   Check fresh ingestion with a bounded wait. Expand the scenario only when
+   necessary to exercise the affected approval/resume or failure path.
+4. **Run final acceptance once the candidate is stable.** Execute all seven hosted
+   scenarios, assert exact native branches/parents and real model usage, compare
+   noise counts, and check privacy and command correlation. A failed gate reopens
+   the affected work; it must not be relabeled as a pass.
+5. **Do not repeat unrelated gates without a reason.** Hosted telemetry-only work
+   does not automatically require IaC, API/frontend rollouts, browser suites or
+   cloud judge reruns. State which evidence was rerun and which remains a
+   version-specific baseline. Changed business logic, prompts, dependencies or
+   contracts require reassessing that scope.
+6. **Close and persist the result.** Stop only owned sessions, retain evidence,
+   update this ledger and affected READMEs, and report deliberate holds separately.
+   Idle sessions are not authorization to delete their data. Push/merge remains a
+   separate decision.
+
+Reuse the existing
+[parent-completeness gate](../../agent-framework/double-charge/maf/observability/trace-completeness.kql),
+[command-only index](../../agent-framework/double-charge/maf/observability/command-traces.kql),
+and [observability guidance](../../agent-framework/double-charge/maf/observability/README.md)
+instead of rebuilding ad hoc checks on the next investigation.

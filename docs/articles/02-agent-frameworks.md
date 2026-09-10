@@ -125,7 +125,7 @@ In the [MAF workflow](../../agent-framework/double-charge/maf/backend/src/maf_do
 
 The enclosing builder, executor definitions, conditions, and terminal routes are omitted. MAF routes values between executors; the join receives the validation results and applies the next business decision.
 
-The [LangGraph workflow](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/workflow.py) expresses the corresponding section with named nodes:
+The [LangGraph workflow](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/graph/workflows/double_charge.py) expresses the corresponding section with named nodes:
 
 ```python
 builder.add_edge("dispatch_validations", "billing_validation")
@@ -181,19 +181,17 @@ response = interrupt(
 decision = str(response.get("decision", "deny"))
 ```
 
-Its [service](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/service.py) constructs the resume input from the recorded approval:
+Its [service](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/application/service.py) constructs the resume input from the recorded approval:
 
 ```python
-command = Command(
-    resume={
-        "decision": approval["decision"],
-        "reviewer_id": approval["reviewer_id"],
-        "reason": approval.get("reason"),
-    }
-)
+command = {
+    "decision": approval["decision"],
+    "reviewer_id": approval["reviewer_id"],
+    "reason": approval.get("reason"),
+}
 ```
 
-`interrupt` and `Command` come from `langgraph.types`. The service then invokes the compiled graph with this command and the original run-derived thread ID. These are excerpts, not standalone programs: checkpointer configuration, authorization, pending-approval checks, and invocation are essential omitted setup.
+The [native runner](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/graph/runner.py) wraps that recorded decision in `Command(resume=decision)` and invokes the compiled graph with the original run-derived thread ID. `interrupt` and `Command` come from `langgraph.types`. These are excerpts, not standalone programs: checkpointer configuration, authorization, pending-approval checks, and invocation are essential omitted setup.
 
 Neither mechanism makes chat text an approval. A reviewer submits a decision for the current checkpoint; the application validates and persists it; a separate resume command continues the run. No web request needs to remain blocked while the reviewer considers the case.
 
@@ -280,7 +278,7 @@ flowchart TB
 
 This is a configurable design pattern, not a claim that the example implements every box. Framework state can carry data between steps; application code or a configured context provider decides what enters the model input. Retrieval, summarization, filtering, and token budgets require deliberate choices.
 
-The actual [MAF model boundary](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/clients.py) and [LangGraph adapter](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/model_adapter.py) are intentionally narrow:
+The actual [MAF model boundary](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/clients.py) and [LangGraph adapter](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/infrastructure/model_client.py) are intentionally narrow:
 
 | Model operation | MAF input data | LangGraph input data |
 |---|---|---|

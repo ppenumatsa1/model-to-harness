@@ -23,9 +23,9 @@ services:
       - name: DATABASE_URL
         value: ${DATABASE_URL}
       - name: LANGGRAPH_SCHEMA
-        value: langgraph_app
+        value: ${LANGGRAPH_SCHEMA}
       - name: LANGGRAPH_CHECKPOINT_SCHEMA
-        value: langgraph_checkpoints
+        value: ${LANGGRAPH_CHECKPOINT_SCHEMA}
       - name: CORS_ORIGINS
         value: ""
       - name: AZURE_OPENAI_ENDPOINT
@@ -34,6 +34,14 @@ services:
         value: ${AZURE_AI_MODEL_DEPLOYMENT_NAME}
       - name: OTEL_SERVICE_NAME
         value: model-harness-langgraph
+      - name: OTEL_TRACES_SAMPLER
+        value: always_on
+      - name: OTEL_PYTHON_DISABLED_INSTRUMENTATIONS
+        value: requests,urllib3
+      - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
+        value: "false"
+      - name: AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED
+        value: "false"
     protocols:
       - protocol: responses
         version: 2.0.0

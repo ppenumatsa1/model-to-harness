@@ -1,0 +1,11 @@
+// Index actual command boundaries, including approval-only and failed commands.
+let Commands = dependencies
+    | where timestamp > ago(24h) and name == "foundry.responses.invoke"
+    | summarize commandSpans = count(), commandFailed = countif(success == false)
+        by operation_Id;
+requests
+| where timestamp > ago(24h)
+| join kind=inner Commands on operation_Id
+| project timestamp, operation_Id, requestId = id, name, duration, success, resultCode,
+    commandSpans, commandFailed
+| order by timestamp desc

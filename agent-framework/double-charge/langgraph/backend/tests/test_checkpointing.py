@@ -1,5 +1,5 @@
 import pytest
-from model_to_harness_langgraph.checkpointing import checkpoint_conninfo
+from model_to_harness_langgraph.infrastructure.persistence.checkpointing import checkpoint_conninfo
 from psycopg.conninfo import conninfo_to_dict
 
 
@@ -26,4 +26,3 @@ def test_checkpoint_conninfo_preserves_connection_and_pins_search_path():
 def test_checkpoint_conninfo_rejects_unsafe_schema(schema):
     with pytest.raises(ValueError, match="lowercase SQL identifier"):
         checkpoint_conninfo("postgresql://localhost/workflows", schema)
-

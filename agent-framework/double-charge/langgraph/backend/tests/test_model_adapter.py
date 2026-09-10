@@ -1,45 +1,45 @@
-from model_to_harness_langgraph import model_adapter
+import pytest
 from model_to_harness_langgraph.config import Settings
+from model_to_harness_langgraph.infrastructure import model_client
 
 
-def test_default_model_configuration_omits_temperature(monkeypatch):
-    captured: dict[str, object] = {}
+@pytest.mark.parametrize("temperature", [None, 0.25])
+def test_configured_temperature_is_forwarded_only_when_present(monkeypatch, temperature):
+    captured = {}
 
-    class FakeAzureChatOpenAI:
+    class Chat:
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    monkeypatch.setattr(model_adapter, "AzureChatOpenAI", FakeAzureChatOpenAI)
-    monkeypatch.setattr(model_adapter, "DefaultAzureCredential", lambda: object())
-    monkeypatch.setattr(model_adapter, "get_bearer_token_provider", lambda *_: object())
-
-    model_adapter.FoundryComplaintModel(
+    monkeypatch.setattr(model_client, "AzureChatOpenAI", Chat)
+    monkeypatch.setattr(model_client, "get_bearer_token_provider", lambda *_: object())
+    model_client.FoundryComplaintModel(
         Settings(
             azure_openai_endpoint="https://example.openai.azure.com/",
             azure_openai_deployment="model",
-        )
+            model_temperature=temperature,
+        ),
+        credential=object(),
+        http_client=object(),
+        http_async_client=object(),
     )
+    if temperature is None:
+        assert "temperature" not in captured
+    else:
+        assert captured["temperature"] == temperature
+    assert "azure_ad_async_token_provider" in captured
+    assert "azure_ad_token_provider" not in captured
 
-    assert "temperature" not in captured
 
-
-def test_explicit_model_temperature_is_forwarded(monkeypatch):
-    captured: dict[str, object] = {}
-
-    class FakeAzureChatOpenAI:
-        def __init__(self, **kwargs):
-            captured.update(kwargs)
-
-    monkeypatch.setattr(model_adapter, "AzureChatOpenAI", FakeAzureChatOpenAI)
-    monkeypatch.setattr(model_adapter, "DefaultAzureCredential", lambda: object())
-    monkeypatch.setattr(model_adapter, "get_bearer_token_provider", lambda *_: object())
-
-    model_adapter.FoundryComplaintModel(
-        Settings(
-            azure_openai_endpoint="https://example.openai.azure.com/",
-            azure_openai_deployment="model",
-            model_temperature=0.25,
-        )
-    )
-
-    assert captured["temperature"] == 0.25
+@pytest.mark.parametrize(
+    "content",
+    [
+        {"reasoning": "SECRET"},
+        [{"type": "reasoning", "text": "SECRET"}],
+        [{"type": "text", "text": {"SECRET": "SECRET"}}],
+        "   ",
+    ],
+)
+def test_model_boundary_does_not_stringify_private_or_missing_content(content):
+    with pytest.raises(ValueError):
+        model_client._text(content)

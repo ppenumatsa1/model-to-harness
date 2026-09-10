@@ -29,8 +29,19 @@ This project was built with the microsoft-foundry skill. Before working on or an
   `APPLICATIONINSIGHTS_CONNECTION_STRING` in the hosted `azure.yaml`.
 - Preserve the Responses trace boundary and safe correlation hierarchy:
   `foundry.responses.invoke` -> `workflow.run` -> workflow node/model/tool evidence.
-  Durable events may project node and deterministic tool spans, but telemetry never
-  replaces PostgreSQL audit state.
+  Instrument actual execution, never reconstruct spans from audit timestamps.
+  Telemetry never replaces PostgreSQL audit state. Preserve SDK-owned hosted
+  providers; verify complete sampling and opt-outs against the pinned hosted stack.
+- `bootstrap.open_runtime()` owns API/hosted composition. The API entrypoint is
+  `model_to_harness_langgraph.api.app:create_app --factory`; old flat module paths
+  are removed, not retained as aliases.
+- `backend/migrations/` is authoritative application SQL. Explicit setup runs
+  application migrations and native saver setup separately; runtime startup only
+  verifies. Keep `langgraph_app_cutover` and `langgraph_checkpoints_cutover`
+  independently parameterized. No old-data or checkpoint conversion.
+- Update `docs/design/issues-changes-fixes.md` as problems are found and fixed.
+  Use focused intermediate checks, then final integrated acceptance after review;
+  never equate active hosted metadata or aggregate telemetry with business readiness.
 - Never trace complaint text, prompts, model content, raw checkpoint state,
   idempotency keys, credentials, connection strings, or unrestricted tool
   arguments/results.

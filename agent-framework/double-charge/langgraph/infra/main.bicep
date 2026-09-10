@@ -1,29 +1,19 @@
 targetScope = 'resourceGroup'
 
 @description('Azure region for all lane-owned resources.')
-param location string = 'northcentralus'
+param location string
 
 @description('Short prefix used to derive globally unique resource names.')
 param namePrefix string = 'mth-lg'
 
-@description('Optional explicit Foundry account name. Leave empty to derive a unique name.')
-param foundryAccountName string = ''
+@description('Existing LangGraph Foundry account; this template never creates an account.')
+param foundryAccountName string
 
 @description('Foundry project name.')
 param foundryProjectName string = 'model-harness-langgraph'
 
 @description('Azure OpenAI deployment resource name.')
 param modelDeploymentName string = 'model-harness-gpt-5-6-sol'
-
-@description('Model catalog name.')
-param modelName string = 'gpt-5.6-sol'
-
-@description('Pinned model version.')
-param modelVersion string = '2026-07-09'
-
-@minValue(1)
-@description('GlobalStandard deployment capacity. Confirm regional quota before deployment.')
-param modelCapacity int = 100
 
 @description('PostgreSQL administrator login.')
 param postgresAdministratorLogin string = 'mthadmin'
@@ -35,28 +25,37 @@ param postgresAdministratorPassword string
 @description('PostgreSQL database name dedicated to the LangGraph lane.')
 param postgresDatabaseName string = 'model_harness_langgraph'
 
+@description('Existing PostgreSQL server name; empty preserves the original naming formula.')
+param postgresServerName string = ''
+
+@minLength(1)
+@maxLength(63)
+param langgraphSchema string = 'langgraph_app_cutover'
+
+@minLength(1)
+@maxLength(63)
+param langgraphCheckpointSchema string = 'langgraph_checkpoints_cutover'
+
 @description('Optional release-operator IPv4 address for database migration access.')
 param operatorIp string = ''
 
-@description('Backend image. The deploy script replaces the bootstrap image after ACR build.')
-param backendImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+@description('Verified immutable backend image reference (registry/repository@sha256:digest).')
+param backendImage string
 
 @description('Backend target port.')
-param backendTargetPort int = 80
+param backendTargetPort int = 8000
 
-@description('Frontend image. The deploy script replaces the bootstrap image after ACR build.')
-param frontendImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+@description('Verified immutable frontend image reference (registry/repository@sha256:digest).')
+param frontendImage string
 
 @description('Enable FastAPI health probes after the real backend image is deployed.')
-param enableBackendProbes bool = false
+param enableBackendProbes bool = true
 
 @description('Optional resource tags.')
 param tags object = {}
 
 var suffix = uniqueString(subscription().id, resourceGroup().id, namePrefix)
-var effectiveFoundryAccountName = empty(foundryAccountName)
-  ? take('${replace(namePrefix, '-', '')}${suffix}ai', 64)
-  : foundryAccountName
+var effectiveFoundryAccountName = foundryAccountName
 var registryName = take('${replace(namePrefix, '-', '')}${suffix}acr', 50)
 var logName = take('${namePrefix}-${suffix}-log', 63)
 var insightsName = take('${namePrefix}-${suffix}-appi', 64)
@@ -65,62 +64,26 @@ var backendName = take('${namePrefix}-${suffix}-api', 32)
 var frontendName = take('${namePrefix}-${suffix}-web', 32)
 var backendIdentityName = take('${namePrefix}-${suffix}-api-mi', 128)
 var frontendIdentityName = take('${namePrefix}-${suffix}-web-mi', 128)
-var postgresName = take('${replace(namePrefix, '-', '')}${suffix}pg', 63)
+var postgresName = empty(postgresServerName)
+  ? take('${replace(namePrefix, '-', '')}${suffix}pg', 63)
+  : postgresServerName
 var postgresHost = '${postgresName}.postgres.database.azure.com'
-var databaseUrl = 'postgresql://${postgresAdministratorLogin}:${postgresAdministratorPassword}@${postgresHost}:5432/${postgresDatabaseName}?sslmode=require'
+var databaseUrl = 'postgresql://${uriComponent(postgresAdministratorLogin)}:${uriComponent(postgresAdministratorPassword)}@${postgresHost}:5432/${postgresDatabaseName}?sslmode=require'
 var foundryProjectEndpoint = 'https://${effectiveFoundryAccountName}.services.ai.azure.com/api/projects/${foundryProjectName}'
 var azureOpenAiEndpoint = 'https://${effectiveFoundryAccountName}.openai.azure.com/'
 
-resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
+resource foundryAccount 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
   name: effectiveFoundryAccountName
-  location: location
-  tags: tags
-  identity: {
-    type: 'SystemAssigned'
-  }
-  kind: 'AIServices'
-  sku: {
-    name: 'S0'
-  }
-  properties: {
-    allowProjectManagement: true
-    customSubDomainName: effectiveFoundryAccountName
-    disableLocalAuth: true
-    dynamicThrottlingEnabled: false
-    publicNetworkAccess: 'Enabled'
-    restrictOutboundNetworkAccess: false
-  }
 }
 
-resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
+resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' existing = {
   parent: foundryAccount
   name: foundryProjectName
-  location: location
-  tags: tags
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    displayName: foundryProjectName
-    description: 'Independent LangGraph double-charge workflow project.'
-  }
 }
 
-resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
+resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' existing = {
   parent: foundryAccount
   name: modelDeploymentName
-  sku: {
-    name: 'GlobalStandard'
-    capacity: modelCapacity
-  }
-  properties: {
-    model: {
-      format: 'OpenAI'
-      name: modelName
-      version: modelVersion
-    }
-    versionUpgradeOption: 'NoAutoUpgrade'
-  }
 }
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
@@ -397,11 +360,11 @@ resource backend 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'LANGGRAPH_SCHEMA'
-              value: 'langgraph_app'
+              value: langgraphSchema
             }
             {
               name: 'LANGGRAPH_CHECKPOINT_SCHEMA'
-              value: 'langgraph_checkpoints'
+              value: langgraphCheckpointSchema
             }
             {
               name: 'CORS_ORIGINS'
@@ -532,3 +495,5 @@ output frontendUrl string = 'https://${frontend.properties.configuration.ingress
 output postgresHost string = postgresHost
 output postgresDatabaseName string = database.name
 output applicationInsightsName string = insights.name
+output langgraphSchema string = langgraphSchema
+output langgraphCheckpointSchema string = langgraphCheckpointSchema

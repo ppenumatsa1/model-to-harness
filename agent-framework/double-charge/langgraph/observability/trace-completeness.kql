@@ -1,0 +1,56 @@
+// Supply one fresh no-duplicate command operation ID from the verified hosted version.
+let TargetOperation = "<operation-id>";
+let ExpectedNodes = dynamic(["normalize_complaint", "load_account", "detect_duplicate", "close_no_duplicate"]);
+let Spans = materialize(
+    union
+        (requests | extend spanType = "request"),
+        (dependencies | extend spanType = "dependency")
+    | where timestamp > ago(24h) and operation_Id == TargetOperation
+    | project timestamp, spanId = id, parentId = operation_ParentId, name, spanType,
+        success = coalesce(tobool(success), false), weight = coalesce(itemCount, 1),
+        node = tostring(customDimensions["workflow.node"]),
+        genaiOperation = tostring(customDimensions["gen_ai.operation.name"])
+);
+let Native = materialize(Spans
+    | where name in ("foundry.responses.invoke", "workflow.run")
+        or name startswith "workflow.node."
+        or genaiOperation in ("chat", "execute_tool"));
+let Workflows = Native | where name == "workflow.run";
+let Nodes = Native
+    | where name startswith "workflow.node."
+    | extend node = substring(name, strlen("workflow.node."));
+let ExecutedNodes = toscalar(Nodes | summarize make_set(node));
+let MissingNodes = set_difference(ExpectedNodes, ExecutedNodes);
+let UnexpectedNodes = set_difference(ExecutedNodes, ExpectedNodes);
+let MissingParents = toscalar(Native
+    | where isnotempty(parentId)
+    | join kind=leftanti (Spans | project knownParent = spanId)
+        on $left.parentId == $right.knownParent
+    | count);
+let MisparentedNodes = toscalar(Nodes
+    | join kind=leftanti (Workflows | project workflowId = spanId)
+        on $left.parentId == $right.workflowId
+    | count);
+let NormalizerModels = toscalar(Native
+    | where genaiOperation == "chat"
+    | join kind=inner (Nodes | where node == "normalize_complaint"
+        | project normalizerId = spanId)
+        on $left.parentId == $right.normalizerId
+    | count);
+let SuccessfulRequests = toscalar(Spans
+    | where spanType == "request" and success == true
+    | count);
+let FailedRequests = toscalar(Spans
+    | where spanType == "request" and success == false
+    | count);
+let WorkflowCount = toscalar(Workflows | count);
+let NativeCount = toscalar(Native | count);
+let MaxWeight = toscalar(Native | summarize max(weight));
+print operationId = TargetOperation, workflows = WorkflowCount, nativeSpans = NativeCount,
+    executedNodes = ExecutedNodes, missingNodes = MissingNodes, unexpectedNodes = UnexpectedNodes,
+    missingParents = MissingParents, misparentedNodes = MisparentedNodes,
+    normalizerModels = NormalizerModels, maximumWeight = MaxWeight,
+    passed = SuccessfulRequests > 0 and FailedRequests == 0 and WorkflowCount == 1
+        and NativeCount > 0 and NormalizerModels > 0
+        and array_length(MissingNodes) == 0 and array_length(UnexpectedNodes) == 0
+        and MissingParents == 0 and MisparentedNodes == 0 and MaxWeight == 1

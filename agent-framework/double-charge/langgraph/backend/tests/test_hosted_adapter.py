@@ -1,15 +1,15 @@
 import json
 
-from fakes import FakeDomainGateway, FakeModel
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.audit import InMemoryAuditRepository
-from model_to_harness_langgraph.hosted_adapter import (
+from model_to_harness_langgraph.application.service import InvalidCommandError, WorkflowService
+from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
+from model_to_harness_langgraph.projections.hosted_adapter import (
     dispatch_hosted_command,
     parse_hosted_command,
     safe_hosted_error,
 )
-from model_to_harness_langgraph.service import InvalidCommandError, WorkflowService
-from model_to_harness_langgraph.workflow import DoubleChargeWorkflow
+from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.testing.fakes import FakeDomainGateway, FakeModel
 
 
 def make_service() -> WorkflowService:

@@ -3,21 +3,42 @@
 The app emits structured JSON logs correlated by case, run, node, transition,
 checkpoint, retry attempt, and a one-way truncated idempotency-key hash. Install
 `.[observability]` and set `APPLICATIONINSIGHTS_CONNECTION_STRING` to enable the
-App Insights-ready OpenTelemetry setup in `observability.py`.
+App Insights-ready OpenTelemetry setup in `infrastructure/telemetry.py`.
 
 For Foundry Hosted Agents, the project-level `ApplicationInsights` connection is
 created by this lane's Bicep and the Responses runtime injects the connection string.
 The adapter creates a `foundry.responses.invoke` span, each graph command creates a
-`workflow.run` span, and durable audit timestamps project safe `workflow.node.*`,
-and deterministic tool spans. The actual model dependency is auto-instrumented under
-the same run span. This keeps pause/resume traces correlated without treating
-telemetry as workflow state.
+`workflow.run` span, and real executing nodes create `workflow.node.*` spans.
+Actual deterministic tool awaits and model calls are children of the executing
+node. Model spans record real token usage when supplied. No node/tool spans are
+reconstructed from audit timestamps, and no artificial MAF agent layer is added.
+Separate start, approval and resume requests retain their own operation IDs and
+safe hashed case/run correlation.
 
-Operational telemetry may be sampled and retained according to platform policy.
-Durable business audit is different: ordered `langgraph_app.events`, insert-once
+This teaching deployment requires full native retention, configured and checked
+after SDK initialization. Hosted SDK providers/exporters remain SDK-owned; API
+bootstrap owns its providers and cleanup. The pinned hosted stack is tested
+independently from MAF. Do not copy version-sensitive MAF fixes or infer live
+instrumentor state from environment configuration alone.
+
+`trace-completeness.kql` checks one fresh no-duplicate operation, including exact
+node set, workflow/model presence, parent linkage and sampling weight. Empty input
+fails. Extend the executed-node expectation for other branches rather than
+requiring every graph node in every operation. `trace-safety.kql` returns only
+prohibited attribute key names, never unrestricted attributes. `command-traces.kql`
+indexes actual commands, including failed and approval-only commands, without
+promoting standalone SDK setup or log operations into workflow runs.
+
+Resolve the exact project, version, App Insights resource and time window before
+querying; display the KQL before execution and never claim aggregate counts prove
+all individual traces complete. Local query files are acceptance tools, not proof
+of deployed ingestion until a fresh operation passes them.
+
+Durable business audit is different: ordered application-schema `events`, insert-once
 approval commands, idempotent refund records and fingerprints, run projections,
 outcomes, and selected memory remain in PostgreSQL.
-LangGraph checkpoint tables live in the separate `langgraph_checkpoints` schema.
+The cutover application default is `langgraph_app_cutover`, with native checkpoint
+tables in the separate `langgraph_checkpoints_cutover` schema.
 They support resume but are not an audit API and are never returned to the browser.
 
 Allowed telemetry: event names, latency, counts, route names, safe summaries, hashed

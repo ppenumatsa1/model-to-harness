@@ -91,3 +91,26 @@ After the fresh MAF cutover, `scripts/deploy_azure.sh --update-existing` verifie
 the current schema's migration history read-only before updating the deployment.
 It preserves workflow records and checkpoints and never runs migrations or resets
 state. Future SQL changes still require an explicit reviewed migration.
+
+## LangGraph backend cutover
+
+The LangGraph cutover uses the same separation of responsibilities, independently
+implemented inside `model_to_harness_langgraph`:
+
+- `api/` owns HTTP schemas, routers and transport dependencies.
+- `application/` owns commands, business records, persistence ports and recovery.
+- `graph/` owns native state/reducers, grouped nodes, graph composition and execution.
+- `infrastructure/` owns PostgreSQL adapters, model integration, logging and telemetry.
+- `projections/` owns safe case/event views and the read-only selected-run assistant.
+- `testing/` contains explicitly injected doubles; production cannot fall back to them.
+- `bootstrap.py` owns runtime construction and deterministic resource cleanup.
+
+Application migrations remain in `backend/migrations/`. Native saver migrations
+remain owned by `langgraph-checkpoint-postgres` and run as a separate explicit setup
+step. The cutover selects fresh application and checkpoint schemas; it does not
+read, convert or migrate old workflow data. Leaving obsolete storage untouched is
+not compatibility support or an acceptance dependency.
+
+The package name and native LangGraph command semantics remain stable, but internal
+flat-module import paths are removed rather than retained as aliases. The issue
+ledger distinguishes implementation progress from verified deployed acceptance.

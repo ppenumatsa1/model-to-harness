@@ -1,8 +1,8 @@
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.app import create_app
-from model_to_harness_langgraph.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.api.app import create_app
 from model_to_harness_langgraph.config import Settings
-from model_to_harness_langgraph.domain_gateway import SharedDomainGateway
+from model_to_harness_langgraph.infrastructure.domain_gateway import SharedDomainGateway
+from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
 
 
 class E2EFakeModel:
@@ -20,4 +20,3 @@ app = create_app(
     model=E2EFakeModel(),
     checkpointer=InMemorySaver(),
 )
-

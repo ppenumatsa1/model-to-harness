@@ -18,3 +18,11 @@ infra/foundry-hosted/agent/SOURCE_MANIFEST.json
 
 .foundry/results/*
 !.foundry/results/.gitkeep
+
+infra/foundry-hosted/agent/.foundry/results/
+infra/foundry-hosted/agent/.foundry/suites/
+infra/foundry-hosted/agent/.foundry/evaluators/
+infra/foundry-hosted/agent/.foundry/agent-metadata*.yaml
+infra/foundry-hosted/agent/.foundry/.poll/
+infra/foundry-hosted/agent/.foundry/datasets/*
+!infra/foundry-hosted/agent/.foundry/datasets/double-charge-hosted-cases.jsonl

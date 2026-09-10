@@ -1,12 +1,13 @@
 import pytest
-from fakes import FakeModel
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.audit import InMemoryAuditRepository
-from model_to_harness_langgraph.contracts import ApprovalRequest, StartCaseRequest
-from model_to_harness_langgraph.domain_gateway import SharedDomainGateway
-from model_to_harness_langgraph.service import WorkflowService
-from model_to_harness_langgraph.workflow import DoubleChargeWorkflow
+from model_to_harness_langgraph.application.records import ApprovalRequest, StartCaseRequest
+from model_to_harness_langgraph.application.service import WorkflowService
+from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
+from model_to_harness_langgraph.infrastructure.domain_gateway import SharedDomainGateway
+from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.testing.fakes import FakeModel
 from model_to_harness_shared import EVALUATION_CASES, get_fixture
+from pydantic import ValidationError
 
 
 @pytest.mark.parametrize("evaluation_case", EVALUATION_CASES, ids=lambda case: case.fixture_id)
@@ -34,9 +35,7 @@ async def test_shared_fixture_matches_framework_neutral_outcome(evaluation_case)
             started.case_id,
             ApprovalRequest(
                 checkpoint_id=started.checkpoint_id or "",
-                decision="deny"
-                if str(fixture.approval_decision) == "denied"
-                else "approve",
+                decision="deny" if str(fixture.approval_decision) == "denied" else "approve",
                 reviewer_id="shared-contract-test",
             ),
         )
@@ -81,3 +80,27 @@ async def test_shared_simulator_state_is_isolated_per_run():
         await service.resume(started.case_id)
         events = await service.list_events(started.case_id)
         assert any(event.event_type == "tool_call_retried" for event in events)
+
+
+@pytest.mark.parametrize("operation", ["validate_billing", "validate_policy"])
+async def test_validation_uses_supplied_evidence_without_redetection_or_cache_fallback(operation):
+    fixture = get_fixture("duplicate-confirmed")
+    charges = [charge.model_dump(mode="json") for charge in fixture.charges]
+    gateway = SharedDomainGateway()
+    detected = await gateway.detect_duplicate(
+        "evidence-run", fixture.scenario_input.customer_id, charges, fixture.fixture_id
+    )
+    assert detected.value["decision"] == "confirmed"
+    validate = getattr(gateway, operation)
+    result = await validate(
+        "evidence-run",
+        fixture.scenario_input.customer_id,
+        charges,
+        {"decision": "not_found", "rationale": "The persisted evidence is not confirmed."},
+        fixture.fixture_id,
+    )
+    assert result.ok is False
+    with pytest.raises(ValidationError):
+        await validate(
+            "evidence-run", fixture.scenario_input.customer_id, charges, {}, fixture.fixture_id
+        )

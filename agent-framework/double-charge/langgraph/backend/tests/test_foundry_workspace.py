@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -29,11 +30,60 @@ def test_foundry_workspace_is_single_environment_metadata_and_cache_only():
     assert "version: 2.0.0" in azure_yaml
     assert "DATABASE_URL: postgresql://" not in azure_yaml
 
+
+def test_foundry_template_requires_discovered_location_and_existing_ai_resources():
     bicep = (ROOT / "infra" / "main.bicep").read_text()
-    assert "param location string = 'northcentralus'" in bicep
-    assert "gpt-5.6-sol" in bicep
-    assert "@secure()" in bicep
+    assert re.search(r"(?m)^param location string[ \t]*$", bicep)
+    assert re.search(r"(?m)^param foundryAccountName string[ \t]*$", bicep)
+    resources = re.findall(
+        r"(?m)^[ \t]*resource\s+\w+\s+'(Microsoft\.CognitiveServices/[^']+)'\s+"
+        r"(existing\s+)?=\s*\{",
+        bicep,
+    )
+    existing_ai_kinds = {
+        "Microsoft.CognitiveServices/accounts",
+        "Microsoft.CognitiveServices/accounts/projects",
+        "Microsoft.CognitiveServices/accounts/deployments",
+    }
+    existing_ai_resources = [
+        (kind.split("@")[0], existing)
+        for kind, existing in resources
+        if kind.split("@")[0] in existing_ai_kinds
+    ]
+    assert {kind for kind, _ in existing_ai_resources} == existing_ai_kinds
+    assert all(existing.strip() == "existing" for _, existing in existing_ai_resources)
+    assert "param modelDeploymentName string = 'model-harness-gpt-5-6-sol'" in bicep
+    assert "name: modelDeploymentName" in bicep
+    assert re.search(
+        r"@secure\(\)\s+@description\('[^']+'\)\s+param postgresAdministratorPassword string",
+        bicep,
+    )
     assert "placeholder-only" not in bicep
+    azure_yaml = (ROOT / "azure.yaml").read_text()
+    for parameter, schema, variable in (
+        ("langgraphSchema", "langgraph_app_cutover", "LANGGRAPH_SCHEMA"),
+        (
+            "langgraphCheckpointSchema",
+            "langgraph_checkpoints_cutover",
+            "LANGGRAPH_CHECKPOINT_SCHEMA",
+        ),
+    ):
+        assert f"param {parameter} string = '{schema}'" in bicep
+        assert re.search(rf"name: '{variable}'\s+value: {parameter}\b", bicep)
+        assert re.search(rf"name: {variable}\s+value: \$\{{{variable}\}}", azure_yaml)
+
+
+def test_hosted_evaluation_keeps_reviewed_evaluator_and_model_pins():
+    hosted_eval = (ROOT / "infra" / "foundry-hosted" / "agent" / "eval.yaml").read_text()
+    assert re.findall(
+        r'(?m)^  - name: (builtin\.\w+)\n    version: "(\d+)"[ \t]*$',
+        hosted_eval,
+    ) == [
+        ("builtin.task_completion", "19"),
+        ("builtin.relevance", "12"),
+    ]
+    assert "eval_model: model-harness-gpt-5-6-sol" in hosted_eval
+    assert re.search(r"(?m)^max_samples: 4[ \t]*$", hosted_eval)
 
 
 def test_foundry_guidance_keeps_runtime_prompts_and_tools_in_backend_source():

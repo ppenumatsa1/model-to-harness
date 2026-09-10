@@ -2,5 +2,4 @@
 set -euo pipefail
 
 export PYTHONPATH="${PYTHONPATH:-}:backend/src:../../../shared/src"
-exec uvicorn model_to_harness_langgraph.main:app --reload --host 127.0.0.1 --port 8000
-
+exec uvicorn model_to_harness_langgraph.api.app:create_app --factory --reload --host 127.0.0.1 --port 8000

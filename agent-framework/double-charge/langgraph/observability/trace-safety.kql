@@ -1,0 +1,8 @@
+// Query keys only. Never return an entire customDimensions bag for privacy checks.
+let TargetOperation = "<operation-id>";
+union requests, dependencies, traces
+| where timestamp > ago(24h) and operation_Id == TargetOperation
+| mv-expand attributeKey = bag_keys(customDimensions)
+| extend attributeKey = tostring(attributeKey)
+| where attributeKey matches regex @"(?i)(^|[._])(prompt|complaint|password|secret|connection_string|access_token|authorization|checkpoint_payload|tool_arguments|tool_result|input_messages|output_messages|content)([._]|$)"
+| summarize occurrences = count() by attributeKey

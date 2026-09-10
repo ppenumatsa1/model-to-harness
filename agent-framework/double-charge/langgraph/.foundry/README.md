@@ -19,9 +19,15 @@ endpoint, resource ID, subscription, registry, credential, remote suite claim, a
 binding, or deployment state.
 
 Runtime prompts and tools remain backend source code, primarily in
-`backend/src/model_to_harness_langgraph/model_adapter.py`, `workflow.py`, and
-`domain_gateway.py`. They must not be copied into `.foundry`. This folder never
+`backend/src/model_to_harness_langgraph/infrastructure/model_client.py`,
+`graph/`, and `infrastructure/domain_gateway.py`. They must not be copied into `.foundry`. This folder never
 overrides runtime orchestration, LangGraph checkpoints, PostgreSQL audit records, or
 selected application memory.
 
 No `azure.yaml` or azd deployment configuration belongs in this teaching placeholder.
+
+Hosted acceptance intent is separate at `../infra/foundry-hosted/agent/eval.yaml`,
+with its reviewed four-case seed under that hosted root's `.foundry/datasets/`.
+Preparation verifies the selected azd agent version and pinned evaluator catalog
+entries before creating a fresh group. Generated requests/results are private,
+ignored artifacts; no local placeholder metadata is proof of cloud acceptance.

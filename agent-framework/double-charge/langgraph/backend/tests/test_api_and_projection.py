@@ -1,10 +1,10 @@
-from fakes import FakeDomainGateway, FakeModel
 from fastapi.testclient import TestClient
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.agui import project_events
-from model_to_harness_langgraph.app import create_app
-from model_to_harness_langgraph.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.api.app import create_app
 from model_to_harness_langgraph.config import Settings
+from model_to_harness_langgraph.projections.agui import project_events
+from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.testing.fakes import FakeDomainGateway, FakeModel
 
 
 def test_api_pause_approval_resume_and_redacted_projection():
@@ -50,20 +50,18 @@ def test_api_pause_approval_resume_and_redacted_projection():
         tool_event = next(event for event in events if event["event_type"] == "tool_call_started")
         projected = project_events(
             __import__(
-                "model_to_harness_langgraph.contracts", fromlist=["NativeEvent"]
+                "model_to_harness_langgraph.application.records", fromlist=["NativeEvent"]
             ).NativeEvent.model_validate(tool_event)
         )[0]
         assert projected["type"] == "TOOL_CALL_START"
         assert "arguments" not in projected
 
         completed_tool = next(
-            event
-            for event in events
-            if event["event_type"] == "tool_call_succeeded"
+            event for event in events if event["event_type"] == "tool_call_succeeded"
         )
         completion = project_events(
             __import__(
-                "model_to_harness_langgraph.contracts", fromlist=["NativeEvent"]
+                "model_to_harness_langgraph.application.records", fromlist=["NativeEvent"]
             ).NativeEvent.model_validate(completed_tool)
         )
         assert [event["type"] for event in completion] == [
@@ -157,10 +155,13 @@ def test_copilotkit_bridge_is_read_only_and_discards_untrusted_context():
         assert after_case == before_case
         assert after_events == before_events
 
-        assert client.post(
-            "/api/copilotkit",
-            json={"threadId": started["case_id"], "runId": "bad"},
-        ).status_code == 404
+        assert (
+            client.post(
+                "/api/copilotkit",
+                json={"threadId": started["case_id"], "runId": "bad"},
+            ).status_code
+            == 404
+        )
         invalid_id = client.post(
             "/api/copilotkit/agent/selected-run/run",
             json={"threadId": "../approval", "runId": "bad/run"},
