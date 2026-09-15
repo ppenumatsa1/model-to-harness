@@ -1,7 +1,7 @@
 # Shared domain package
 
 Framework-neutral contracts, fixtures, evaluation expectations, and deterministic
-simulators for the double-charge scenario.
+simulators for the double-charge and checkout-recovery scenarios.
 
 ```bash
 python3.12 -m venv .venv

@@ -19,7 +19,8 @@ once with Microsoft Agent Framework (MAF) and once with LangGraph.
 5. Explore the framework-neutral contracts in [`shared/`](shared/) and the
    independent [MAF](agent-framework/double-charge/maf/) and
    [LangGraph](agent-framework/double-charge/langgraph/) applications.
-6. Continue to the future harness layer described in [`harness/`](harness/).
+6. Read [Part 3: Agent Harnesses](docs/articles/03-agent-harnesses.md), then
+   explore the [checkout-recovery MAF harness](harness/checkout-recovery/maf/).
 
 ## Repository boundaries
 
@@ -27,7 +28,7 @@ once with Microsoft Agent Framework (MAF) and once with LangGraph.
 shared/                         deterministic domain contracts and simulators
 agent-framework/.../maf/        independent MAF application
 agent-framework/.../langgraph/  independent LangGraph application
-harness/                        next-stage teaching placeholder
+harness/checkout-recovery/maf/   independent MAF harness application
 compose.yaml                    one local PostgreSQL developer dependency
 ```
 
@@ -38,7 +39,7 @@ application source of truth; the root Compose file is only a local convenience.
 
 ## Prerequisites
 
-- Python 3.12
+- Python 3.12 for the framework lanes; Python 3.13 for the checkout harness
 - Docker with Compose (only when running the framework applications)
 - Node.js tooling required by each framework-owned frontend
 - A Microsoft Foundry model configuration for model-backed local runs
@@ -75,15 +76,22 @@ application is launched by the root Compose file.
 - [Project structure](docs/design/projectstructure.md)
 - [Issues, changes, and fixes](docs/design/issues-changes-fixes.md)
 - [Part 2: Agent Frameworks](docs/articles/02-agent-frameworks.md)
+- [Part 3: Agent Harnesses](docs/articles/03-agent-harnesses.md)
 
 ## Contributor skills
 
 `.github/skills/` contains a small, pinned set of third-party Microsoft and LangChain
 skills for current SDK and platform guidance. No repository-owned custom skills are
-included yet, and skills are never part of either application runtime. See
+included yet. These contributor skills are not application runtime dependencies;
+the checkout harness has a separately owned runtime triage procedure. See
 [the skills provenance file](.github/skills/README.md).
 
 ## Status
+
+The checkout-recovery MAF harness is independently deployed in `northcentralus`
+under `rg-crmaf-20260912`, with Hosted Agent version 2, a private API, and an
+authenticated UI. Its [lane-local delivery ledger](harness/checkout-recovery/maf/docs/issues-changes-fixes.md)
+records the actual API, browser, hosted, evaluation, and telemetry results.
 
 Both independent teaching lanes are deployed in `northcentralus` under
 `rg-model-harness` with separate Foundry projects, Hosted Agents, PostgreSQL servers,

@@ -30,3 +30,17 @@ def test_shared_source_has_no_framework_runtime_or_cloud_imports() -> None:
                     violations.append(f"{path.relative_to(source_root)} imports {name}")
 
     assert violations == []
+
+
+def test_checkout_recovery_has_simple_public_package_imports() -> None:
+    from model_to_harness_shared import (
+        CheckoutSimulator,
+        RemediationRequest,
+        get_checkout_fixture,
+    )
+
+    fixture = get_checkout_fixture("recoverable-inventory-reservation")
+
+    assert CheckoutSimulator is not None
+    assert RemediationRequest is not None
+    assert fixture.order.order_id == "order-recoverable-inventory-reservation"

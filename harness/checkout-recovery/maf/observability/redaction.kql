@@ -1,0 +1,8 @@
+union requests, dependencies, traces, exceptions
+| where timestamp > ago(2h)
+| where cloud_RoleName in ("checkout-recovery-maf", "checkout-recovery-maf-api", "agentsv2")
+| extend keys = bag_keys(customDimensions), messageText = tostring(column_ifexists("message", ""))
+| summarize rows=count(),
+    contentAttributes=countif(isnotempty(customDimensions["gen_ai.input.messages"]) or isnotempty(customDimensions["gen_ai.output.messages"]) or isnotempty(customDimensions["db.connection_string"]) or isnotempty(customDimensions["tool.arguments"]) or isnotempty(customDimensions["tool.result"])),
+    credentialText=countif(messageText contains "postgresql://" or messageText contains "PRIVATE-CONTENT-CANARY")
+    by cloud_RoleName

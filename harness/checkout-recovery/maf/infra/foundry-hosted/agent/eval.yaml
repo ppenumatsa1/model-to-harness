@@ -1,0 +1,8 @@
+name: checkout-recovery-maf-start-contract
+agent:
+  name: checkout-recovery-maf
+dataset:
+  local_uri: .foundry/datasets/checkout-start-contract.jsonl
+evaluators:
+  - checkout_exact_contract
+max_samples: 7

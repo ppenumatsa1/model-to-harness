@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: checkout-recovery-maf
+services:
+  checkout-recovery-project:
+    host: azure.ai.project
+    deployments:
+      - name: gpt-4.1-mini
+        model:
+          format: OpenAI
+          name: gpt-4.1-mini
+          version: "2025-04-14"
+        sku:
+          name: Standard
+          capacity: 100
+  checkout-recovery-maf:
+    project: ./infra/foundry-hosted/agent
+    host: azure.ai.agent
+    language: python
+    uses:
+      - checkout-recovery-project
+    codeConfiguration:
+      dependencyResolution: remote_build
+      entryPoint: main.py
+      runtime: python_3_13
+    container:
+      resources:
+        cpu: "1"
+        memory: 2Gi
+    kind: hosted
+    name: checkout-recovery-maf
+    description: Bounded MAF checkout investigation with explicit approval and verified remediation.
+    protocols:
+      - protocol: responses
+        version: 2.0.0
+    env:
+      CHECKOUT_RECOVERY_DATABASE_URL: ${CHECKOUT_RECOVERY_DATABASE_URL}
+      CHECKOUT_RECOVERY_FOUNDRY_PROJECT_ENDPOINT: ${AZURE_AI_PROJECT_ENDPOINT}
+      CHECKOUT_RECOVERY_FOUNDRY_MODEL_DEPLOYMENT: ${CHECKOUT_RECOVERY_FOUNDRY_MODEL_DEPLOYMENT}
+      CHECKOUT_RECOVERY_EXECUTION_MODE: maf
+      ENABLE_SENSITIVE_DATA: "false"
+      CHECKOUT_RECOVERY_MAX_AUTO_INVENTORY_QUANTITY: ${CHECKOUT_RECOVERY_MAX_AUTO_INVENTORY_QUANTITY}
+      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false"
+      OTEL_TRACES_SAMPLER: microsoft.fixed_percentage
+      OTEL_TRACES_SAMPLER_ARG: "1.0"
+infra:
+  provider: microsoft.foundry
+hooks:
+  prepackage:
+    shell: sh
+    run: uv run python scripts/prepare_hosted.py

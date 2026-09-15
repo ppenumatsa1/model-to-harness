@@ -1,0 +1,346 @@
+:root {
+  color: #192234;
+  background: #f5f7fb;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.app-shell {
+  width: min(1180px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 3rem 0 4rem;
+}
+
+.page-header,
+.section-heading,
+.start-card,
+.approval-card,
+.resume-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.page-header {
+  align-items: flex-start;
+  margin-bottom: 2rem;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0.5rem;
+  font-size: clamp(2rem, 5vw, 3.1rem);
+  letter-spacing: -0.055em;
+}
+
+h2 {
+  margin-bottom: 0.5rem;
+  font-size: 1.25rem;
+}
+
+h3 {
+  margin: 1.8rem 0 0.75rem;
+  font-size: 1rem;
+}
+
+.eyebrow {
+  margin-bottom: 0.45rem;
+  color: #576579;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.intro,
+.start-card p,
+.approval-card p,
+.resume-card p,
+.progress-label {
+  color: #58677a;
+  line-height: 1.55;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.55rem 0.8rem;
+  background: #e7ebf2;
+  color: #344155;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.status-badge span {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-badge.active { background: #dceafe; color: #2059a9; }
+.status-badge.warning { background: #fff1d2; color: #8a5300; }
+.status-badge.success { background: #dff3e9; color: #176640; }
+.status-badge.danger { background: #ffe2e0; color: #a82b27; }
+
+.card {
+  margin-bottom: 1.25rem;
+  border: 1px solid #dfe5ee;
+  border-radius: 14px;
+  padding: 1.45rem;
+  background: #fff;
+  box-shadow: 0 2px 7px rgb(21 38 70 / 4%);
+}
+
+.start-card > div:first-child,
+.approval-card > div:first-child,
+.resume-card > div:first-child {
+  max-width: 580px;
+}
+
+.start-form {
+  display: grid;
+  min-width: min(100%, 365px);
+  gap: 0.48rem;
+}
+
+label,
+dt {
+  color: #58677a;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 2.6rem;
+  border: 1px solid #bdc8d7;
+  border-radius: 7px;
+  padding: 0.55rem 0.7rem;
+  background: #fff;
+  color: #192234;
+}
+
+.button {
+  min-height: 2.55rem;
+  border: 0;
+  border-radius: 7px;
+  padding: 0.55rem 0.9rem;
+  font-weight: 750;
+}
+
+.primary {
+  background: #155fc4;
+  color: #fff;
+}
+
+.secondary {
+  border: 1px solid #bdc8d7;
+  background: #fff;
+  color: #27415f;
+}
+
+.danger {
+  margin-left: 0.55rem;
+  background: #8f302c;
+  color: #fff;
+}
+
+.error-banner {
+  margin-bottom: 1.25rem;
+  border: 1px solid #f0b9b6;
+  border-radius: 9px;
+  padding: 0.8rem 1rem;
+  background: #fff0ef;
+  color: #8e2926;
+}
+
+.progress {
+  display: flex;
+  margin: 1.2rem 0 1.5rem;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border: 1px solid #dfe5ee;
+  border-radius: 8px;
+}
+
+.progress li {
+  flex: 1;
+  min-width: 7.5rem;
+  padding: 0.58rem 0.65rem;
+  border-right: 1px solid #dfe5ee;
+  color: #708095;
+  font-size: 0.77rem;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.progress li:last-child {
+  border-right: 0;
+}
+
+.progress .complete {
+  background: #dff3e9;
+  color: #176640;
+}
+
+.progress .current {
+  background: #fff1d2;
+  color: #8a5300;
+}
+
+.metadata-grid,
+.result-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+
+.metadata-grid div,
+.result-list div {
+  min-width: 0;
+}
+
+dd {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.93rem;
+}
+
+.approval-actions {
+  width: min(100%, 390px);
+}
+
+.approval-actions input {
+  margin: 0.38rem 0 0.75rem;
+}
+
+.resume-card {
+  background: #f7fbff;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1.25rem;
+}
+
+.workspace-grid .card {
+  margin: 0;
+}
+
+.event-list {
+  display: grid;
+  gap: 0.85rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-list li {
+  border-left: 3px solid #adc4e5;
+  padding: 0.1rem 0 0.1rem 0.75rem;
+}
+
+.event-list strong,
+.event-list span,
+.event-list time {
+  display: block;
+}
+
+.event-list strong {
+  font-size: 0.9rem;
+}
+
+.event-list span,
+.event-list time,
+.muted {
+  color: #718096;
+  font-size: 0.8rem;
+}
+
+.event-list p {
+  margin: 0.2rem 0;
+  color: #45566e;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.result-list {
+  grid-template-columns: 1fr;
+  gap: 0.8rem;
+}
+
+.artifact-list {
+  gap: 0.65rem;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    width: min(100% - 1.25rem, 1180px);
+    padding-top: 1.5rem;
+  }
+
+  .page-header,
+  .start-card,
+  .approval-card,
+  .resume-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .status-badge {
+    align-self: flex-start;
+  }
+
+  .start-form,
+  .approval-actions {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .progress {
+    overflow-x: auto;
+  }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}

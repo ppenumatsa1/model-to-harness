@@ -3,6 +3,13 @@
 This directory is reserved for the next article-series stage: placing the framework
 workflows inside complete task environments that can carry work to verified results.
 
+## Checkout recovery example
+
+The first harness implementation is the
+[MAF checkout-recovery lane](checkout-recovery/maf/). It follows the
+[checkout-recovery contract](checkout-recovery/docs/README.md) and is
+independent from the double-charge MAF and LangGraph workflow applications.
+
 Future projects should demonstrate:
 
 - context assembly from instructions, state, selected memory, history, and workspace;

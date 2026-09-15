@@ -1,0 +1,6 @@
+union requests, dependencies
+| where timestamp > ago(2h)
+| extend agent = coalesce(tostring(customDimensions["gen_ai.agent.name"]), tostring(customDimensions["azure.ai.agentserver.agent_name"]))
+| where (itemType == "request" and agent == "checkout-recovery-maf") or name startswith "checkout."
+| summarize spans=count(), failures=countif(success == false) by itemType, name, agent, cloud_RoleName
+| order by itemType asc, name asc

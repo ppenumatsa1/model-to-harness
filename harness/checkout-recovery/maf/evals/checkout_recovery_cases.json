@@ -1,0 +1,37 @@
+[
+  {
+    "fixture_id": "recoverable-inventory-reservation",
+    "approval_command": null,
+    "expected_terminal_status": "recovered"
+  },
+  {
+    "fixture_id": "captured-payment-approved-remediation",
+    "approval_command": "approved",
+    "expected_terminal_status": "recovered"
+  },
+  {
+    "fixture_id": "payment-pending-manual-review",
+    "approval_command": null,
+    "expected_terminal_status": "manual_review"
+  },
+  {
+    "fixture_id": "diagnostic-read-failure",
+    "approval_command": null,
+    "expected_terminal_status": "failed"
+  },
+  {
+    "fixture_id": "denied-approval",
+    "approval_command": "denied",
+    "expected_terminal_status": "closed_denied"
+  },
+  {
+    "fixture_id": "uncertain-remediation-recovery",
+    "approval_command": null,
+    "expected_terminal_status": "recovered"
+  },
+  {
+    "fixture_id": "verification-mismatch",
+    "approval_command": null,
+    "expected_terminal_status": "manual_review"
+  }
+]

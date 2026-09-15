@@ -1,0 +1,38 @@
+azd:
+  environmentName: crmaf-20260912
+  service: checkout-recovery-maf
+defaultEnvironment: crmaf-20260912
+environments:
+  crmaf-20260912:
+    lastEval:
+      evalId: eval_188058e6d7424429b855697f94735630
+      evalRunId: evalrun_2d6557a7f2f54c1dbef6f204e5fe2d48
+      runName: crmaf-20260912-agent2-native-verified
+      agentVersion: "2"
+      startedAt: "2026-09-12T20:52:14Z"
+      status: passed
+      graderType: python
+      passed: 7
+      total: 7
+      exactContractPassed: 7
+    previousEval:
+      evalId: eval_584cd62762874148bc01a303cfa34bcc
+      evalRunId: evalrun_a5828c80336d49ceb8be13d0b477f064
+      status: failed-grader-response-namespace
+    namespaceDiagnostic:
+      evalId: eval_19a6963d6f024460af1affdf0623b4c9
+      evalRunId: evalrun_e188dea5ef5d4265870839ebb9069122
+      purpose: nongating-argument-shape-probe
+      finding: response-is-item-sample.output_text
+    evaluationSuites:
+      - id: checkout-start-contract
+        tags:
+          tier: smoke
+          purpose: explicit-command-contract
+        generationSource: manual-contract
+        datasetFile: .foundry/datasets/checkout-start-contract.jsonl
+        evaluators:
+          - name: checkout_exact_contract
+            version: "2"
+            execution: native-python-evaluation-group
+            threshold: 1.0
