@@ -1,7 +1,6 @@
 # Agent Frameworks: The Model Can Answer. Can the Workflow Finish?
 
-_Part 2 of From Models to Harnesses. LinkedIn draft, adapted from the repository's
-technical chapter._
+_Part 2—a continuation of [From Models to Harnesses: How AI Agents Learn to Finish the Job](https://www.linkedin.com/pulse/from-models-harnesses-how-ai-agents-learn-finish-job-penumatsa-g2mjc)._
 
 ## Beyond smarter models: systems that finish the job
 
@@ -17,8 +16,7 @@ actually happened.
 
 **A smarter answer does not settle an unfinished case.**
 
-In [Part 1](https://www.linkedin.com/pulse/from-models-harnesses-how-ai-agents-learn-finish-job-penumatsa-g2mjc),
-we separated three responsibilities:
+To understand what closes the gap, distinguish three responsibilities:
 
 > Framework = how work is coordinated. Harness = what surrounds the agent so it
 > can finish and verify the work. Runtime infrastructure = the hosting, workers,
