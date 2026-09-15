@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2350" viewBox="0 0 1200 2350" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2120" viewBox="0 0 1200 2120" role="img" aria-labelledby="title description">
   <title id="title">From complaint to verified refund</title>
   <desc id="description">A double-charge workflow separates model judgment, deterministic code, and human approval. Check the charges, run billing and policy validations in parallel, and join their evidence. Policy ineligibility closes without a refund; missing or invalid evidence fails explicitly. Pause and checkpoint, record the reviewer's decision, then explicitly resume through a separate command in this application. An approved refund uses a stable idempotency identity and is verified before notification. Unresolved payment outcomes and verification mismatches require manual review. Payments and notifications are simulated.</desc>
   <defs>
@@ -22,7 +22,7 @@
     </style>
   </defs>
 
-  <rect width="1200" height="2350" fill="#ffffff"/>
+  <rect width="1200" height="2120" fill="#ffffff"/>
   <rect x="64" y="34" width="72" height="7" rx="3" fill="#0866c6"/>
   <text x="64" y="100" class="heading">From complaint to verified refund</text>
   <text x="64" y="143" class="subtitle">One case. Two frameworks. Explicit boundaries.</text>
@@ -73,7 +73,7 @@
   <rect x="64" y="985" width="1072" height="140" rx="18" class="human"/>
   <text x="94" y="1029" class="card-title">Pause at the approval boundary</text>
   <text x="1106" y="1027" text-anchor="end" class="badge" style="fill:#84500c">HUMAN</text>
-  <text x="94" y="1070" class="detail">Persist checkpoint and business evidence; await a reviewer.</text>
+  <text x="94" y="1070" class="detail">Save progress and wait for review.</text>
   <text x="94" y="1106" class="note">Application ends the request. No refund yet.</text>
   <path d="M600 1125 V1165" class="connector"/>
 
@@ -104,21 +104,16 @@
   <rect x="64" y="1725" width="1072" height="140" rx="18" class="code"/>
   <text x="94" y="1769" class="card-title">Verify the refund evidence</text>
   <text x="1106" y="1767" text-anchor="end" class="badge" style="fill:#176747">CODE</text>
-  <text x="94" y="1810" class="detail">Check the outcome against authoritative business records.</text>
+  <text x="94" y="1810" class="detail">Confirm exactly one matching refund.</text>
   <text x="94" y="1846" class="exit">Mismatch? Manual review, not a success message.</text>
   <path d="M600 1865 V1920" class="connector"/>
   <rect x="629" y="1875" width="172" height="35" rx="8" fill="#ffffff"/>
   <text x="644" y="1900" class="note">Verified</text>
 
   <rect x="64" y="1925" width="1072" height="105" rx="18" class="model"/>
-  <text x="94" y="1969" class="card-title">Draft the update; record the outcome</text>
+  <text x="94" y="1969" class="card-title">Notify and close</text>
   <text x="1106" y="1967" text-anchor="end" class="badge" style="fill:#075aaa">MODEL + CODE</text>
-  <text x="94" y="2008" class="detail">Only after verification: tell the customer what happened.</text>
+  <text x="94" y="2008" class="detail">Draft the customer update and record the outcome.</text>
 
-  <text x="64" y="2090" class="card-title">Other exits are deliberate.</text>
-  <text x="64" y="2130" class="detail">No refund &#183; Denial &#183; Failed investigation &#183; Manual review</text>
-
-  <text x="64" y="2201" class="note">Checkpoint progress is not proof that money moved.</text>
-  <text x="64" y="2250" font-size="24" style="fill:#475569">Reference implementation uses simulated payments and notifications.</text>
-  <text x="64" y="2321" font-size="26" fill="#475569">Frameworks coordinate. Applications enforce. Evidence closes the case.</text>
+  <text x="64" y="2081" font-size="24" style="fill:#475569">Payments and notifications are simulated.</text>
 </svg>

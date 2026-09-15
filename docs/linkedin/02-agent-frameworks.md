@@ -1,7 +1,7 @@
 # Agent Frameworks: The Model Can Answer. Can the Workflow Finish?
 
-*Part 2 of From Models to Harnesses. LinkedIn draft, adapted from the repository's
-technical chapter.*
+_Part 2 of From Models to Harnesses. LinkedIn draft, adapted from the repository's
+technical chapter._
 
 ## Beyond smarter models: systems that finish the job
 
@@ -9,7 +9,7 @@ technical chapter.*
 
 A language model can apologize, explain possible causes, and draft a reassuring
 reply. But the customer is not asking for better wording. They want the charges
-investigated and, if a refund is justified, their money returned. Once.
+investigated and, if a refund is justified, the correct amount returned.
 
 Between the complaint and that outcome sit billing records, policy, human
 approval, a payment operation that might time out, and evidence that the refund
@@ -21,7 +21,8 @@ In [Part 1](https://www.linkedin.com/pulse/from-models-harnesses-how-ai-agents-l
 we separated three responsibilities:
 
 > Framework = how work is coordinated. Harness = what surrounds the agent so it
-> can finish and verify the work. Runtime = where that work executes and survives.
+> can finish and verify the work. Runtime infrastructure = the hosting, workers,
+> and storage that sustain execution.
 
 Let's follow one case through two independent implementations, with real code.
 
@@ -34,12 +35,11 @@ Our case introduces harder questions. Which checks can run together? What happen
 if only one passes? Where does the system stop for approval? What survives a
 process restart? Is retrying a timed-out refund safe?
 
-A framework gives the application structures for expressing those answers:
-steps, routes, state, joins, pauses, and recovery boundaries. It coordinates code,
-tools, and model calls rather than leaving every transition implicit.
+A framework helps coordinate the work, track progress, and define what can
+happen next.
 
-**Predictable orchestration does not make a model deterministic. It makes the
-permitted actions and transitions explicit.**
+**The model's answers may vary. The workflow defines which actions are allowed,
+and when.**
 
 Not every automation needs an agent framework. A conventional service or workflow
 engine may already fit. The value appears when model calls, tool execution,
@@ -51,16 +51,16 @@ custom plumbing.
 Our investigation needs a small vocabulary. Each **primitive** solves a practical
 coordination problem:
 
-| Primitive | Its job in our case |
-|---|---|
-| **Workflow / graph** | Describe the allowed journey from complaint to outcome. |
-| **Node / executor** | Perform one task: interpret, check, submit, or verify. |
-| **Edge / route** | Choose the next permitted step from the evidence. |
-| **State** | Carry the case's evidence, status, and decisions. |
+| Primitive            | Its job in our case                                       |
+| -------------------- | --------------------------------------------------------- |
+| **Workflow / graph** | Describe the allowed journey from complaint to outcome.   |
+| **Node / executor**  | Perform one task: interpret, check, submit, or verify.    |
+| **Edge / route**     | Choose the next permitted step from the evidence.         |
+| **State**            | Carry the case's evidence, status, and decisions.         |
 | **Fan-out / fan-in** | Run independent checks together, then join their results. |
-| **Checkpoint** | Save the execution state needed for continuation. |
-| **Pause / resume** | Stop for external input and continue later. |
-| **Failure handling** | Bound attempts and define failure or review routes. |
+| **Checkpoint**       | Save the execution state needed for continuation.         |
+| **Pause / resume**   | Stop for external input and continue later.               |
+| **Failure handling** | Bound attempts and define failure or review routes.       |
 
 State carries the case's progress and evidence. **Context** is the selected
 information the model sees for a particular call—for example, complaint text or
@@ -78,12 +78,14 @@ Framework (MAF) and LangGraph:
 
 ![Double-charge workflow: model interpretation, deterministic duplicate detection, parallel billing and policy checks, then an approval pause. This application records the decision and resumes through separate commands. An approved refund uses a stable idempotency identity and is verified before notification. Policy ineligibility closes without a refund; unresolved payment outcomes require manual review rather than a failed-payment assumption.](assets/02-agent-frameworks-flow.png)
 
-*One case, several possible outcomes. Payments and notifications are simulated in
-this teaching repository; the authority and verification boundaries are deliberate.*
+_One case, several possible outcomes._
 
 ## Follow the case: from complaint to verified outcome
 
 ### 1. Investigate and bring the evidence together
+
+> Open case → interpret complaint → check charges → run billing and policy checks
+> → join results
 
 An explicit start command opens the case. A model interprets the complaint;
 code investigates the billing records.
@@ -128,6 +130,9 @@ requesting approval.**
 
 ### 2. Eligibility is not permission
 
+> Request approval → save progress and pause → record reviewer decision
+> → explicitly resume → proceed or close denied
+
 The checks pass. The refund is eligible—but nobody has authorized it yet.
 
 The workflow pauses for a reviewer. Neither the customer's request nor the
@@ -142,30 +147,34 @@ The application can end the request and resume the workflow later. In our design
 one command records the decision; a separate command resumes the workflow.
 Approval allows the refund path to continue. Denial closes it without a refund.
 
-LangGraph restarts the interrupted node on resume, so code before the pause
-must be safe to repeat.
+Recovery can repeat work, so actions with side effects need safeguards against
+duplication.
 
 PostgreSQL records the business evidence and decisions; framework checkpoints
 save execution progress. **A checkpoint is not proof that money moved.**
 
 ### 3. Refund once. Verify before closing.
 
+> Submit refund → confirmation unavailable? Check existing result
+> → retry if needed, within limits → verify or seek review
+
 After approval and resume, the workflow submits the refund with a stable
 **idempotency key**—an identifier reused for the same refund request across attempts.
 
-But what if the response is lost? The application checks for an existing refund
-and retries only within its defined limits, using the same key. If the outcome
-remains uncertain, the case goes to **manual review** for reconciliation.
-A missing response does not prove the payment failed.
+In a real payment integration, the provider might process the refund but a network
+timeout prevents its confirmation from reaching the application. **The communication
+failed; the refund may still have succeeded.** Our simulator represents that uncertainty.
 
-Next, the workflow verifies that the evidence shows one matching refund.
-A mismatch goes to manual review, not a success message.
+The application checks its refund ledger and reuses an existing result if one
+is found. Otherwise, it retries within a defined limit, using the same
+idempotency key.
 
-Only after verification does the model draft the customer update and the
-application record the outcome.
+**One matching refund verified → notify and close. Unresolved uncertainty or
+mismatched evidence → manual review.** The model drafts the customer update only
+after verification; manual-review cases still need reconciliation.
 
-Payments and notifications are simulated here. A real payment system must enforce
-the idempotency contract and supply authoritative refund evidence.
+Payments and notifications are simulated. A real provider must enforce the
+idempotency contract and supply authoritative refund evidence.
 
 **Framework retries are not an exactly-once guarantee. The application still
 needs idempotency and verification.**
@@ -175,16 +184,17 @@ needs idempotency and verification.**
 Our case used several orchestration patterns—without needing a team of
 autonomous agents.
 
-| Pattern | Where we used it |
-|---|---|
-| **Sequential** | Submit, verify, then notify. |
-| **Parallel** | Check billing and policy independently. |
-| **Fan-out/fan-in** | Start both checks and join their results. |
-| **Conditional routing** | Continue, close without refund, fail, or seek review. |
-| **Human-in-the-loop** | Pause for approval and resume from the recorded decision. |
+| Pattern                 | Where we used it                                          |
+| ----------------------- | --------------------------------------------------------- |
+| **Sequential**          | Submit, verify, then notify.                              |
+| **Parallel**            | Check billing and policy independently.                   |
+| **Fan-out/fan-in**      | Start both checks and join their results.                 |
+| **Conditional routing** | Continue, close without refund, fail, or seek review.     |
+| **Human-in-the-loop**   | Pause for approval and resume from the recorded decision. |
 
-Other workloads may add specialist handoffs, supervisor-led delegation, or
-bounded review loops—but multiple steps do not automatically require multiple agents.
+For work that benefits from agent teams, MAF provides
+[Sequential, Concurrent, Handoff, Group Chat, and Magentic orchestration](https://learn.microsoft.com/en-us/agent-framework/workflows/orchestrations/).
+Magentic uses a manager agent to coordinate specialists.
 
 ## Agent SDKs and orchestration: choosing the fit
 
@@ -201,9 +211,9 @@ Pick contracts your team can understand when the happy path ends.
 
 ## The usual suspects around the workflow
 
-The workflow needs a runtime and durable storage, alongside the same cross-cutting
-concerns introduced in Part 1. Framework and runtime are responsibilities, not
-necessarily separate products.
+The framework's execution engine runs the graph. Runtime infrastructure supplies
+the hosting, worker processes, and durable storage around it. The application also
+needs the same cross-cutting concerns introduced in Part 1:
 
 - **Experience:** where people review progress and issue approval commands.
 - **Standards:** MCP for tools and data, A2A for agents, and AG-UI for user interfaces.
@@ -223,8 +233,7 @@ and verification—with explicit outcomes when the refund could not proceed.
 
 ## Explore the code
 
-The [public repository](https://github.com/ppenumatsa1/model-to-harness) contains
-both independent implementations. Start with the
+Start with the
 [MAF walkthrough](https://github.com/ppenumatsa1/model-to-harness/blob/8a2ac71dc8afb4b82e2e49bd37d35cf9d3647225/agent-framework/double-charge/maf/README.md)
 or the
 [LangGraph walkthrough](https://github.com/ppenumatsa1/model-to-harness/blob/8a2ac71dc8afb4b82e2e49bd37d35cf9d3647225/agent-framework/double-charge/langgraph/README.md),
