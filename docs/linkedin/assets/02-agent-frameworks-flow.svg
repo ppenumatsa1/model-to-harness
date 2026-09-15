@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2120" viewBox="0 0 1200 2120" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2094" viewBox="0 0 1200 2094" role="img" aria-labelledby="title description">
   <title id="title">From complaint to verified refund</title>
   <desc id="description">A double-charge workflow separates model judgment, deterministic code, and human approval. Check the charges, run billing and policy validations in parallel, and join their evidence. Policy ineligibility closes without a refund; missing or invalid evidence fails explicitly. Pause and checkpoint, record the reviewer's decision, then explicitly resume through a separate command in this application. An approved refund uses a stable idempotency identity and is verified before notification. Unresolved payment outcomes and verification mismatches require manual review. Payments and notifications are simulated.</desc>
   <defs>
@@ -22,7 +22,7 @@
     </style>
   </defs>
 
-  <rect width="1200" height="2120" fill="#ffffff"/>
+  <rect width="1200" height="2094" fill="#ffffff"/>
   <rect x="64" y="34" width="72" height="7" rx="3" fill="#0866c6"/>
   <text x="64" y="100" class="heading">From complaint to verified refund</text>
   <text x="64" y="143" class="subtitle">One case. Two frameworks. Explicit boundaries.</text>

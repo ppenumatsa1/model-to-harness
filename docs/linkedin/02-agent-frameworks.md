@@ -4,6 +4,10 @@ _Part 2—a continuation of [From Models to Harnesses: How AI Agents Learn to Fi
 
 ## Beyond smarter models: systems that finish the job
 
+Consider a customer-support case: a customer reports two charges for the same
+purchase. The task is to investigate, determine whether a refund is justified,
+obtain approval, and verify the result.
+
 "I was charged twice."
 
 A language model can apologize, explain possible causes, and draft a reassuring
@@ -69,7 +73,7 @@ A node need not be an agent: ordinary code, a tool call, or a model-backed
 operation can fill that role. The framework coordinates them; business rules
 decide what is allowed.
 
-## Give the case a route, not just a prompt
+## From complaint to resolution: the workflow
 
 Here is the business flow implemented independently with Microsoft Agent
 Framework (MAF) and LangGraph:
