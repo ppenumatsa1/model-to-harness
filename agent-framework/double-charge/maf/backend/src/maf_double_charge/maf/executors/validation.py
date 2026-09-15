@@ -89,7 +89,7 @@ def validation_executors(
                 branch="policy_validation",
                 ok=False,
                 summary="Duplicate evidence is unavailable.",
-                failure_code="policy_ineligible",
+                failure_code="billing_validation_failed",
             )
         else:
             data = await asyncio.to_thread(
@@ -106,7 +106,9 @@ def validation_executors(
             )
         await audit.emit(
             state,
-            "tool.call.succeeded" if result.ok else "tool.call.failed",
+            "tool.call.succeeded"
+            if result.ok or result.evidence.get("decision") == "ineligible"
+            else "tool.call.failed",
             result.summary,
             node="policy_validation",
             payload={"tool": "shared.policy.assess", "ok": result.ok},
@@ -133,8 +135,18 @@ def validation_executors(
         billing = by_branch["billing_validation"]
         policy = by_branch["policy_validation"]
         valid = billing.ok and policy.ok
+        ineligible = (
+            billing.ok and not policy.ok and policy.evidence.get("decision") == "ineligible"
+        )
+        target = (
+            "approval_checkpoint"
+            if valid
+            else "close_policy_ineligible"
+            if ineligible
+            else "route_failure"
+        )
         joined = state.advance(
-            "approval_checkpoint" if valid else "route_failure",
+            target,
             billing_validation=billing,
             policy_validation=policy,
             failure_code=billing.failure_code or policy.failure_code,
@@ -142,6 +154,8 @@ def validation_executors(
         join_summary = (
             "Parallel validations joined; both passed."
             if valid
+            else "Policy assessment completed; refund is ineligible."
+            if ineligible
             else "Validation join found a failure."
         )
         await audit.emit(
@@ -151,7 +165,6 @@ def validation_executors(
             node="join_validations",
             payload={"billing_ok": billing.ok, "policy_ok": policy.ok},
         )
-        target = "approval_checkpoint" if valid else "route_failure"
         await audit.edge(
             joined, "join_validations", target, f"Validation route selected: {target}."
         )

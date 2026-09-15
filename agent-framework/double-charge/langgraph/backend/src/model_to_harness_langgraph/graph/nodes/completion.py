@@ -103,6 +103,14 @@ class CompletionNodes(NodeContext):
             refund_status="denied",
         )
 
+    async def close_policy_ineligible(self, state: DoubleChargeState) -> dict[str, Any]:
+        return await self._terminal(
+            state,
+            terminal_status="completed",
+            summary="Case closed without refund because policy eligibility was not met.",
+            refund_status="not_required",
+        )
+
     async def close_success(self, state: DoubleChargeState) -> dict[str, Any]:
         if state.get("notification_status") != "sent":
             return await self._terminal(
@@ -143,5 +151,9 @@ class CompletionNodes(NodeContext):
         return await self._terminal(
             state,
             terminal_status="manual_review",
-            summary="Refund verification mismatch requires manual review.",
+            summary=(
+                "Refund outcome is uncertain after bounded attempts; reconciliation is required."
+                if state.get("failure_code") == "REFUND_OUTCOME_UNCERTAIN"
+                else "Refund verification mismatch requires manual review."
+            ),
         )

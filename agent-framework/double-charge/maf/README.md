@@ -26,6 +26,14 @@ append-only audit events.
 The UI and API expose concise business evidence, never chain-of-thought, raw
 prompts, credentials, unrestricted tool payloads, or raw checkpoint contents.
 
+Policy ineligibility with valid billing evidence closes as `completed_no_refund`;
+it is not a technical failure. Missing or invalid required evidence still fails.
+Refund attempts exhausted with an uncertain outcome route to `manual_review`
+with `refund_outcome_uncertain`, without a success notification. The executor's
+retry limit applies per invocation; replay can repeat work, so the durable
+ledger and stable idempotency identity remain essential. No automated live-provider
+reconciliation is implemented.
+
 ## Local setup
 
 From this `maf/` folder:

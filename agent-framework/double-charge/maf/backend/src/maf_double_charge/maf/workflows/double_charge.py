@@ -21,6 +21,9 @@ def build_workflow(dependencies: WorkflowDependencies, run_id: str) -> Workflow:
     notify_customer = notification_executor(dependencies, audit)
     close_case = terminal_executor(audit, "close_case", "completed_refunded")
     close_no_duplicate = terminal_executor(audit, "close_no_duplicate", "completed_no_refund")
+    close_policy_ineligible = terminal_executor(
+        audit, "close_policy_ineligible", "completed_no_refund"
+    )
     close_denied = terminal_executor(audit, "close_denied", "closed_denied")
     route_failure = terminal_executor(
         audit,
@@ -45,6 +48,7 @@ def build_workflow(dependencies: WorkflowDependencies, run_id: str) -> Workflow:
             output_from=[
                 close_case,
                 close_no_duplicate,
+                close_policy_ineligible,
                 close_denied,
                 route_failure,
                 manual_review,
@@ -79,6 +83,10 @@ def build_workflow(dependencies: WorkflowDependencies, run_id: str) -> Workflow:
                     ),
                     approval,
                 ),
+                Case(
+                    lambda state: state.current_step == "close_policy_ineligible",
+                    close_policy_ineligible,
+                ),
                 Default(route_failure),
             ],
         )
@@ -96,6 +104,7 @@ def build_workflow(dependencies: WorkflowDependencies, run_id: str) -> Workflow:
             submit_refund,
             [
                 Case(lambda state: state.failure_code is None, verify_refund),
+                Case(lambda state: state.refund_status == "manual_review", manual_review),
                 Default(route_failure),
             ],
         )

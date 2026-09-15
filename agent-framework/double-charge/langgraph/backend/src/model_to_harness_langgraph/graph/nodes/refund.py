@@ -60,8 +60,9 @@ class RefundNodes(NodeContext):
         if (result.ok or result.uncertain) and not refund_id:
             result = ToolResult(
                 ok=False,
-                code="REFUND_SUBMISSION_FAILED",
-                safe_summary="Refund response did not include a durable refund identifier",
+                uncertain=True,
+                code="REFUND_OUTCOME_UNCERTAIN",
+                safe_summary="Refund response lacked an identifier; payment outcome is unknown",
             )
         if (result.ok or result.uncertain) and refund_id:
             try:
@@ -98,15 +99,21 @@ class RefundNodes(NodeContext):
                 "uncertain" if result.uncertain else "submitted" if result.ok else "failed"
             ),
             "refund_id": refund_id,
-            "failure_code": result.code if not result.ok and not result.uncertain else None,
+            "failure_code": (
+                "REFUND_OUTCOME_UNCERTAIN"
+                if result.uncertain
+                else result.code if not result.ok else None
+            ),
             "current_step": node,
         }
 
-    def route_refund(self, state: DoubleChargeState) -> Literal["retry", "submitted", "failed"]:
+    def route_refund(
+        self, state: DoubleChargeState
+    ) -> Literal["retry", "submitted", "manual_review", "failed"]:
         if state.get("refund_status") == "submitted":
             return "submitted"
-        if state.get("refund_status") == "uncertain" and state.get("refund_attempts", 0) < 2:
-            return "retry"
+        if state.get("refund_status") == "uncertain":
+            return "retry" if state.get("refund_attempts", 0) < 2 else "manual_review"
         return "failed"
 
     async def verify_refund(self, state: DoubleChargeState) -> dict[str, Any]:

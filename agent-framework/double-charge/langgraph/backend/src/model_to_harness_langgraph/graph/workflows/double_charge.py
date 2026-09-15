@@ -40,6 +40,10 @@ def build_graph(self: "DoubleChargeWorkflow") -> StateGraph:
     builder.add_node(
         "close_no_duplicate", instrument_node("close_no_duplicate", self.close_no_duplicate)
     )
+    builder.add_node(
+        "close_policy_ineligible",
+        instrument_node("close_policy_ineligible", self.close_policy_ineligible),
+    )
     builder.add_node("close_denied", instrument_node("close_denied", self.close_denied))
     builder.add_node("close_success", instrument_node("close_success", self.close_success))
     builder.add_node("fail_load", instrument_node("fail_load", self.fail_load))
@@ -74,7 +78,11 @@ def build_graph(self: "DoubleChargeWorkflow") -> StateGraph:
     builder.add_conditional_edges(
         "join_validations",
         self.route_validation,
-        {"eligible": "request_approval", "failed": "fail_validation"},
+        {
+            "eligible": "request_approval",
+            "ineligible": "close_policy_ineligible",
+            "failed": "fail_validation",
+        },
     )
     builder.add_conditional_edges(
         "request_approval",
@@ -87,6 +95,7 @@ def build_graph(self: "DoubleChargeWorkflow") -> StateGraph:
         {
             "retry": "submit_refund",
             "submitted": "verify_refund",
+            "manual_review": "manual_review",
             "failed": "fail_refund",
         },
     )
@@ -102,6 +111,7 @@ def build_graph(self: "DoubleChargeWorkflow") -> StateGraph:
     builder.add_edge("notify_customer", "close_success")
     for terminal in (
         "close_no_duplicate",
+        "close_policy_ineligible",
         "close_denied",
         "close_success",
         "fail_load",

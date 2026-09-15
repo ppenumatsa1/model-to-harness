@@ -75,16 +75,21 @@ def refund_executors(dependencies: WorkflowDependencies, audit: Audit) -> tuple[
                         retry_attempt=attempt,
                         payload={"tool": "shared.billing.submit_refund", "uncertain": True},
                     )
-        failed = state.advance(
-            "route_failure",
-            status=RunStatus.FAILED,
-            terminal_status="failed",
-            refund_status="failed",
-            failure_code="refund_submission_failed",
+        unresolved = state.advance(
+            "manual_review",
+            status=RunStatus.MANUAL_REVIEW,
+            terminal_status="manual_review",
+            refund_status="manual_review",
+            failure_code="refund_outcome_uncertain",
         )
-        await audit.edge(failed, "submit_refund", "route_failure", "Refund retries were exhausted.")
-        await audit.save(failed)
-        await ctx.send_message(failed)
+        await audit.edge(
+            unresolved,
+            "submit_refund",
+            "manual_review",
+            "Refund attempts exhausted with an uncertain outcome; reconciliation is required.",
+        )
+        await audit.save(unresolved)
+        await ctx.send_message(unresolved)
 
     @executor(id="verify_refund")
     async def verify_refund(state: WorkflowState, ctx: WorkflowContext[WorkflowState]) -> None:

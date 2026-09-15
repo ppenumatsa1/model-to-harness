@@ -2,6 +2,21 @@
 
 This is a concise implementation ledger, not a release history.
 
+## Article-driven outcome corrections - 2026-09-15
+
+- Both lanes now close a policy-ineligible case without refund when billing
+  evidence is valid; missing or invalid evidence does not become a policy rejection.
+- Exhausted uncertain refund attempts route to manual review with
+  `refund_outcome_uncertain`, not a failed-payment assumption. LangGraph also
+  preserves uncertainty when a response lacks a refund identifier.
+- Native routes, MAF's graph projection, normalized outcomes, and focused
+  regressions were updated independently. Existing parallel join mechanics remain;
+  the article now explains LangGraph's concurrent-state reducers.
+- Article and diagram distinguish per-invocation/recoverable retry state from a
+  lifetime retry guarantee, and checkpoint state from request lifecycle and authority.
+- These source changes are not deployed. The release evidence below describes
+  earlier versions, not these corrections. Live-provider reconciliation is not implemented.
+
 ## LangGraph direct cutover - completed
 
 ### Final verified checkpoint - 2026-09-10

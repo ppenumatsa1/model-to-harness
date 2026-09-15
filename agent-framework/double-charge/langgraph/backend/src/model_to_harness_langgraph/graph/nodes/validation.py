@@ -1,3 +1,4 @@
+from dataclasses import replace
 from typing import Any, Literal
 
 from ...infrastructure.telemetry import execute_tool
@@ -59,7 +60,16 @@ class ValidationNodes(NodeContext):
             state["duplicate_evidence"],
             state["scenario_id"],
         )
-        await self._tool_end(state, node, "policy.validate_refund", result)
+        ineligible = (
+            result.code == "POLICY_INELIGIBLE"
+            and result.value.get("decision") == "ineligible"
+        )
+        await self._tool_end(
+            state,
+            node,
+            "policy.validate_refund",
+            replace(result, ok=True) if ineligible else result,
+        )
         await self._event(
             state,
             "parallel_branch_completed",
@@ -72,6 +82,7 @@ class ValidationNodes(NodeContext):
                 "policy": {
                     "ok": result.ok,
                     "code": result.code,
+                    "decision": result.value.get("decision"),
                     "summary": result.safe_summary,
                 }
             },
@@ -80,15 +91,19 @@ class ValidationNodes(NodeContext):
 
     async def join_validations(self, state: DoubleChargeState) -> dict[str, Any]:
         results = state.get("validation_results", {})
-        eligible = bool(
-            results.get("billing", {}).get("ok") and results.get("policy", {}).get("ok")
+        route = self.route_validation(state)
+        eligible = route == "eligible"
+        summary = (
+            "Billing and policy checks both passed."
+            if eligible
+            else "Policy assessment completed; refund is ineligible."
+            if route == "ineligible"
+            else "At least one required validation failed."
         )
         await self._event(
             state,
             "parallel_branch_joined",
-            "Parallel validations joined; refund evidence is sufficient"
-            if eligible
-            else "Parallel validations joined; evidence is insufficient",
+            summary,
             node="join_validations",
             data={"eligible": eligible},
         )
@@ -105,17 +120,18 @@ class ValidationNodes(NodeContext):
         return {
             "current_step": "join_validations",
             "failure_code": failure_code,
-            "safe_summaries": [
-                "Billing and policy checks both passed."
-                if eligible
-                else "At least one required validation failed."
-            ],
+            "safe_summaries": [summary],
         }
 
-    def route_validation(self, state: DoubleChargeState) -> Literal["eligible", "failed"]:
+    def route_validation(
+        self, state: DoubleChargeState
+    ) -> Literal["eligible", "ineligible", "failed"]:
         results = state.get("validation_results", {})
-        return (
-            "eligible"
-            if results.get("billing", {}).get("ok") and results.get("policy", {}).get("ok")
-            else "failed"
-        )
+        if not results.get("billing", {}).get("ok"):
+            return "failed"
+        policy = results.get("policy", {})
+        if policy.get("ok"):
+            return "eligible"
+        if policy.get("code") == "POLICY_INELIGIBLE" and policy.get("decision") == "ineligible":
+            return "ineligible"
+        return "failed"

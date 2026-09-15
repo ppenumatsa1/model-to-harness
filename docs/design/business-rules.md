@@ -72,6 +72,13 @@ Retries are at-least-once attempts, not an exactly-once claim. Success is declar
 only after verification finds exactly one refund matching the idempotency key and
 business data. Zero or multiple matches route to manual review.
 
+Exhausting refund attempts with an uncertain response does not prove payment failure.
+The workflow ends in `manual_review` with `refund_outcome_uncertain`, sends no
+success notification, and leaves reconciliation outstanding. A missing refund ID
+in an acknowledged or uncertain response is also uncertainty, not evidence that
+no money moved. This differs from exhausted billing reads, which fail the
+investigation before submission.
+
 ## Notification and terminal states
 
 Notification occurs only after a verified refund. No-duplicate, policy-ineligible,

@@ -93,7 +93,7 @@ flowchart TB
     verify --> notify["Customer notification<br/>Simulated in this demo"]
 ```
 
-This diagram shows the approved-refund path, not every branch. No duplicate closes without a refund; denial stops the refund path; exhausted retries fail explicitly; a verification mismatch requires review.
+This diagram shows the approved-refund path, not every branch. No duplicate or policy ineligibility closes without a refund; denial stops the refund path. Exhausted billing reads fail explicitly, while unresolved refund responses and verification mismatches require manual review.
 
 ### Step 1: turn the complaint into a case
 
@@ -133,7 +133,7 @@ Here `builder` is a `StateGraph(DoubleChargeState)` with nodes already registere
 
 ### Step 4: join the results before making a decision
 
-The workflow must not request approval after seeing only one successful check. **Fan-in** brings the results together; application rules require both billing and policy to pass.
+The workflow must not request approval after seeing only one successful check. **Fan-in** brings the results together; application rules require both billing and policy to pass. With valid billing evidence, a known policy-ineligible decision closes as `completed_no_refund`; missing or invalid required evidence is not a policy rejection.
 
 The [MAF validation executors](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/executors/validation.py) pass typed branch results to the join. The [LangGraph validation nodes](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/graph/nodes/validation.py) store the results in workflow state and check them at the join. Missing or failed required evidence does not lead to a refund.
 
@@ -141,13 +141,13 @@ The [MAF validation executors](../../agent-framework/double-charge/maf/backend/s
 
 Eligibility is not permission to move money. We need a reviewer, so the workflow reaches a **human-in-the-loop pause**.
 
-The [MAF approval executor](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/executors/approval.py) uses `ctx.request_info(...)` to request a typed response. The [LangGraph approval node](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/graph/nodes/approval.py) uses `interrupt(...)`.
+This implementation's [MAF approval executor](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/executors/approval.py) uses `ctx.request_info(...)` to request a typed response. The [LangGraph approval node](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/graph/nodes/approval.py) uses `interrupt(...)`. Typed input does not itself authenticate or authorize the reviewer.
 
-In both cases, an explicit application command records the reviewer's decision. Chat text is not approval, and recording approval does not itself resume execution.
+In both cases, our application design uses an explicit command to record the reviewer's decision. Chat text is not approval, and recording approval does not itself resume execution. Separate commands are not a universal framework requirement.
 
 ### Step 6: resume from saved progress
 
-The reviewer may return later. A **checkpoint** saves the execution progress needed to continue without holding a web request open.
+The reviewer may return later. A **checkpoint** saves resumable execution state; the application and hosting model allow the request to end and later execution to resume. LangGraph restarts the interrupted node, so code before `interrupt()` runs again.
 
 A separate resume command loads the recorded decision. The [MAF runner](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/runner.py) supplies it through `responses` while resuming the checkpoint. The [LangGraph runner](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/graph/runner.py) uses `Command(resume=decision)` on the original workflow thread.
 
@@ -160,6 +160,8 @@ The approved case can now request a refund. But what if the refund is stored and
 Both lanes use a **stable idempotency identity** and a durable refund ledger to recover the same result. The [MAF refund executor](../../agent-framework/double-charge/maf/backend/src/maf_double_charge/maf/executors/refund.py) uses a bounded retry loop; the [LangGraph refund node](../../agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/graph/nodes/refund.py) uses an explicit retry route.
 
 The framework coordinates attempts. The application defines when retrying is safe, and a real payment provider must enforce the idempotency contract. **Retries alone do not prevent duplicate refunds.**
+
+MAF's refund limit bounds one executor invocation; LangGraph persists attempts in graph state. Neither is a blanket lifetime-attempt guarantee across arbitrary crashes. If uncertainty remains after the allowed attempts, both lanes route to `manual_review` with `refund_outcome_uncertain` rather than claiming payment failure. Live-provider reconciliation remains outside this simulator-backed demo.
 
 ### Step 8: verify before claiming success
 
@@ -231,7 +233,7 @@ In this repository, durable events are the source for UI projections. AG-UI does
 
 ### The runtime underneath
 
-The runtime is the execution substrate beneath the framework: local, self-hosted, or managed. Depending on its implementation and configuration, it supplies workers, persistence infrastructure, isolation, scheduling, recovery, and scaling. The framework still has its own execution/checkpoint semantics; the application still owns approval, retry policy, idempotency, and completion rules.
+The runtime is the execution substrate beneath the framework: local, self-hosted, or managed. Depending on its implementation and configuration, it supplies workers, persistence infrastructure, isolation, scheduling, recovery, and scaling. The framework still has its own execution/checkpoint semantics; the application still owns approval, retry policy, idempotency, and completion rules. Framework and runtime describe responsibilities that may be supplied by the same product.
 
 The [repository architecture](../design/architecture.md) documents the independent lanes and operating choices. Those details are implementation references, not a claim of current live health, real payment processing, or production readiness. **Runtime recovery does not imply business correctness.** The runtime chapter explores these operating responsibilities in depth.
 
@@ -461,16 +463,17 @@ flowchart TB
     detect -->|confirmed| policy["Evaluate policy"]
     billing --> join["Join results and apply rules"]
     policy --> join
-    join -->|not eligible / invalid| failed
+    join -->|policy ineligible, valid billing| noRefund
+    join -->|invalid or missing required evidence| failed
     join -->|eligible| pause["Checkpoint and pause"]
     pause --> command["Approval command<br/>Record reviewer decision"]
     command --> resume["Separate resume command<br/>Load recorded decision"]
     resume -->|deny| denied["Close denied"]
     resume -->|approve| refund["Submit idempotent refund"]
     refund -->|uncertain, retry budget remains| refund
-    refund -->|retries exhausted| failed
+    refund -->|uncertainty remains after retries| review["Manual review"]
     refund -->|submitted or recovered| verify{"One matching refund verified?"}
-    verify -->|mismatch| review["Manual review"]
+    verify -->|mismatch| review
     verify -->|operational failure| failed
     verify -->|yes| notify["Draft notification<br/>Model-backed"]
     notify --> closed["Simulate notification<br/>Record outcome"]

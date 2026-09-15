@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from maf_double_charge.application.commands import ApprovalCommand, ScenarioInput
+from maf_double_charge.application.errors import UncertainRefundResponseError
 from maf_double_charge.application.models import ApprovalDecision, RunStatus
 from maf_double_charge.application.refunds import DurableRefundService
 from maf_double_charge.application.service import DoubleChargeService
@@ -281,6 +282,7 @@ def test_native_graph_preserves_executor_ids_and_framework_fan_in(
         "notify_customer",
         "close_case",
         "close_no_duplicate",
+        "close_policy_ineligible",
         "close_denied",
         "route_failure",
         "manual_review",
@@ -308,9 +310,84 @@ async def test_single_allowed_refund_attempt_never_notifies_on_uncertain_respons
         started = await runtime.service.start(command("retry-safe-refund"))
         assert started.checkpoint_id
         completed = await approve_and_resume(runtime.service, started.run_id, started.checkpoint_id)
-        assert completed.status == RunStatus.FAILED
-        assert completed.failure_code == "refund_submission_failed"
+        assert completed.status == RunStatus.MANUAL_REVIEW
+        assert completed.failure_code == "refund_outcome_uncertain"
+        assert completed.refund_status == "manual_review"
         assert completed.notification_status == "not_sent"
         assert await repository.count_refunds(completed.idempotency_key) == 1
+    finally:
+        await runtime.close()
+
+
+@pytest.mark.parametrize("billing_valid", [True, False])
+async def test_policy_ineligibility_closes_without_refund_only_with_valid_billing(
+    service: DoubleChargeService,
+    repository: InMemoryRepository,
+    monkeypatch: pytest.MonkeyPatch,
+    billing_valid: bool,
+) -> None:
+    def policy_ineligible(self, evidence_data, account_summary):
+        return {
+            "decision": "ineligible",
+            "reason": "Refund is outside the policy window.",
+            "policy_code": "outside_window",
+        }
+
+    monkeypatch.setattr(SimulatedActions, "validate_policy", policy_ineligible)
+    if not billing_valid:
+        monkeypatch.setattr(
+            SimulatedActions,
+            "validate_billing",
+            lambda *args: {"valid": False, "reason": "Invalid evidence.", "checked_charge_ids": []},
+        )
+    started = await service.start(command("duplicate-confirmed"))
+    outcome = await service.get_outcome(started.run_id)
+    assert outcome is not None
+    assert outcome.terminal_status == ("completed_no_refund" if billing_valid else "failed")
+    assert outcome.policy_decision == "ineligible"
+    assert outcome.refund_status == "not_requested"
+    assert outcome.notification_status == "not_sent"
+    assert not started.approval_required
+    assert await repository.get_approval(started.run_id) is None
+    events = await repository.list_events(started.run_id)
+    assert not any(
+        event.event_type == "tool.call.failed" and event.node == "policy_validation"
+        for event in events
+    )
+    assert not any(event.node == "submit_refund" for event in events)
+
+
+@pytest.mark.parametrize("attempts", [1, 3])
+async def test_unresolved_refund_without_ledger_requires_manual_review(
+    repository: InMemoryRepository,
+    settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    attempts: int,
+) -> None:
+    calls: list[str] = []
+
+    def uncertain(self, idempotency_key):
+        calls.append(idempotency_key)
+        raise UncertainRefundResponseError("Payment outcome cannot be determined.")
+
+    monkeypatch.setattr(SimulatedActions, "submit_refund", uncertain)
+    runtime = create_runtime(
+        settings.model_copy(update={"max_tool_attempts": attempts}),
+        repository=repository,
+        model=FakeModelClient(),
+        checkpoint_storage_factory=InMemoryRunCheckpointStorage,
+    )
+    await runtime.start()
+    try:
+        started = await runtime.service.start(command("duplicate-confirmed"))
+        assert started.checkpoint_id
+        completed = await approve_and_resume(runtime.service, started.run_id, started.checkpoint_id)
+        assert completed.status == RunStatus.MANUAL_REVIEW
+        assert completed.failure_code == "refund_outcome_uncertain"
+        assert completed.notification_status == "not_sent"
+        assert calls == [completed.idempotency_key] * attempts
+        assert await repository.count_refunds(completed.idempotency_key) == 0
+        outcome = await runtime.service.get_outcome(started.run_id)
+        assert outcome and outcome.refund_status == "manual_review"
     finally:
         await runtime.close()

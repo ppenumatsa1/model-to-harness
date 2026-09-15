@@ -59,7 +59,11 @@ def _policy(state: dict[str, Any]) -> PolicyDecision:
     result = state.get("validation_results", {}).get("policy")
     if not result:
         return PolicyDecision.NOT_EVALUATED
-    return PolicyDecision.ELIGIBLE if result.get("ok") else PolicyDecision.INELIGIBLE
+    if result.get("ok"):
+        return PolicyDecision.ELIGIBLE
+    if result.get("code") == "POLICY_INELIGIBLE" and result.get("decision") == "ineligible":
+        return PolicyDecision.INELIGIBLE
+    return PolicyDecision.MANUAL_REVIEW
 
 
 def _approval(value: Any) -> ApprovalDecision:
@@ -105,7 +109,11 @@ def _terminal(
         return TerminalStatus.COMPLETED_REFUNDED
     if approval == ApprovalDecision.DENIED:
         return TerminalStatus.CLOSED_DENIED
-    if duplicate == DuplicateDecision.NOT_FOUND:
+    if duplicate == DuplicateDecision.NOT_FOUND or (
+        state.get("terminal_status") == "completed"
+        and _policy(state) == PolicyDecision.INELIGIBLE
+        and refund == RefundStatus.NOT_REQUESTED
+    ):
         return TerminalStatus.COMPLETED_NO_REFUND
     return TerminalStatus.FAILED
 
@@ -118,6 +126,7 @@ def _failure(value: Any) -> FailureCode:
         "POLICY_INELIGIBLE": FailureCode.POLICY_INELIGIBLE,
         "REFUND_IDEMPOTENCY_CONFLICT": FailureCode.REFUND_IDEMPOTENCY_CONFLICT,
         "REFUND_SUBMISSION_FAILED": FailureCode.REFUND_SUBMISSION_FAILED,
+        "REFUND_OUTCOME_UNCERTAIN": FailureCode.REFUND_OUTCOME_UNCERTAIN,
         "VERIFY_MISMATCH": FailureCode.REFUND_VERIFICATION_MISMATCH,
     }
     return mapping.get(value, FailureCode.REFUND_SUBMISSION_FAILED)

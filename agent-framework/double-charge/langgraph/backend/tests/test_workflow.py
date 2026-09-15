@@ -1,7 +1,11 @@
+from unittest.mock import AsyncMock
+
+import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from model_to_harness_langgraph.application.records import ApprovalRequest, StartCaseRequest
 from model_to_harness_langgraph.application.service import WorkflowService
 from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
+from model_to_harness_langgraph.infrastructure.domain_gateway import ToolResult
 from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
 from model_to_harness_langgraph.testing.fakes import (
     FakeDomainGateway,
@@ -146,3 +150,110 @@ async def test_denial_resumes_to_closed_without_refund():
     case = await service.get_case(started.case_id)
     assert case.outcome and case.outcome.refund_status == "not_requested"
     assert gateway.refunds == {}
+
+
+@pytest.mark.parametrize(
+    ("billing_ok", "decision", "terminal"),
+    [
+        (True, "ineligible", "completed_no_refund"),
+        (False, "ineligible", "failed"),
+        (True, None, "failed"),
+    ],
+)
+async def test_policy_no_refund_requires_a_known_decision_and_valid_billing(
+    monkeypatch, billing_ok, decision, terminal
+):
+    gateway = FakeDomainGateway()
+    monkeypatch.setattr(
+        gateway,
+        "validate_billing",
+        AsyncMock(
+            return_value=ToolResult(
+                ok=billing_ok, code=None if billing_ok else "BILLING_VALIDATION_FAILED"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        gateway,
+        "validate_policy",
+        AsyncMock(
+            return_value=ToolResult(
+                ok=False,
+                code="POLICY_INELIGIBLE",
+                value={"decision": decision},
+                safe_summary="Policy assessment completed.",
+            )
+        ),
+    )
+    service, audit, _ = make_service(gateway)
+    started = await service.start(
+        StartCaseRequest(
+            complaint="I was charged twice.",
+            customer_id="customer-1",
+        )
+    )
+    case = await service.get_case(started.case_id)
+    assert case.outcome and case.outcome.terminal_status == terminal
+    assert case.outcome.policy_decision == ("ineligible" if decision else "manual_review")
+    assert case.outcome.refund_status == "not_requested"
+    assert case.outcome.notification_status == "not_sent"
+    assert not started.approval_required
+    assert await audit.get_pending_approval(started.run_id) is None
+    assert gateway.refunds == {}
+    if decision == "ineligible":
+        events = await audit.list_events(started.run_id)
+        assert not any(
+            event.node == "policy_validation" and event.event_type == "tool_call_failed"
+            for event in events
+        )
+
+
+@pytest.mark.parametrize("acknowledged", [True, False])
+@pytest.mark.parametrize("recovers", [True, False])
+async def test_missing_refund_identifier_stays_uncertain_until_resolved(
+    monkeypatch, acknowledged, recovers
+):
+    gateway = FakeDomainGateway()
+    submit = gateway.submit_refund
+    calls = []
+
+    async def uncertain(run_id, customer_id, evidence, key, scenario_id):
+        calls.append(key)
+        result = await submit(run_id, customer_id, evidence, key, scenario_id)
+        if recovers and len(calls) == 2:
+            return result
+        return ToolResult(
+            ok=acknowledged,
+            uncertain=not acknowledged,
+            safe_summary="Response omitted the refund identifier.",
+        )
+
+    monkeypatch.setattr(gateway, "submit_refund", uncertain)
+    service, _, _ = make_service(gateway)
+    started = await service.start(
+        StartCaseRequest(
+            complaint="I was charged twice.",
+            customer_id="customer-1",
+        )
+    )
+    await service.submit_approval(
+        started.case_id,
+        ApprovalRequest(
+            checkpoint_id=started.checkpoint_id,
+            decision="approve",
+            reviewer_id="reviewer-1",
+        ),
+    )
+    resumed = await service.resume(started.case_id)
+    assert resumed.status == ("completed" if recovers else "manual_review")
+    case = await service.get_case(started.case_id)
+    assert case.outcome is not None
+    assert case.outcome.refund_status == ("verified" if recovers else "manual_review")
+    assert case.outcome.notification_status == ("sent" if recovers else "not_sent")
+    assert case.outcome.failure_code == ("none" if recovers else "refund_outcome_uncertain")
+    assert len(calls) == 2 and calls[0] == calls[1]
+    assert len(gateway.refunds) == 1
+    if not recovers:
+        events = await service.list_events(started.case_id)
+        assert any("reconciliation is required" in event.summary for event in events)
+        assert not any(event.node == "notify_customer" for event in events)

@@ -16,6 +16,15 @@ resources; idle hosted compute retains no application pool or native saver
 connection. Old flat-module imports are
 removed without aliases. This is a fresh-state cutover, not a legacy-data migration.
 
+Policy ineligibility with valid billing evidence normalizes to
+`completed_no_refund`, not a technical failure. Missing or invalid required
+evidence still fails. Refund attempts exhausted with an uncertain outcome,
+including responses without a refund ID, route to `manual_review` with
+`refund_outcome_uncertain`; no success notification is sent. Attempts are recorded
+in graph state, but recovery can replay work since the last checkpoint. Provider
+idempotency and reconciliation remain application responsibilities; this demo
+does not perform live-provider reconciliation.
+
 ## Local setup
 
 ```bash
