@@ -8,7 +8,6 @@ from model_to_harness_langgraph.application.ports import (
     ApprovalCommandConflictError,
     RefundIdempotencyConflictError,
 )
-from model_to_harness_langgraph.application.records import ApprovalRequest, StartCaseRequest
 from model_to_harness_langgraph.application.service import InvalidCommandError, WorkflowService
 from model_to_harness_langgraph.bootstrap import open_runtime
 from model_to_harness_langgraph.config import Settings
@@ -23,6 +22,9 @@ from model_to_harness_langgraph.infrastructure.persistence.migrations import (
     apply_application,
     setup_storage,
 )
+from model_to_harness_langgraph.testing.commands import approval_request as ApprovalRequest
+from model_to_harness_langgraph.testing.commands import resume_request
+from model_to_harness_langgraph.testing.commands import start_request as StartCaseRequest
 from model_to_harness_langgraph.testing.fakes import FakeModel
 from psycopg import AsyncConnection, sql
 
@@ -100,7 +102,7 @@ async def test_postgres_pause_reconstruct_uncertain_refund_and_schema_isolation(
                     case_id,
                     approval.model_copy(update={"decision": "deny"}),
                 )
-            interrupted_retry = await service2.resume(case_id)
+            interrupted_retry = await service2.resume(case_id, resume_request(started))
             assert interrupted_retry.status == "running"
             durable = await audit2.get_refund(f"durable-refund-{suffix}")
             assert durable is not None
@@ -193,6 +195,7 @@ async def test_postgres_validation_restart_uses_checkpointed_evidence(breakpoint
     suffix = uuid4().hex[:12]
     settings = Settings(
         _env_file=None,
+        telemetry_enabled=False,
         database_url=TEST_DATABASE_URL,
         langgraph_schema=f"lg_evidence_app_{suffix}",
         langgraph_checkpoint_schema=f"lg_evidence_cp_{suffix}",
@@ -258,7 +261,9 @@ async def test_postgres_validation_restart_uses_checkpointed_evidence(breakpoint
                     reviewer_id="checkpoint-evidence-reviewer",
                 ),
             )
-            assert (await reconstructed.service.resume(started.case_id)).status == "completed"
+            assert (
+                await reconstructed.service.resume(started.case_id, resume_request(paused))
+            ).status == "completed"
             case = await reconstructed.service.get_case(started.case_id)
             assert case.outcome is not None
             assert case.outcome.refund_status == "verified"

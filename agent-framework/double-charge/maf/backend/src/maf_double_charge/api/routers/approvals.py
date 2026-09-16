@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from ...infrastructure.telemetry import telemetry_context
+from ...projections.workspace import safe_state
 from ..dependencies import ServiceDependency
 from ..schemas import ApprovalCommand, ResumeCommand
 
@@ -19,7 +20,7 @@ async def approval(
         with telemetry_context(run_id=run_id):
             state = await service.record_approval(run_id, command.to_command())
             with telemetry_context(case_id=state.case_id):
-                return {"status": "recorded", "run_id": run_id, "state": state}
+                return {"status": "recorded", "run_id": run_id, "state": safe_state(state)}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="run not found") from exc
     except ValueError as exc:
@@ -30,9 +31,11 @@ async def approval(
 async def resume(run_id: str, command: ResumeCommand, service: ServiceDependency) -> dict[str, Any]:
     try:
         with telemetry_context(run_id=run_id):
-            state = await service.resume(run_id, command.to_command().checkpoint_id)
+            state = await service.resume(
+                run_id, command.checkpoint_id, operator_id=command.operator_id
+            )
             with telemetry_context(case_id=state.case_id):
-                return {"status": state.status, "state": state}
+                return {"status": state.status, "state": safe_state(state)}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="run not found") from exc
     except ValueError as exc:

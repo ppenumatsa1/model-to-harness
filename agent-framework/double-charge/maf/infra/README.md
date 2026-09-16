@@ -1,5 +1,11 @@
 # Existing MAF deployment
 
+Current source boundaries are documented in the lane's
+[4+1 architecture](../docs/design/architecture.md); dated artifact, incident and
+acceptance evidence is in the [MAF ledger](../docs/design/issues-changes-fixes.md).
+This operational procedure does not claim that current local workspace/actor or
+configuration changes have been deployed or that remote resources are healthy.
+
 This lane owns its Container Apps, ACR, PostgreSQL configuration and Foundry
 integration independently of LangGraph. The API stays private; the public nginx
 frontend proxies `/api/` and health requests to it on the same origin. Hosted
@@ -99,19 +105,81 @@ This mode does not create, migrate, adopt, or reset a schema; it is not a bypass
 for the fresh-cutover guard. Apply any future reviewed SQL migration explicitly
 before using it.
 
+### App-only release without foundation changes
+
+Use **both** `--app-only --update-existing` when releasing application and hosted
+source into the existing infrastructure. This is the supported no-foundation path:
+`--update-existing` alone preserves SQL data but still applies the full foundation
+template. Do not use the full-template path to avoid an unapproved foundation delta.
+
 ```bash
 AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
-  scripts/deploy_azure.sh --preview --update-existing --environment maf-dev \
+  scripts/deploy_azure.sh --preview --app-only --update-existing --environment maf-dev \
   --schema maf_double_charge_cutover
+
+# Only after local acceptance, a reviewed local commit, and release approval:
 AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
-  scripts/deploy_azure.sh --apply --update-existing --environment maf-dev \
+  scripts/deploy_azure.sh --apply --app-only --update-existing --environment maf-dev \
   --source-commit "$(git rev-parse HEAD)" --schema maf_double_charge_cutover
 ```
 
-The remaining source, IaC, immutable-image, private-ingress, and readiness gates
-are unchanged. Preview is still read-only; apply creates new image tags and deploys
-the hosted bundle, preserving all workflow records and checkpoints. Identical-code
-version reuse is accepted only after archive and environment verification.
+The selected commit must be HEAD and clean across the MAF lane, `shared/`,
+`.dockerignore`, and `LICENSE`, including staged changes and nonignored untracked
+files. Staging is insufficient; a reviewed local commit is sufficient, without a
+remote push. A dirty preview does not authorize an apply.
+
+The MAF-owned `app/update-existing.bicep` declares exactly the existing API and UI
+Container Apps. It does not declare PostgreSQL, managed environments, identities,
+role assignments, registry, monitoring, or Foundry connections. The existing
+monitoring connection's sharing is untouched. The incremental deployment uses
+`model-harness-maf-app-update`, preserving the original foundation deployment and
+its discovery outputs.
+
+The ordered app-only gates are:
+
+1. Resolve the clean source and existing targets; verify SQL migration checksums
+   read-only. Require healthy single-revision apps, automatic revision suffixes,
+   a private API, and the existing public frontend.
+2. Snapshot editable app state through the same stable
+   [Container Apps API](https://learn.microsoft.com/azure/templates/microsoft.app/2025-07-01/containerapps)
+   used by the template. Capture existing secret values privately with
+   `az containerapp secret list --show-values`; retain Key Vault bindings unchanged.
+   Values use a secure ARM object parameter, not the nonsecret app parameters.
+3. Require Provider-level `FullResourcePayloads` what-if evidence for both apps.
+   No unmanaged Create/Modify/Delete, managed Ignore, incomplete, unsupported, or
+   unevaluated change is accepted. Compare complete before/after resource bodies;
+   only the intended image change and narrowly checked service-default omissions
+   are allowed. A preview stops here without mutation.
+4. Build only the selected git archive into unique commit-prefixed tags, lock
+   overwrite/deletion, and cross-check ACR build output against registry digest,
+   repository, tag, and lock readback. Deploy by verified digest, not a mutable tag.
+5. Run a second strict Provider what-if with the actual built digests, re-read app
+   configuration and secrets to reject drift, and recheck the clean source before
+   applying only the two apps.
+6. Await healthy revisions and exact image/configuration/secret readback. Then use
+   the existing hosted preparation, direct-code deployment, active-version,
+   environment, archive-hash and package-content verification.
+
+Full-resource what-if receipts remain private (0600) under ignored
+`.azure/release/app-only-what-if-*.json`; temporary parameter files are removed.
+Credentials are neither printed nor rotated. A caller must have permission to read
+the existing secrets; unavailable or masked values stop the release. Null readback
+fields, empty managed-identity registry credentials, empty identity settings and
+automatic revision suffixes are normalized as their absent service representation.
+The only allowed before/after omissions are `runningStatus=Running` and the HTTP
+ingress default `exposedPort=0`; nondefault omissions and other changes fail closed.
+Unknown writable fields or delegated identities require a separately reviewed
+implementation rather than silently dropping configuration.
+
+`--foundation` and `--operator-ip` are incompatible with app-only mode. This mode
+cannot apply migrations, introduce runtime settings, change networking/scale,
+rotate credentials, or repair foundation drift. Such changes need their own
+reviewed procedure. Once explicitly approved, apply creates image/build records,
+app revisions and a hosted deployment; it preserves all workflow records and
+checkpoints. Identical-code hosted version reuse still requires archive and
+environment verification. Smoke, E2E, evaluation, native business verification and
+telemetry acceptance below remain separate required gates, not claims made by the
+release command.
 
 ## Explicit acceptance
 

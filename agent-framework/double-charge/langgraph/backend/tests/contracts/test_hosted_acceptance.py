@@ -134,4 +134,6 @@ def test_native_hosted_scenarios_use_case_commands_and_separate_resume(harness):
         assert "existing_case_id" not in command
         assert "run_id" not in command
         if command["action"] == "resume":
-            assert set(command) == {"action", "case_id"}
+            assert set(command) == {"action", "case_id", "checkpoint_id", "operator_id"}
+            assert command["checkpoint_id"] == "interrupt-test"
+            assert command["operator_id"]

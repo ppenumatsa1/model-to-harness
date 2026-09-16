@@ -5,7 +5,7 @@ from uuid import uuid4
 from model_to_harness_shared import WorkflowOutcome, get_fixture
 
 from .audit import Audit
-from .commands import ApprovalCommand, ScenarioInput
+from .commands import ApprovalCommand, ResumeCommand, ScenarioInput
 from .models import ApprovalResponse, RunStatus, StartResult, WorkflowState
 from .ports import Repository, WorkflowRunner
 
@@ -38,7 +38,8 @@ class DoubleChargeService:
             case_id, {"customer_id": command.customer_id, "fixture_id": command.scenario_id}
         )
         await self.audit.emit(
-            state, "run.started", "Double-charge workflow started.", node="normalize_complaint"
+            state, "run.started", "Double-charge workflow started.", node="normalize_complaint",
+            actor_id=command.operator_id,
         )
         await self.runner.start(state)
         current = await self.get_state(state.run_id)
@@ -72,11 +73,19 @@ class DoubleChargeService:
             "Approval command was durably recorded; resume remains an explicit operation.",
             node="approval_checkpoint",
             checkpoint_id=command.checkpoint_id,
-            payload={"decision": command.decision.value, "reviewer_id": command.reviewer_id},
+            payload={
+                "decision": command.decision.value,
+                "reviewer_id": command.reviewer_id,
+                "reason": command.reason,
+            },
+            actor_id=command.reviewer_id,
         )
         return state
 
-    async def resume(self, run_id: str, checkpoint_id: str) -> WorkflowState:
+    async def resume(
+        self, run_id: str, checkpoint_id: str, *, operator_id: str
+    ) -> WorkflowState:
+        command = ResumeCommand(checkpoint_id=checkpoint_id, operator_id=operator_id)
         state = await self.get_state(run_id)
         if state.status != RunStatus.PAUSED:
             raise ValueError("run is not paused")
@@ -88,9 +97,10 @@ class DoubleChargeService:
         await self.audit.emit(
             state,
             "workflow.resumed",
-            "Workflow resumed from the durable MAF checkpoint.",
+            "Resume command recorded; workflow continuation has been requested.",
             node="approval_checkpoint",
             checkpoint_id=checkpoint_id,
+            actor_id=command.operator_id,
         )
         await self.runner.resume(state, checkpoint_id, approval)
         return await self.get_state(run_id)

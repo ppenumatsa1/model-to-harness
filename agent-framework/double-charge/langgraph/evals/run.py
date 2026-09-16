@@ -29,7 +29,7 @@ class EvaluationModel:
 async def main() -> None:
     failures: list[str] = []
     app = create_app(
-        settings=Settings(database_url="unused"),
+        settings=Settings(_env_file=None, database_url="unused", telemetry_enabled=False),
         audit=InMemoryAuditRepository(),
         gateway=SharedDomainGateway(),
         model=EvaluationModel(),
@@ -53,6 +53,7 @@ async def main() -> None:
                     "/api/cases",
                     json={
                         "complaint": scenario_input["complaint_text"],
+                        "operator_id": "evaluation-runner",
                         "customer_id": scenario_input["customer_id"],
                         "scenario_id": case["fixture_id"],
                     },
@@ -67,10 +68,17 @@ async def main() -> None:
                             "checkpoint_id": started["checkpoint_id"],
                             "decision": decision,
                             "reviewer_id": "evaluation-runner",
+                            "reason": "Evaluation runner reviewed deterministic fixture evidence",
                         },
                     )
                     response.raise_for_status()
-                    response = await client.post(f"/api/cases/{started['case_id']}/resume")
+                    response = await client.post(
+                        f"/api/cases/{started['case_id']}/resume",
+                        json={
+                            "checkpoint_id": started["checkpoint_id"],
+                            "operator_id": "evaluation-runner",
+                        },
+                    )
                     response.raise_for_status()
                 response = await client.get(f"/api/cases/{started['case_id']}")
                 response.raise_for_status()

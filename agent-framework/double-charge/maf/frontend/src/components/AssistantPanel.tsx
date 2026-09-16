@@ -1,6 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAgent } from "@copilotkit/react-core/v2";
 import type { WorkflowState } from "../types";
+
+interface Invocation {
+  completion: Promise<unknown>;
+  detachment?: Promise<void>;
+}
+
+// The runtime agent owns a mutable message collection, including across panel mounts.
+const invocations = new WeakMap<object, Invocation>();
 
 export function AssistantPanel({ state }: { state: WorkflowState | null }) {
   const { agent, isReady } = useAgent({ agentId: "selected-run" });
@@ -8,11 +16,36 @@ export function AssistantPanel({ state }: { state: WorkflowState | null }) {
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const generation = useRef(0);
+  const selectedRun = useRef(state?.run_id);
+  selectedRun.current = state?.run_id;
 
   useEffect(() => {
+    let active = true;
     setAnswer("");
     setError("");
-    if (isReady) agent.setMessages([]);
+    generation.current += 1;
+    const detach = (invocation: Invocation) => {
+      invocation.detachment ??= (async () => {
+        await Promise.allSettled([agent.detachActiveRun(), invocation.completion]);
+      })();
+      return invocation.detachment;
+    };
+    const previous = invocations.get(agent);
+    setBusy(Boolean(previous));
+    const prepare = () => {
+      if (!active) return;
+      if (isReady) agent.setMessages([]);
+      setBusy(false);
+    };
+    if (previous) void detach(previous).then(prepare);
+    else prepare();
+    return () => {
+      active = false;
+      generation.current += 1;
+      const invocation = invocations.get(agent);
+      if (invocation) void detach(invocation);
+    };
   }, [agent, isReady, state?.run_id]);
 
   return (
@@ -32,7 +65,10 @@ export function AssistantPanel({ state }: { state: WorkflowState | null }) {
       <button
         disabled={!state || !isReady || busy || question.trim().length < 2}
         onClick={async () => {
-          if (!state) return;
+          if (!state || busy || invocations.has(agent)) return;
+          const requestGeneration = generation.current;
+          const runId = state.run_id;
+          const isCurrent = () => generation.current === requestGeneration && selectedRun.current === runId;
           setBusy(true);
           setError("");
           try {
@@ -42,7 +78,17 @@ export function AssistantPanel({ state }: { state: WorkflowState | null }) {
               role: "user",
               content: question.trim()
             });
-            const result = await agent.runAgent();
+            const completion = agent.runAgent();
+            const invocation: Invocation = { completion };
+            invocations.set(agent, invocation);
+            let result;
+            try {
+              result = await completion;
+            } finally {
+              await invocation.detachment;
+              if (invocations.get(agent) === invocation) invocations.delete(agent);
+            }
+            if (!isCurrent()) return;
             const response = [...result.newMessages]
               .reverse()
               .find((message) => message.role === "assistant");
@@ -52,9 +98,10 @@ export function AssistantPanel({ state }: { state: WorkflowState | null }) {
                 : "The read-only runtime returned no explanation."
             );
           } catch (caught) {
+            if (!isCurrent()) return;
             setError(caught instanceof Error ? caught.message : "Explanation failed.");
           } finally {
-            setBusy(false);
+            if (isCurrent()) setBusy(false);
           }
         }}
       >

@@ -75,6 +75,12 @@ def terminal_executor(
             "run.completed" if run_status == RunStatus.COMPLETED else "run.failed",
             f"Run reached terminal status {terminal_status}.",
             node=executor_id,
+            payload={
+                "terminal_status": completed.terminal_status,
+                "refund_status": completed.refund_status,
+                "notification_status": completed.notification_status,
+                "failure_code": completed.failure_code,
+            },
         )
         await ctx.yield_output(completed)
 

@@ -126,11 +126,15 @@ def validate_cases(rows: list[Any]) -> None:
             or command.get("action") != "start"
             or command.get("scenario_id") != scenario
             or set(command)
-            - {"action", "scenario_id", "complaint", "customer_id", "case_id", "idempotency_key"}
+            - {
+                "action", "scenario_id", "complaint", "customer_id",
+                "case_id", "idempotency_key", "operator_id",
+            }
             or not all(
                 isinstance(command.get(k), str) and command[k].strip()
-                for k in ("complaint", "customer_id")
+                for k in ("complaint", "customer_id", "operator_id")
             )
+            or len(command["operator_id"].strip()) > 128
             or not isinstance(row.get("ground_truth"), str)
             or not row["ground_truth"].strip()
             or row.get("expected_terminal_status") != terminal

@@ -27,14 +27,21 @@ does not perform live-provider reconciliation.
 
 ## Local setup
 
+Configuration belongs to this lane's private `.env`, not the launch directory.
+Explicit `Settings(...)` values override process environment, which overrides the
+selected dotenv file, then safe defaults. `_env_file=None` disables dotenv;
+`_env_file=path` selects an explicit alternative. Installed wheels and hosted
+packages use process environment by default and do not search checkout parents.
+
 ```bash
 cd agent-framework/double-charge/langgraph
-docker compose -f ../../../compose.yaml up -d postgres
 python3.12 -m venv .venv
 . .venv/bin/activate
 pip install -e ../../../shared
-pip install -e ".[dev]"
-cp .env.example .env
+pip install -e ".[dev,observability]"
+test -e .env || cp .env.example .env
+# For an existing database, fill DATABASE_URL and model settings privately.
+# For isolated local PostgreSQL, use the Local PostgreSQL wrappers below instead.
 PYTHONPATH=backend/src python scripts/setup_db.py
 ./scripts/dev-backend.sh
 ```
@@ -47,9 +54,35 @@ npm install
 npm run dev
 ```
 
-Real runs require the Foundry/Azure OpenAI variables in `.env` and an identity
-available through `DefaultAzureCredential`. Tests use a fake model and in-memory
-checkpointer/audit repository:
+Real runs require `DATABASE_URL`, `AZURE_OPENAI_ENDPOINT`,
+`AZURE_OPENAI_DEPLOYMENT` and an identity available through
+`DefaultAzureCredential`. There is no database credential fallback, automatic
+schema setup or silent fake-model fallback. `HOST`/`PORT` default to
+`127.0.0.1:8000`; `FRONTEND_HOST`/`FRONTEND_PORT` default to `localhost:5173`.
+`BACKEND_PROXY_URL` optionally overrides the server-only proxy (otherwise derived
+from backend host/port); `CORS_ORIGINS` should match the chosen browser origin.
+
+After installation, launch from any directory using the absolute path to
+`scripts/dev-backend.sh`, or from the repository root:
+
+```bash
+agent-framework/double-charge/langgraph/scripts/dev-backend.sh
+npm --prefix agent-framework/double-charge/langgraph/frontend run dev
+```
+
+The backend script selects this lane's `.venv/bin/python` and resolved source
+paths. With the editable package installed, the same interpreter can run
+`-m model_to_harness_langgraph.infrastructure.persistence.migrations --verify-only`
+from any directory. Restart backend and Vite after configuration edits.
+See [.env.example](.env.example) and the
+[canonical configuration table](docs/design/techstack.md#backend-configuration-contract).
+
+Optional local telemetry uses the resolved Settings connection string,
+service name and app environment. `TELEMETRY_ENABLED=false` prevents local
+exporter installation; hosted SDK providers remain SDK-owned and safety-checked.
+Vite selects only safe server fields, never dotenv secrets or `VITE_*` keys into
+browser environment/bundles. Tests explicitly disable dotenv and local telemetry,
+using fake models and in-memory checkpointer/audit repositories:
 
 ```bash
 pytest
@@ -57,7 +90,10 @@ cd frontend && npm install && npm test && npm run build
 ```
 
 `./scripts/browser-e2e.sh` starts an in-memory fake-model backend plus Vite, runs
-Playwright, and cleans up both processes. Install the Playwright Chromium binary once
+Playwright, and cleans up both processes. It uses separate default ports
+18000/15173, an explicit loopback fake-backend proxy, and rejects occupied ports;
+test-only process overrides are `E2E_BACKEND_PORT` and `E2E_FRONTEND_PORT`.
+It does not run against the interactive preview. Install the Playwright Chromium binary once
 with `cd frontend && npx playwright install chromium`.
 
 Database setup uses the application virtual environment plus Psycopg; it does not
@@ -70,20 +106,92 @@ PYTHONPATH=backend/src python scripts/setup_db.py
 PYTHONPATH=backend/src python scripts/setup_db.py --verify-only
 ```
 
-Set `TEST_DATABASE_URL` to a dedicated PostgreSQL database to run reconstruction,
+Set the process-only `TEST_DATABASE_URL` to a dedicated loopback PostgreSQL database to run reconstruction,
 durable-refund, and schema-isolation integration coverage.
+The fixture creates/drops randomized paired schemas and rejects remote database
+hosts. It never loads the test URL from a private lane dotenv file.
 Use fresh paired schemas instead of dropping application records while retaining
 unrelated checkpoints. Runtime startup never applies DDL or silently selects a fake.
 
+### Local PostgreSQL
+
+This lane's [compose.yaml](compose.yaml) starts only PostgreSQL 16 at
+`127.0.0.1:25432`, database `double_charge_lg_local`, user `lgdev`.
+Project `double-charge-lg` owns network `double-charge-lg_default` and volume
+`double-charge-lg_postgres-data`; it has no globally named container. It can run
+alongside both MAF databases. An occupied port makes startup fail visibly; never
+stop unrelated listeners or switch an existing Azure-backed preview for this setup.
+
+From this lane directory, create separate private Compose settings once:
+
+```bash
+python3 - <<'PY'
+import os
+import secrets
+from pathlib import Path
+template = Path(".env.compose.example").read_text()
+with os.fdopen(os.open(".env.compose", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as file:
+    file.write(template.replace("replace-me", secrets.token_hex(24)))
+PY
+docker compose --env-file .env.compose config --quiet
+docker compose --env-file .env.compose up -d --wait postgres
+```
+
+Exclusive file creation refuses to overwrite existing settings. Never print the
+resolved Compose configuration (it includes credentials), shell-source dotenv, or
+replace the application's `.env`. Do not export `POSTGRES_PASSWORD` or
+`COMPOSE_PROJECT_NAME` overrides. Keep `.env.compose`: changing it does not change
+the password stored in an initialized database volume.
+
+The lane-owned wrapper validates this Compose project's loopback binding and
+provides canonical `DATABASE_URL` and `TEST_DATABASE_URL` only to its child process.
+It also explicitly selects `LANGGRAPH_SCHEMA=langgraph_app_local` and
+`LANGGRAPH_CHECKPOINT_SCHEMA=langgraph_checkpoints_local`. These process settings
+override the lane's private `.env` without editing it. Exporters are disabled.
+
+```bash
+.venv/bin/python scripts/with_local_db.py -- .venv/bin/python scripts/setup_db.py
+.venv/bin/python scripts/with_local_db.py -- .venv/bin/python scripts/setup_db.py --verify-only
+.venv/bin/python scripts/with_local_db.py -- .venv/bin/python -m pytest backend/tests
+# Optional model-backed API; configure the model separately and use an unused port.
+.venv/bin/python scripts/with_local_db.py -- env PORT=18000 ./scripts/dev-backend.sh
+```
+
+Tests explicitly use fake models and fixture-owned randomized schemas; the local
+database selection never enables cloud models or telemetry. The wrapper itself
+does not replace the real backend's model. Unwrapped commands retain the existing
+application configuration, so use the wrapper for every local migration/test/run.
+
+```bash
+docker compose --env-file .env.compose ps
+docker compose --env-file .env.compose stop postgres
+docker compose --env-file .env.compose start --wait postgres
+```
+
+Stop/start preserves state without affecting another project. `down` retains the
+volume, but never use `down -v` or prune volumes. The retired root Compose volume
+is not reused, migrated, or deleted.
+
 ## API flow
 
-1. `POST /api/cases` runs until terminal state or the durable approval interrupt.
-2. `POST /api/cases/{case_id}/approval` records an explicit reviewer decision.
+1. `POST /api/cases` requires an operator identity and runs until terminal state
+   or the durable approval interrupt. The UI can observe the committed case while it runs.
+2. `POST /api/cases/{case_id}/approval` records a reviewer decision and required reason.
    The command is insert-once: an identical retry is accepted, while any changed
    checkpoint, decision, reviewer, or reason conflicts and cannot replace it.
-3. `POST /api/cases/{case_id}/resume` supplies that decision through
-   `Command(resume=...)`.
-4. Read state, native audit history, or the additive SSE AG-UI projection.
+3. `POST /api/cases/{case_id}/resume` requires the current checkpoint and a Resume
+   operator, then supplies the recorded decision through `Command(resume=...)`.
+4. `GET /api/cases` pages through history; `/api/cases/{case_id}/workspace`
+   returns safe context, memory/outcome, persisted approval and command eligibility.
+5. `/api/cases/{case_id}/events/stream` follows committed native events and
+   independent workspace snapshots. AG-UI remains an additive projection.
+
+The three-pane workspace separates history, execution/controls and business audit.
+Record approval/denial and Resume are separate buttons. Human identities are
+caller-supplied, not authenticated. New audit records distinguish actors and
+actual continuation; legacy missing facts remain unknown. Selected memory is
+empty while paused and retained at completion. The demo picker has six choices;
+the mismatch fixture remains available to regression/evaluation harnesses.
 
 The UI exposes only allowlisted summaries, tool metadata, retries, approval state,
 selected memory, and normalized outcomes. It never exposes prompts, model reasoning,
@@ -113,7 +221,22 @@ is intentionally narrow and duck-types the shared records so this app remains
 independently packaged. Tests inject a local fake gateway and do not duplicate the
 production simulator.
 
-See `observability/README.md`, `infra/README.md`, and `.foundry/README.md`.
+See [observability](observability/README.md), [infrastructure](infra/README.md),
+and [Foundry metadata](.foundry/README.md).
+
+## Lane-owned design
+
+This lane independently owns seven design documents:
+
+| Document | Scope |
+| --- | --- |
+| [Product requirements](docs/design/prd.md) | Current capabilities and acceptance boundaries. |
+| [Business scenarios and rules](docs/design/business-rules.md) | Six scenarios, walkthroughs, approval/resume process and core rules. |
+| [User flow](docs/design/userflow.md) | Three-pane workspace, history, native event streaming and explicit controls. |
+| [Architecture](docs/design/architecture.md) | Logical, process, development, physical and scenario views. |
+| [Technology and configuration](docs/design/techstack.md) | Dependency roles, canonical variables and launch behavior. |
+| [Project structure](docs/design/projectstructure.md) | Real package, tests, scripts, artifacts and ownership. |
+| [Issues, changes and fixes](docs/design/issues-changes-fixes.md) | LangGraph provenance and local versus deployed evidence. |
 
 ## Independent Azure deployment
 
@@ -130,18 +253,23 @@ deployment scripts. Nothing is shared with the MAF deployment.
 - The frontend is the only public Container App. nginx serves React and proxies
   `/api`, `/health`, and `/ready` to the internal FastAPI app.
 
-The hosted adapter accepts either plain text (a `start` command) or safe JSON:
+The current hosted adapter requires explicit JSON commands with human identities;
+actorless plain-text starts are invalid:
 
 ```json
-{"action":"start","complaint":"I was charged twice.","customer_id":"customer-1"}
-{"action":"approval","case_id":"case-id","checkpoint_id":"checkpoint-id","decision":"approve","reviewer_id":"reviewer-1"}
-{"action":"resume","case_id":"case-id"}
+{"action":"start","operator_id":"operator-1","complaint":"I was charged twice.","customer_id":"customer-1"}
+{"action":"approval","case_id":"case-id","checkpoint_id":"checkpoint-id","decision":"approve","reviewer_id":"reviewer-1","reason":"Reviewed duplicate evidence."}
+{"action":"resume","case_id":"case-id","checkpoint_id":"checkpoint-id","operator_id":"resumer-1"}
 ```
 
 Approval only records the durable command. Resume remains a separate explicit
 operation. Responses contain case status, normalized outcome, and allowlisted event
 summaries; they omit prompts, reasoning, workflow state, event data, tool payloads,
 credentials, and checkpoint internals.
+
+These workspace/actor changes are local source changes, not a new cloud rollout.
+The historical hosted version below predates them. Foundry deployment remains
+deferred until local review and approval.
 
 Release tooling discovers the existing lane environment and previews ARM changes
 without mutation by default. Local validation and independent review precede apply.
@@ -189,7 +317,7 @@ Public app:
 App Insights: `mth-lg-2vq7rokaqwhae-appi`.
 Final evaluation: `eval_8cdf767bc2994123822a531d8414fa4e` /
 `evalrun_83c0674c78af4e1488263f7646318db0`.
-See the [implementation ledger](../../../docs/design/issues-changes-fixes.md) for
+See the [implementation ledger](docs/design/issues-changes-fixes.md) for
 immutable image/archive digests, incident evidence and remaining teaching
 constraints. No legacy-data migration, destructive cleanup, push or merge was
 part of this cutover.
@@ -217,4 +345,4 @@ auto-instrumented. Prompts, complaint text, checkpoint bodies, tool arguments/re
 and credentials were excluded. The cutover replaces those reconstructed node/tool
 spans with real execution spans and hashes cross-command identifiers. This historical
 deployment/evaluation evidence is not acceptance of the new cutover; see the
-[implementation ledger](../../../docs/design/issues-changes-fixes.md) for current gates.
+[implementation ledger](docs/design/issues-changes-fixes.md) for current gates.

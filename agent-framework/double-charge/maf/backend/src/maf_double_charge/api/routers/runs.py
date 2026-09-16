@@ -5,8 +5,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from model_to_harness_shared import WorkflowOutcome
 
-from ...application.models import DurableEvent
 from ...projections.workflow_graph import WORKFLOW_GRAPH
+from ...projections.workspace import SafeEvent, WorkspaceView, safe_event, workspace_view
 from ..dependencies import RepositoryDependency, RunDependency, ServiceDependency, require_run
 
 router = APIRouter()
@@ -17,37 +17,33 @@ async def workflow_graph() -> dict[str, Any]:
     return WORKFLOW_GRAPH
 
 
-@router.get("/api/runs/{run_id}")
+@router.get("/api/runs/{run_id}", response_model=WorkspaceView)
 async def get_run(
     run_id: str,
     state: RunDependency,
     repository: RepositoryDependency,
     service: ServiceDependency,
-) -> dict[str, Any]:
-    return {
-        "state": state,
-        "memory": await repository.get_memory(state.case_id),
-        "outcome": await service.get_outcome(run_id),
-        "graph": WORKFLOW_GRAPH,
-    }
+) -> WorkspaceView:
+    return await workspace_view(repository, state)
 
 
-@router.get("/api/runs/{run_id}/events", response_model=list[DurableEvent])
+@router.get("/api/runs/{run_id}/events", response_model=list[SafeEvent])
 async def events(
     run_id: str,
     repository: RepositoryDependency,
     service: ServiceDependency,
     after: int = Query(default=0, ge=0),
-) -> list[DurableEvent]:
+    limit: int | None = Query(default=None, ge=1, le=500),
+) -> list[SafeEvent]:
     await require_run(run_id, service)
-    return await repository.list_events(run_id, after=after)
+    return [safe_event(event) for event in await repository.list_events(run_id, after, limit)]
 
 
-@router.get("/api/runs/{run_id}/history", response_model=list[DurableEvent])
+@router.get("/api/runs/{run_id}/history", response_model=list[SafeEvent])
 async def history(
     run_id: str, state: RunDependency, repository: RepositoryDependency
-) -> list[DurableEvent]:
-    return await repository.list_events(run_id, after=0)
+) -> list[SafeEvent]:
+    return [safe_event(event) for event in await repository.list_events(run_id, after=0)]
 
 
 @router.get("/api/runs/{run_id}/outcome", response_model=WorkflowOutcome)

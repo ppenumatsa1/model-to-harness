@@ -101,6 +101,7 @@ async def _execute(command: dict[str, Any], conversation_id: str) -> dict[str, A
     if action == "start":
         started = await service.start(
             ScenarioInput(
+                operator_id=command.get("operator_id"),
                 complaint=str(command.get("complaint") or "I may have been charged twice."),
                 customer_id=str(command.get("customer_id") or "foundry-customer"),
                 account_id=command.get("account_id"),
@@ -126,9 +127,11 @@ async def _execute(command: dict[str, Any], conversation_id: str) -> dict[str, A
         state = await service.get_state(run_id)
         run_id = state.run_id
         with telemetry_context(case_id=state.case_id, run_id=state.run_id):
+            resume_command = ResumeCommand.model_validate(command)
             await service.resume(
                 run_id,
-                ResumeCommand.model_validate(command).checkpoint_id,
+                resume_command.checkpoint_id,
+                operator_id=resume_command.operator_id,
             )
     else:
         raise ValueError("action must be start, approval, or resume")

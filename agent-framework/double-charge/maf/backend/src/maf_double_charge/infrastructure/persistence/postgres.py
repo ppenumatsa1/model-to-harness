@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 from maf_double_charge.application.errors import (
     RefundIdempotencyConflictError,
@@ -8,6 +9,7 @@ from maf_double_charge.application.errors import (
 )
 from maf_double_charge.application.models import (
     ApprovalResponse,
+    CaseSummary,
     DurableEvent,
     RefundLedgerEntry,
     WorkflowState,
@@ -106,6 +108,35 @@ class PostgresRepository:
             row = await result.fetchone()
         return WorkflowState.model_validate(row["state"]) if row else None
 
+    async def get_run_created_at(self, run_id: str) -> datetime:
+        async with self.pool.connection() as conn:
+            result = await conn.execute("SELECT created_at FROM runs WHERE run_id = %s", (run_id,))
+            row = await result.fetchone()
+        if row is None:
+            raise KeyError("run not found")
+        return row["created_at"]
+
+    async def list_cases(
+        self, limit: int, before: tuple[datetime, str] | None = None
+    ) -> list[CaseSummary]:
+        async with self.pool.connection() as conn:
+            result = await conn.execute(
+                """
+                SELECT state, created_at, updated_at FROM runs
+                WHERE (%s::timestamptz IS NULL OR (created_at, run_id) < (%s, %s))
+                ORDER BY created_at DESC, run_id DESC LIMIT %s
+                """,
+                (before[0] if before else None, before[0] if before else None,
+                 before[1] if before else None, limit),
+            )
+            rows = await result.fetchall()
+        return [
+            CaseSummary.model_validate(
+                {**row["state"], "created_at": row["created_at"], "updated_at": row["updated_at"]}
+            )
+            for row in rows
+        ]
+
     async def save_memory(self, case_id: str, memory: dict[str, object]) -> None:
         async with self.pool.connection() as conn:
             await conn.execute(
@@ -126,6 +157,11 @@ class PostgresRepository:
 
     async def append_event(self, event: DurableEvent) -> DurableEvent:
         async with self.pool.connection() as conn:
+            # Lock before sequence allocation, through commit, so replay cannot skip late commits.
+            # This dedicated audit namespace never serializes the parallel branch work itself.
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(1296123457, hashtext(%s))", (event.run_id,)
+            )
             result = await conn.execute(
                 """
                 INSERT INTO execution_events
@@ -152,15 +188,17 @@ class PostgresRepository:
             row = await result.fetchone()
         return event.model_copy(update={"sequence": row["sequence"]})
 
-    async def list_events(self, run_id: str, after: int = 0) -> list[DurableEvent]:
+    async def list_events(
+        self, run_id: str, after: int = 0, limit: int | None = None
+    ) -> list[DurableEvent]:
         async with self.pool.connection() as conn:
             result = await conn.execute(
                 """
                 SELECT sequence, event_id::text, case_id, run_id, event_type, node, transition,
                        checkpoint_id, retry_attempt, idempotency_key, summary, payload, created_at
-                FROM execution_events WHERE run_id = %s AND sequence > %s ORDER BY sequence
+                FROM execution_events WHERE run_id = %s AND sequence > %s ORDER BY sequence LIMIT %s
                 """,
-                (run_id, after),
+                (run_id, after, limit),
             )
             rows = await result.fetchall()
         return [DurableEvent.model_validate(row) for row in rows]

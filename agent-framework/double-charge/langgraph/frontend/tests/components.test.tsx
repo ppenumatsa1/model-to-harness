@@ -2,18 +2,14 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { Graph, Timeline } from "../src/App";
-import type { CaseView, NativeEvent } from "../src/types";
+import type { NativeEvent } from "../src/types";
+import { viewFor } from "./workspaceFixtures";
 
-const run: CaseView = {
-  case_id: "case-1",
-  run_id: "run-1",
-  status: "paused",
-  current_step: "request_approval",
-  approval_required: true,
-  checkpoint_id: "checkpoint-1",
-  workflow_state: {},
-  selected_memory: {}
-};
+const run = viewFor("case-1");
+run.state.status = "paused";
+run.state.current_step = "request_approval";
+run.state.approval_required = true;
+run.state.checkpoint_id = "checkpoint-1";
 
 const events: NativeEvent[] = [
   {
@@ -34,7 +30,7 @@ describe("teaching views", () => {
   it("shows the parallel graph and durable timeline", () => {
     render(
       <>
-        <Graph run={run} events={events} />
+        <Graph run={run} />
         <Timeline events={events} />
       </>
     );
@@ -46,4 +42,3 @@ describe("teaching views", () => {
     expect(screen.getByText("paused")).toBeInTheDocument();
   });
 });
-

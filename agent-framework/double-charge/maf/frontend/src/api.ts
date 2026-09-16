@@ -1,16 +1,26 @@
 import type {
   AguiEvent,
+  CasePage,
   DurableEvent,
   RunView,
   Scenario,
   WorkflowGraph
 } from "./types";
 
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
 async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const response = await fetch(input, init);
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(body.detail ?? `Request failed: ${response.status}`);
+    throw new ApiError(
+      typeof body.detail === "string" ? body.detail : `Request failed: ${response.status}`,
+      response.status
+    );
   }
   return response.json() as Promise<T>;
 }
@@ -18,10 +28,17 @@ async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T>
 export const api = {
   scenarios: () => json<Scenario[]>("/api/scenarios"),
   graph: () => json<WorkflowGraph>("/api/workflow/graph"),
+  cases: (cursor?: string, signal?: AbortSignal) =>
+    json<CasePage>(`/api/cases?limit=10${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { signal }),
+  case: (caseId: string, signal?: AbortSignal) =>
+    json<RunView>(`/api/cases/${encodeURIComponent(caseId)}`, { signal }),
   start: (payload: {
     complaint: string;
     customer_id: string;
     scenario_id: string;
+    operator_id: string;
+    existing_case_id: string;
+    idempotency_key: string;
   }) =>
     json<{
       case_id: string;
@@ -35,16 +52,16 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
     }),
-  run: (runId: string) => json<RunView>(`/api/runs/${runId}`),
+  run: (runId: string, signal?: AbortSignal) => json<RunView>(`/api/runs/${runId}`, { signal }),
   events: (runId: string, after = 0) =>
-    json<DurableEvent[]>(`/api/runs/${runId}/events?after=${after}`),
+    json<DurableEvent[]>(`/api/runs/${runId}/events?after=${after}&limit=200`),
   approve: (
     runId: string,
     payload: {
       checkpoint_id: string;
       decision: "approve" | "deny";
       reviewer_id: string;
-      reason?: string;
+      reason: string;
     }
   ) =>
     json(`/api/runs/${runId}/approval`, {
@@ -52,11 +69,11 @@ export const api = {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload)
     }),
-  resume: (runId: string, checkpointId: string) =>
+  resume: (runId: string, checkpointId: string, operatorId: string) =>
     json(`/api/runs/${runId}/resume`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ checkpoint_id: checkpointId })
+      body: JSON.stringify({ checkpoint_id: checkpointId, operator_id: operatorId })
     })
 };
 

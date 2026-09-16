@@ -6,13 +6,14 @@ context, tools, skills, and approval integration. PostgreSQL remains
 authoritative for the checkout case, reviewer commands, remediation ledger,
 audit history, and verification evidence.
 
-The companion [checkout-recovery contract](../docs/README.md) is
+The companion [checkout-recovery contract](../README.md) is
 framework-neutral. This lane owns its own API, UI, telemetry, infrastructure,
 tests, and Foundry Hosted Agent adapter.
 
 ## Run locally
 
-Use Python 3.13, uv, Node.js, and a dedicated PostgreSQL database. From this directory:
+Use Python 3.13, uv, Node.js, and a dedicated PostgreSQL database. For an existing
+database, from this directory (for disposable local storage use the wrappers below):
 
 ```sh
 uv sync --extra dev
@@ -42,6 +43,65 @@ npm --prefix frontend run test:e2e
 The PostgreSQL test URL must identify a dedicated test database: tests create
 synthetic cases but never drop or reset schemas. Migrations are versioned and
 checksum-checked; neither the API nor Hosted Agent auto-migrates.
+
+### Local PostgreSQL
+
+This harness independently owns [compose.yaml](compose.yaml), project
+`checkout-recovery-maf`, network `checkout-recovery-maf_default`, and volume
+`checkout-recovery-maf_postgres-data`. It starts **only PostgreSQL 16** at
+`127.0.0.1:35432`, database `checkout_recovery_local`, user `checkoutdev`.
+There are no global container names, API/UI containers, or shared runtime helpers.
+Both double-charge projects can run simultaneously. If this port is occupied,
+startup fails rather than taking over another listener.
+
+Create separate private settings once from this directory:
+
+```bash
+python3 - <<'PY'
+import os
+import secrets
+from pathlib import Path
+template = Path(".env.compose.example").read_text()
+with os.fdopen(os.open(".env.compose", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as file:
+    file.write(template.replace("replace-me", secrets.token_hex(24)))
+PY
+docker compose --env-file .env.compose config --quiet
+docker compose --env-file .env.compose up -d --wait postgres
+```
+
+Exclusive creation protects existing settings. Never print resolved Compose
+configuration, shell-source dotenv, or replace application/cloud `.env` files.
+Do not export `POSTGRES_PASSWORD` or `COMPOSE_PROJECT_NAME` overrides. Preserve
+`.env.compose`; changing it will not change an initialized volume's password.
+
+The harness-owned wrapper validates the Compose project and loopback port, then
+provides canonical local `DATABASE_URL`, explicitly mapped to this harness's
+existing `CHECKOUT_RECOVERY_DATABASE_URL` and `CHECKOUT_TEST_DATABASE_URL` contracts.
+Only the child process is changed; private Azure configuration is untouched.
+The wrapper selects offline `scripted` development mode and disables exporters.
+
+```bash
+uv sync --extra dev
+.venv/bin/python scripts/with_local_db.py -- .venv/bin/python scripts/migrate.py --apply
+.venv/bin/python scripts/with_local_db.py -- .venv/bin/python -m pytest backend/tests
+# Optional separate offline API; do not replace the existing double-charge previews.
+.venv/bin/python scripts/with_local_db.py -- .venv/bin/python -m uvicorn checkout_recovery_maf.bootstrap:app --host 127.0.0.1 --port 18020
+```
+
+These PostgreSQL tests use deterministic/fake investigators, not a cloud model.
+They retain synthetic records only in the new local database. Use this wrapper
+for every local command; unwrapped commands retain existing process configuration.
+
+```bash
+docker compose --env-file .env.compose ps
+docker compose --env-file .env.compose stop postgres
+docker compose --env-file .env.compose start --wait postgres
+```
+
+Stop/start preserves persisted cases without affecting other projects.
+`down` retains the volume; never use `down -v` or prune volumes. The retired root
+Compose data is not reused or deleted. Root `shared/` stays framework-neutral
+and unchanged.
 
 ## Delivery
 

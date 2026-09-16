@@ -5,8 +5,19 @@ checkpoint, retry attempt, and a one-way truncated idempotency-key hash. Install
 `.[observability]` and set `APPLICATIONINSIGHTS_CONNECTION_STRING` to enable the
 App Insights-ready OpenTelemetry setup in `infrastructure/telemetry.py`.
 
+API bootstrap passes resolved `Settings`: lane-root dotenv, process overrides and
+explicit constructor values now drive the connection string, `OTEL_SERVICE_NAME`
+and `APP_ENV`. `TELEMETRY_ENABLED=false` disables local provider installation.
+Capture restrictions validate both Settings and SDK process flags before setup;
+dotenv cannot bypass complete sampling or hosted opt-out checks. Tests disable
+dotenv/export and mock providers rather than exporting to Azure.
+See [configuration](../docs/design/techstack.md#telemetry-safety-and-sdk-compatibility)
+and the [lane ledger](../docs/design/issues-changes-fixes.md).
+
 For Foundry Hosted Agents, the project-level `ApplicationInsights` connection is
-created by this lane's Bicep and the Responses runtime injects the connection string.
+part of the existing lane foundation and the Responses runtime injects the connection
+string. The current application-release Bicep references supporting resources; it
+does not recreate monitoring connections.
 The adapter creates a `foundry.responses.invoke` span, each graph command creates a
 `workflow.run` span, and real executing nodes create `workflow.node.*` spans.
 Actual deterministic tool awaits and model calls are children of the executing

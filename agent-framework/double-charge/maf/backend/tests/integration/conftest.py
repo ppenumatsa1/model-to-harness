@@ -21,11 +21,14 @@ def database_url() -> str:
     parsed = urlsplit(value)
     if (
         parsed.hostname != "127.0.0.1"
-        or parsed.port != 5434
+        or parsed.port not in {5434, 15432}
         or parsed.path != "/maf_cutover_tests"
         or parsed.username != "mafdev"
     ):
-        pytest.fail("Persistence tests require the dedicated loopback:5434 maf_cutover_tests DB.")
+        pytest.fail(
+            "Persistence tests require the dedicated loopback:5434 or :15432 "
+            "maf_cutover_tests DB."
+        )
     return value
 
 

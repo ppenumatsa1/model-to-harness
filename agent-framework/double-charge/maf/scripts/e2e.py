@@ -30,6 +30,7 @@ def check_scenario(client: httpx.Client, scenario: str, decision: str | None, te
         "POST",
         "/api/cases",
         json={
+            "operator_id": identifier,
             "complaint": "Please investigate two captured charges for a single purchase.",
             "customer_id": identifier,
             "scenario_id": scenario,
@@ -46,7 +47,10 @@ def check_scenario(client: httpx.Client, scenario: str, decision: str | None, te
             client,
             "POST",
             f"/api/runs/{run_id}/approval",
-            json={"checkpoint_id": checkpoint, "decision": decision, "reviewer_id": identifier},
+            json={
+                "checkpoint_id": checkpoint, "decision": decision, "reviewer_id": identifier,
+                "reason": "Deterministic scenario evidence reviewed.",
+            },
         )
         state = json_request(client, "GET", f"/api/runs/{run_id}")
         assert state["state"]["status"] == "paused", "Approval must not implicitly resume"
@@ -54,7 +58,7 @@ def check_scenario(client: httpx.Client, scenario: str, decision: str | None, te
             client,
             "POST",
             f"/api/runs/{run_id}/resume",
-            json={"checkpoint_id": checkpoint},
+            json={"checkpoint_id": checkpoint, "operator_id": identifier},
         )
     outcome = json_request(client, "GET", f"/api/runs/{run_id}/outcome")
     events = json_request(client, "GET", f"/api/runs/{run_id}/events")
@@ -63,7 +67,7 @@ def check_scenario(client: httpx.Client, scenario: str, decision: str | None, te
         assert outcome["refund_id"] and outcome["refund_status"] == "verified"
         repeated = client.post(
             f"/api/runs/{run_id}/resume",
-            json={"checkpoint_id": started["checkpoint_id"]},
+            json={"checkpoint_id": started["checkpoint_id"], "operator_id": identifier},
         )
         assert repeated.status_code == 409, "A terminal run must reject duplicate resume"
         repeated_outcome = json_request(client, "GET", f"/api/runs/{run_id}/outcome")

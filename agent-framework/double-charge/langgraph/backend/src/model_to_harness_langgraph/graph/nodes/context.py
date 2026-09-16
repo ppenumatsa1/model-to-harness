@@ -1,5 +1,7 @@
 import hashlib
 import logging
+from collections.abc import Awaitable, Callable
+from functools import wraps
 from typing import Any
 
 from ...application.ports import AuditRepository
@@ -15,6 +17,22 @@ class NodeContext:
     audit: AuditRepository
     gateway: DomainGateway
     model: ComplaintModel
+
+    def observe_node(
+        self, name: str, function: Callable[[DoubleChargeState], Awaitable[dict[str, Any]]]
+    ) -> Callable[[DoubleChargeState], Awaitable[dict[str, Any]]]:
+        @wraps(function)
+        async def execute(state: DoubleChargeState) -> dict[str, Any]:
+            await self._event(
+                state, "node_started", f"{name} started", node=name, status="running"
+            )
+            result = await function(state)
+            await self._event(
+                state, "node_completed", f"{name} completed", node=name, status="completed"
+            )
+            return result
+
+        return execute
 
     async def _event(
         self,
@@ -86,6 +104,22 @@ class NodeContext:
                 "attempt": attempt,
                 "tool_call_id": tool_call_id,
                 "failure_code": result.code,
+                "ok": result.ok,
+                "uncertain": result.uncertain,
+                "transient": result.transient,
+                **(
+                    {"refund_id": result.value["refund_id"]}
+                    if isinstance(result.value.get("refund_id"), str) else {}
+                ),
+                **(
+                    {"notification_status": "sent" if result.ok else "failed"}
+                    if tool == "notification.send" else {}
+                ),
+                **(
+                    {"simulated": True}
+                    if tool == "notification.send" and result.value.get("simulated") is True
+                    else {}
+                ),
             },
         )
 

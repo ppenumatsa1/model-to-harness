@@ -226,3 +226,54 @@ pre {
   .edge-list, .timeline { padding-left: 17px; padding-right: 17px; }
   .lower { grid-template-columns: 1fr; }
 }
+
+/* Independent scrolling keeps new audit records from moving an older reading position. */
+.case-workspace { grid-template-columns: 250px minmax(360px, 1fr) minmax(300px, 380px); height: 100vh; min-height: 0; }
+.case-workspace > main { min-width: 0; height: 100vh; overflow: auto; padding: 0 20px 32px; }
+.case-workspace .case-history { position: static; height: 100vh; overflow: auto; display: block; padding: 24px 16px; }
+.case-history .brand > span:last-child { display: block; }
+.case-history h2 { margin-top: 28px; font-size: 1rem; }
+.case-history > p { color: #777480; font-size: .75rem; }
+.case-list { list-style: none; padding: 0; }
+.case-list li { margin: 8px 0; }
+.case-list button { width: 100%; text-align: left; overflow-wrap: anywhere; }
+.case-list button[aria-current="page"] { border-color: #b89bf9; background: #f0ebff; }
+.case-list span, .case-list small, .case-list time { display: block; margin-top: 5px; font-size: .68rem; }
+.case-workspace .page-heading { padding: 28px 0 22px; }
+.case-workspace .page-heading h1 { font-size: 1.85rem; }
+.case-workspace .composer, .case-workspace .approval-panel { grid-template-columns: 1fr; }
+.case-workspace .composer-copy { border-right: 0; }
+.case-workspace .composer-form { grid-template-columns: 1fr 1fr; }
+.case-workspace .primary-action { grid-column: 1 / -1; }
+.case-context { padding: 20px; margin-bottom: 20px; }
+.case-context p { font-size: .8rem; overflow-wrap: anywhere; }
+.case-workspace dl { margin: 12px 0; font-size: .75rem; overflow-wrap: anywhere; }
+.case-workspace dt { font-weight: 750; color: #666270; margin-top: 8px; }
+.case-workspace dd { margin: 3px 0 0; white-space: pre-wrap; }
+.observation-status { margin: 12px 0; font-size: .8rem; }
+.case-workspace .timeline-panel, .case-workspace .inspector-panel { margin-bottom: 20px; }
+.case-workspace .timeline li > div { min-width: 0; overflow-wrap: anywhere; }
+.supporting-view { margin: 15px 0; }
+summary { cursor: pointer; padding: 12px; font-size: .8rem; font-weight: 750; }
+summary:focus-visible { outline: 3px solid rgba(113, 72, 215, .28); outline-offset: 2px; }
+.audit-rail { min-width: 0; height: 100vh; overflow: auto; padding: 24px 16px 24px 0; }
+.audit-events { list-style: none; margin: 0; padding: 16px; }
+.audit-events > li { padding: 16px 0; border-bottom: 1px solid #ecebf0; overflow-wrap: anywhere; }
+.audit-events strong, .audit-events p { font-size: .75rem; }
+.audit-events time { color: #777480; font-size: .7rem; }
+.audit-panel .environment-badge { display: inline-block; }
+.audit-events summary { padding-left: 0; }
+.approval-evidence { padding: 0 16px; }
+@media (max-width: 1100px) {
+  .case-workspace { grid-template-columns: 220px minmax(0, 1fr); height: auto; }
+  .case-workspace > main { height: auto; overflow: visible; }
+  .case-workspace .case-history { position: sticky; top: 0; }
+  .audit-rail { grid-column: 2; height: auto; padding: 0 20px 24px; }
+}
+@media (max-width: 620px) {
+  .case-workspace { display: block; }
+  .case-workspace .case-history { position: static; height: auto; max-height: 45vh; }
+  .case-workspace .composer-form, .case-workspace .approval-form { grid-template-columns: 1fr; }
+  .case-workspace .wide { grid-column: auto; }
+  .audit-rail { padding: 0 20px 24px; }
+}

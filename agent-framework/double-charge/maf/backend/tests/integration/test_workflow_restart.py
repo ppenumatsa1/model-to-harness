@@ -40,6 +40,7 @@ async def test_native_workflow_resumes_after_postgres_and_runtime_reconstruction
     try:
         started = await first.service.start(
             ScenarioInput(
+                operator_id="test-operator",
                 complaint="I was charged twice for the same purchase.",
                 customer_id="customer-100",
                 scenario_id=scenario_id,
@@ -51,6 +52,7 @@ async def test_native_workflow_resumes_after_postgres_and_runtime_reconstruction
             checkpoint_id=started.checkpoint_id,
             decision=ApprovalDecision.APPROVE,
             reviewer_id="restart-reviewer",
+            reason="Reviewed fixture evidence.",
         )
         await first.service.record_approval(started.run_id, approval)
         original_approval = await first.repository.get_approval(started.run_id)
@@ -82,7 +84,9 @@ async def test_native_workflow_resumes_after_postgres_and_runtime_reconstruction
     try:
         await restarted.service.record_approval(started.run_id, approval)
         assert await restarted.repository.get_approval(started.run_id) == original_approval
-        completed = await restarted.service.resume(started.run_id, started.checkpoint_id)
+        completed = await restarted.service.resume(
+            started.run_id, started.checkpoint_id, operator_id="test-resumer"
+        )
         assert completed.status == RunStatus.COMPLETED
         assert completed.refund_status == "verified"
         assert completed.notification_status == "sent"

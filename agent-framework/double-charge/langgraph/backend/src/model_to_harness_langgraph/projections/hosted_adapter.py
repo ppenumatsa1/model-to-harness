@@ -6,7 +6,14 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from ..application.records import ApprovalRequest, StartCaseRequest
+from ..application.records import (
+    ApprovalReason,
+    ApprovalRequest,
+    CheckpointIdentifier,
+    HumanIdentifier,
+    ResumeRequest,
+    StartCaseRequest,
+)
 from ..application.service import CaseNotFoundError, InvalidCommandError, WorkflowService
 
 
@@ -21,20 +28,23 @@ class HostedStartCommand(_HostedCommand):
     scenario_id: str = Field(default="duplicate-confirmed", max_length=128)
     case_id: str | None = Field(default=None, max_length=128)
     idempotency_key: str | None = Field(default=None, max_length=200)
+    operator_id: HumanIdentifier
 
 
 class HostedApprovalCommand(_HostedCommand):
     action: Literal["approval"]
     case_id: str = Field(min_length=1, max_length=128)
-    checkpoint_id: str = Field(min_length=1, max_length=256)
+    checkpoint_id: CheckpointIdentifier
     decision: Literal["approve", "deny"]
-    reviewer_id: str = Field(min_length=1, max_length=128)
-    reason: str | None = Field(default=None, max_length=1000)
+    reviewer_id: HumanIdentifier
+    reason: ApprovalReason
 
 
 class HostedResumeCommand(_HostedCommand):
     action: Literal["resume"]
     case_id: str = Field(min_length=1, max_length=128)
+    checkpoint_id: CheckpointIdentifier
+    operator_id: HumanIdentifier
 
 
 HostedCommand = Annotated[
@@ -52,10 +62,7 @@ def parse_hosted_command(text: str) -> HostedCommand:
             raise ValueError("JSON input must be an object")
         payload.setdefault("action", "start")
     else:
-        payload = {
-            "action": "start",
-            "complaint": stripped or "I may have been charged twice.",
-        }
+        raise ValueError("An explicit JSON command with operator identity is required")
     return _COMMAND_ADAPTER.validate_python(payload)
 
 
@@ -73,6 +80,7 @@ async def dispatch_hosted_command(
                 scenario_id=command.scenario_id,
                 existing_case_id=case_id,
                 idempotency_key=command.idempotency_key,
+                operator_id=command.operator_id,
             )
         )
     elif isinstance(command, HostedApprovalCommand):
@@ -88,7 +96,10 @@ async def dispatch_hosted_command(
         )
     else:
         case_id = command.case_id
-        await service.resume(case_id)
+        await service.resume(
+            case_id,
+            ResumeRequest(checkpoint_id=command.checkpoint_id, operator_id=command.operator_id),
+        )
 
     case = await service.get_case(case_id)
     events = await service.list_events(case_id)

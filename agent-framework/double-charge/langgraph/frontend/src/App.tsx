@@ -1,383 +1,181 @@
-import {
-  type JsonSerializable,
-  useAgent,
-  useAgentContext
-} from "@copilotkit/react-core/v2";
-import { FormEvent, useMemo, useState } from "react";
-
-import { recordApproval, resumeCase, startCase } from "./api";
-import type { CaseView, NativeEvent, RunStatus } from "./types";
-import { useRun } from "./useRun";
+import { useEffect, useRef, useState } from "react";
+import { api } from "./api";
+import { ApprovalPanel } from "./components/ApprovalPanel";
+import { SelectedRunAssistant } from "./components/AssistantPanel";
+import { AuditPanel } from "./components/AuditPanel";
+import { RunInspector } from "./components/RunInspector";
+import { Timeline } from "./components/Timeline";
+import { WorkflowGraph } from "./components/WorkflowGraph";
+import type { Scenario } from "./types";
+import { useCaseHistory } from "./useCaseHistory";
+import { useCaseWorkspace } from "./useCaseWorkspace";
 import "./styles.css";
 
-const GRAPH = [
-  "normalize_complaint",
-  "load_account",
-  "detect_duplicate",
-  "billing_validation",
-  "policy_validation",
-  "join_validations",
-  "request_approval",
-  "submit_refund",
-  "verify_refund",
-  "notify_customer",
-  "completed"
-];
+export { SelectedRunAssistant, Timeline, WorkflowGraph as Graph };
 
-const SCENARIOS = [
-  ["duplicate-confirmed", "Duplicate confirmed"],
-  ["no-duplicate", "No duplicate"],
-  ["approval-denied", "Approval denied"],
-  ["transient-failure", "Transient read failure"],
-  ["retry-safe-refund", "Retry-safe refund"],
-  ["resumed-approval", "Resumed approval"],
-  ["verification-mismatch", "Verification mismatch"]
-];
-
-function statusFor(node: string, run: CaseView | undefined, events: NativeEvent[]) {
-  if (!run) return "idle";
-  if (run.current_step === node) return run.status === "paused" ? "paused" : "active";
-  if (events.some((event) => event.node === node)) return "visited";
-  if (node === "completed" && ["completed", "failed", "manual_review"].includes(run.status)) {
-    return run.status;
-  }
-  return "idle";
-}
-
-export function Graph({ run, events }: { run?: CaseView; events: NativeEvent[] }) {
-  return (
-    <section className="panel graph-panel" aria-label="Workflow graph">
-      <header>
-        <div>
-          <span className="eyebrow">StateGraph</span>
-          <h2>Execution graph</h2>
-        </div>
-        <span className={`status-pill ${run?.status ?? "idle"}`}>{run?.status ?? "idle"}</span>
-      </header>
-      <div className="graph">
-        {GRAPH.map((node, index) => (
-          <div
-            className={`node ${statusFor(node, run, events)} ${
-              node.includes("validation") && node !== "join_validations" ? "parallel" : ""
-            }`}
-            key={node}
-          >
-            <span>{index + 1}</span>
-            {node.replaceAll("_", " ")}
-          </div>
-        ))}
-      </div>
-      <p className="legend">
-        Billing and policy nodes fan out together, then join before the durable approval
-        checkpoint.
-      </p>
-    </section>
-  );
-}
-
-export function Timeline({ events }: { events: NativeEvent[] }) {
-  return (
-    <section className="panel timeline-panel" aria-label="Execution timeline">
-      <header>
-        <div>
-          <span className="eyebrow">Native durable events</span>
-          <h2>Timeline</h2>
-        </div>
-        <span className="count">{events.length}</span>
-      </header>
-      <div className="timeline">
-        {events.length === 0 && <p className="empty">Start a case to inspect its audit trail.</p>}
-        {events.map((event) => (
-          <article key={event.event_id} className={`event ${event.status ?? ""}`}>
-            <div className="event-marker">{event.sequence}</div>
-            <div>
-              <div className="event-title">
-                <strong>{event.event_type.replaceAll("_", " ")}</strong>
-                <time>{new Date(event.timestamp).toLocaleTimeString()}</time>
-              </div>
-              <p>{event.summary}</p>
-              <div className="chips">
-                {event.node && <span>{event.node}</span>}
-                {Object.entries(event.data).map(([key, value]) => (
-                  <span key={key}>
-                    {key}: {String(value)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Inspector({ run }: { run?: CaseView }) {
-  const [tab, setTab] = useState<"state" | "memory" | "outcome">("state");
-  const value =
-    tab === "state"
-      ? run?.workflow_state
-      : tab === "memory"
-        ? run?.selected_memory
-        : run?.outcome;
-  return (
-    <section className="panel inspector">
-      <div className="tabs" role="tablist" aria-label="Run records">
-        {(["state", "memory", "outcome"] as const).map((name) => (
-          <button
-            className={tab === name ? "selected" : ""}
-            key={name}
-            onClick={() => setTab(name)}
-            role="tab"
-          >
-            {name}
-          </button>
-        ))}
-      </div>
-      <p className="boundary">
-        {tab === "state"
-          ? "Current execution projection — not a transcript or checkpoint payload."
-          : tab === "memory"
-            ? "Narrow customer/case facts retained separately from workflow state."
-            : "Framework-neutral terminal contract."}
-      </p>
-      <pre>{JSON.stringify(value ?? {}, null, 2)}</pre>
-    </section>
-  );
-}
-
-function ApprovalPanel({
-  run,
-  onDone
-}: {
-  run: CaseView;
-  onDone: () => Promise<void>;
-}) {
-  const [reviewer, setReviewer] = useState("teaching-reviewer");
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
-  const decide = async (decision: "approve" | "deny") => {
-    if (!run.checkpoint_id) return;
-    setBusy(true);
-    try {
-      await recordApproval(run.case_id, run.checkpoint_id, decision, reviewer, reason);
-      await resumeCase(run.case_id);
-      await onDone();
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="approval" aria-label="Human approval">
-      <span className="eyebrow">Durable interrupt</span>
-      <h2>Reviewer decision required</h2>
-      <p>
-        The command is recorded first. Resume is a separate API call that supplies it to
-        LangGraph&apos;s pending interrupt.
-      </p>
-      <input
-        aria-label="Reviewer identifier"
-        value={reviewer}
-        onChange={(event) => setReviewer(event.target.value)}
-      />
-      <textarea
-        aria-label="Decision reason"
-        placeholder="Optional reason"
-        value={reason}
-        onChange={(event) => setReason(event.target.value)}
-      />
-      <div className="approval-actions">
-        <button disabled={busy || !reviewer} onClick={() => void decide("deny")}>
-          Deny
-        </button>
-        <button
-          className="primary"
-          disabled={busy || !reviewer}
-          onClick={() => void decide("approve")}
-        >
-          {busy ? "Resuming…" : "Approve & resume"}
-        </button>
-      </div>
-    </section>
-  );
-}
-
-export function SelectedRunAssistant({
-  caseId,
-  safeContext
-}: {
-  caseId?: string;
-  safeContext: JsonSerializable;
-}) {
-  useAgentContext({
-    description:
-      "Allowlisted selected LangGraph run summaries. Never includes prompts, chain-of-thought, secrets, or checkpoint payloads.",
-    value: safeContext
-  });
-  const { agent, isReady } = useAgent({
-    agentId: "selected-run-panel",
-    runtimeAgentId: "selected-run",
-    threadId: caseId ?? "no-selected-run"
-  });
-  const [answer, setAnswer] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const ask = async () => {
-    if (!caseId) return;
-    setBusy(true);
-    setError("");
-    try {
-      agent.setMessages([]);
-      agent.setState({});
-      const result = await agent.runAgent({ runId: crypto.randomUUID() });
-      const assistant = [...result.newMessages]
-        .reverse()
-        .find((message) => message.role === "assistant");
-      const content = assistant?.content;
-      setAnswer(typeof content === "string" ? content : "No safe summary was returned.");
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Selected-run explanation failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="panel assistant">
-      <span className="eyebrow">CopilotKit selected-run context</span>
-      <h2>Safe run explainer</h2>
-      <p>
-        CopilotKit&apos;s supported AG-UI client invokes the read-only selected-run runtime.
-        Workflow commands remain explicit buttons.
-      </p>
-      <button
-        className="primary"
-        disabled={!caseId || !isReady || busy}
-        onClick={() => void ask()}
-      >
-        {busy ? "Reading durable events…" : "Explain selected run"}
-      </button>
-      {error && <p className="error">{error}</p>}
-      {answer && (
-        <blockquote>{answer}</blockquote>
-      )}
-    </section>
-  );
-}
+function urlCase() { return new URL(window.location.href).searchParams.get("case") || undefined; }
 
 export default function App() {
-  const [caseId, setCaseId] = useState<string>();
-  const [complaint, setComplaint] = useState(
-    "I was charged twice for the same purchase and need the duplicate refunded."
-  );
+  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [scenarioError, setScenarioError] = useState<string>();
+  const [scenarioAttempt, setScenarioAttempt] = useState(0);
+  const [scenarioId, setScenarioId] = useState("duplicate-confirmed");
+  const [complaint, setComplaint] = useState("I was charged twice for the same purchase.");
   const [customerId, setCustomerId] = useState("customer-demo");
-  const [scenario, setScenario] = useState("duplicate-confirmed");
-  const [starting, setStarting] = useState(false);
-  const [error, setError] = useState("");
-  const { run, events, aguiEvents, connection, refresh } = useRun(caseId);
+  const [operatorId, setOperatorId] = useState("");
+  const [caseId, setCaseId] = useState<string | undefined>(urlCase);
+  const [pendingStart, setPendingStart] = useState<string>();
+  const [commands, setCommands] = useState<Record<string, string | undefined>>({});
+  const [commandErrors, setCommandErrors] = useState<Record<string, string | undefined>>({});
+  const selected = useRef(caseId);
+  selected.current = caseId;
+  const selectionVersion = useRef(0);
+  const commandLocks = useRef(new Set<string>());
+  const history = useCaseHistory();
+  const workspace = useCaseWorkspace(caseId, pendingStart === caseId);
+  const { run, events } = workspace;
+  const busy = Boolean(caseId && commands[caseId]);
 
-  const safeContext = useMemo(
-    () => ({
-      status: run?.status ?? null,
-      currentStep: run?.current_step ?? null,
-      summaries: events
-        .filter((event) =>
-          ["decision_summary", "refund_verification", "run_completed", "run_failed"].includes(
-            event.event_type
-          )
-        )
-        .map((event) => event.summary)
-    }),
-    [run, events]
-  );
+  useEffect(() => {
+    let active = true;
+    setScenarioError(undefined);
+    api.scenarios().then((available) => {
+      if (active) setScenarios(available.filter((item) => item.id !== "verification-mismatch"));
+    }).catch(() => { if (active) setScenarioError("Could not load scenarios."); });
+    return () => { active = false; };
+  }, [scenarioAttempt]);
+  useEffect(() => {
+    const restore = () => {
+      selectionVersion.current += 1;
+      selected.current = urlCase();
+      setCaseId(selected.current);
+    };
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+  useEffect(() => {
+    if (run) history.update(run, pendingStart === run.state.case_id);
+  }, [run, pendingStart, history.update]);
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setStarting(true);
-    setError("");
+  function selectCase(id?: string) {
+    selectionVersion.current += 1;
+    selected.current = id;
+    setCaseId(id);
+    if (!id) setOperatorId("");
+    const url = new URL(window.location.href);
+    if (id) url.searchParams.set("case", id);
+    else url.searchParams.delete("case");
+    window.history.pushState({}, "", url);
+  }
+  async function command(target: string, label: string, action: () => Promise<unknown>) {
+    if (commandLocks.current.has(target)) return;
+    commandLocks.current.add(target);
+    const version = selectionVersion.current;
+    setCommands((current) => ({ ...current, [target]: label }));
+    setCommandErrors((current) => ({ ...current, [target]: undefined }));
     try {
-      const response = await startCase({
-        complaint,
-        customer_id: customerId,
-        scenario_id: scenario
-      });
-      setCaseId(response.case_id);
+      await action();
+      if (selected.current === target && selectionVersion.current === version) await workspace.refresh(target);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not start the workflow");
+      const detail = caught instanceof Error ? caught.message : "Request failed.";
+      setCommandErrors((current) => ({
+        ...current, [target]: `${label}: ${detail} The command outcome may be unknown; review persisted evidence before retrying. No command was automatically retried.`
+      }));
+      if (selected.current === target && selectionVersion.current === version) {
+        await workspace.refresh(target).catch(() => {});
+      }
     } finally {
-      setStarting(false);
+      commandLocks.current.delete(target);
+      setCommands((current) => ({ ...current, [target]: undefined }));
+      void history.refresh();
     }
-  };
+  }
+  async function startRun() {
+    if (pendingStart || !operatorId.trim() || !customerId.trim() || complaint.trim().length < 5) return;
+    const id = crypto.randomUUID();
+    const payload = {
+      complaint: complaint.trim(), customer_id: customerId.trim(), scenario_id: scenarioId,
+      operator_id: operatorId.trim(), existing_case_id: id, idempotency_key: `refund-${id}-${crypto.randomUUID()}`
+    };
+    setPendingStart(id);
+    selectCase(id);
+    await command(id, "Starting workflow", () => api.start(payload));
+    setPendingStart(undefined);
+  }
 
-  return (
-    <main>
-      <nav>
-        <div className="brand-mark">LG</div>
-        <div>
-          <strong>Double-charge lab</strong>
-          <span>LangGraph workstream</span>
-        </div>
-        <div className={`connection ${connection}`}>
-          <i />
-          AG-UI {connection} · {aguiEvents.length} projected
-        </div>
-      </nav>
-
-      <header className="hero">
-        <div>
-          <span className="eyebrow">Model → graph → durable outcome</span>
-          <h1>See every safe workflow decision.</h1>
-          <p>
-            Parallel deterministic checks, bounded retries, a PostgreSQL checkpoint, and
-            explicit human resume — without exposing private model reasoning.
-          </p>
-        </div>
-        <form onSubmit={(event) => void submit(event)}>
-          <label>
-            Scenario
-            <select value={scenario} onChange={(event) => setScenario(event.target.value)}>
-              {SCENARIOS.map(([value, label]) => (
-                <option value={value} key={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Customer
-            <input value={customerId} onChange={(event) => setCustomerId(event.target.value)} />
-          </label>
-          <label>
-            Complaint
-            <textarea
-              value={complaint}
-              onChange={(event) => setComplaint(event.target.value)}
-            />
-          </label>
-          <button className="primary launch" disabled={starting}>
-            {starting ? "Running graph…" : "Start durable run"}
-          </button>
-          {error && <p className="error">{error}</p>}
-        </form>
+  return <div className="app-shell case-workspace">
+    <aside className="navigation-rail case-history" aria-label="Persisted cases">
+      <a className="brand" href="#workspace"><span className="brand-mark">LG</span><span><strong>LangGraph</strong><small>Workflow Lab</small></span></a>
+      <h2>Cases</h2><button onClick={() => selectCase()}>New case</button>
+      <p>All persisted LangGraph cases · newest first</p>
+      <ol className="case-list">{history.items.map((item) => <li key={item.case_id}>
+        <button aria-current={caseId === item.case_id ? "page" : undefined}
+          aria-label={`Select case ${item.case_id}: ${item.customer_id}, ${item.scenario_id ?? "Not recorded"}, ${item.terminal_status ?? item.status}`}
+          onClick={() => selectCase(item.case_id)}>
+          <strong>{item.customer_id}</strong><span>{item.scenario_id ?? "Not recorded"}</span>
+          <small>{item.terminal_status ?? item.status} · {item.current_step.replaceAll("_", " ")}</small>
+          <time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString()}</time><small>Case {item.case_id}</small>
+        </button>
+      </li>)}</ol>
+      {history.loading && <p role="status">Loading cases…</p>}
+      {history.error && <div role="alert">{history.error} <button onClick={() => void history.retry()}>Retry cases</button></div>}
+      {history.loaded && !history.items.length && <p>No persisted cases yet. Start a new case.</p>}
+      {history.hasMore && <button disabled={history.loading} onClick={() => void history.loadMore()}>Load more</button>}
+      {history.loaded && history.items.length > 0 && !history.hasMore && <p>End of case history</p>}
+    </aside>
+    <main id="workspace">
+      <header className="page-heading"><p className="eyebrow">LangGraph StateGraph</p>
+        <h1>Double-charge case workspace</h1>
+        <p>Native committed audit is the source of truth. Decisions and resume are explicit commands.</p>
       </header>
-
-      {run?.status === "paused" && <ApprovalPanel run={run} onDone={refresh} />}
-
-      <div className="workspace">
-        <Graph run={run} events={events} />
-        <Timeline events={events} />
-        <Inspector run={run} />
-        <SelectedRunAssistant caseId={caseId} safeContext={safeContext} />
-      </div>
-
-      <footer>
-        <span>State ≠ memory ≠ audit ≠ model context</span>
-        <span>{renderOutcome(run?.status, run?.outcome?.failure_code)}</span>
-      </footer>
+      {!caseId ? <section className="panel composer" aria-labelledby="composer-title">
+        <h2 id="composer-title">Compose a case for review</h2>
+        <p>{scenarios.find((item) => item.id === scenarioId)?.description ?? "Choose a deterministic teaching scenario."}</p>
+        <form className="composer-form" onSubmit={(event) => { event.preventDefault(); void startRun(); }}>
+          <label>Scenario fixture<select value={scenarioId} onChange={(e) => setScenarioId(e.target.value)}>
+            {scenarios.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select></label>
+          <label>Customer ID<input required maxLength={128} value={customerId} onChange={(e) => setCustomerId(e.target.value)} /></label>
+          <label>Operator identity<input required maxLength={128} value={operatorId} onChange={(e) => setOperatorId(e.target.value)} /></label>
+          <p className="boundary-note">Operator-provided identity; not authenticated.</p>
+          <label className="wide">Customer complaint<textarea required minLength={5} maxLength={4000} value={complaint} onChange={(e) => setComplaint(e.target.value)} /></label>
+          <button className="primary-action" disabled={Boolean(pendingStart) || !scenarios.length || !operatorId.trim() || !customerId.trim() || complaint.trim().length < 5}>
+            {pendingStart ? "Another case is starting…" : "Start workflow"}
+          </button>
+          {scenarioError && <div role="alert">{scenarioError} <button type="button" onClick={() => setScenarioAttempt((value) => value + 1)}>Retry scenarios</button></div>}
+        </form>
+      </section> : <>
+        <section className="panel case-context" aria-label="Selected case context">
+          <h2>Selected case</h2><p>Case <code>{caseId}</code></p>
+          {run && <dl>
+            <dt>Scenario fixture</dt><dd>{run.state.scenario_id ?? "Not recorded"}</dd>
+            <dt>Customer ID</dt><dd>{run.state.customer_id}</dd>
+            <dt>Customer complaint</dt><dd>{run.state.complaint ?? "Not recorded"}</dd>
+            <dt>Status / current step</dt><dd>{run.state.status} / {run.state.current_step.replaceAll("_", " ")}</dd>
+          </dl>}
+          {workspace.loading && <p role="status">{pendingStart === caseId ? "Waiting for the new case to be persisted…" : "Loading selected case…"}</p>}
+          {busy && <p role="status">{commands[caseId]}… Observation remains live.</p>}
+        </section>
+        {commandErrors[caseId] && <div className="error-banner" role="alert">{commandErrors[caseId]}</div>}
+        <ApprovalPanel key={run?.state.run_id ?? caseId} run={run} busy={busy}
+          onApprove={(decision, reviewer, reason) => {
+            if (!run?.state.checkpoint_id) return Promise.resolve();
+            return command(caseId, "Recording decision", () => api.approve(caseId, {
+              checkpoint_id: run.state.checkpoint_id!, decision, reviewer_id: reviewer, reason
+            }));
+          }}
+          onResume={(operator) => {
+            if (!run?.state.checkpoint_id) return Promise.resolve();
+            return command(caseId, "Resuming checkpoint", () => api.resume(caseId, run.state.checkpoint_id!, operator));
+          }} />
+      </>}
+      <div className="observation-status" role="status">Native audit: {workspace.connection}</div>
+      {workspace.error && <div className="error-banner" role="alert">{workspace.error} <button onClick={workspace.retry}>Retry observation</button></div>}
+      <Timeline events={events} selected={Boolean(caseId)} />
+      <RunInspector key={caseId ?? "draft"} run={run} />
+      <details className="supporting-view"><summary>Workflow graph</summary><WorkflowGraph run={run} /></details>
+      <details className="supporting-view"><summary>Safe run explainer</summary><SelectedRunAssistant caseId={caseId} /></details>
     </main>
-  );
-}
-
-function renderOutcome(status?: RunStatus, failure?: string) {
-  if (!status) return "No selected run";
-  return failure ? `${status}: ${failure}` : status;
+    <aside className="audit-rail" aria-label="Audit trail"><AuditPanel events={events} run={run} /></aside>
+  </div>;
 }

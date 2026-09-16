@@ -10,9 +10,11 @@
 **/__pycache__
 **/*.pyc
 **/test-results
-report.*.json
-agent-framework/double-charge/maf/.env
-agent-framework/double-charge/maf/.env.*
-agent-framework/double-charge/maf/.foundry
+**/report.*.json
+**/.env
+**/.env.*
+**/.foundry
+**/*.log
+**/*.pid
 agent-framework/double-charge/maf/infra/foundry-hosted/agent/maf_double_charge
 agent-framework/double-charge/maf/infra/foundry-hosted/agent/model_to_harness_shared

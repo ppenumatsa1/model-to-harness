@@ -9,7 +9,6 @@ from .context import NodeContext
 class InvestigationNodes(NodeContext):
     async def normalize_complaint(self, state: DoubleChargeState) -> dict[str, Any]:
         node = "normalize_complaint"
-        await self._event(state, "node_started", "Complaint normalization started", node=node)
         await self._event(
             state,
             "model_call_started",
@@ -90,7 +89,10 @@ class InvestigationNodes(NodeContext):
             "decision_summary",
             result.safe_summary or f"Duplicate decision: {decision}",
             node=node,
-            data={"decision": decision},
+            data={
+                "decision": decision,
+                "matching_charge_ids": evidence.get("matching_charge_ids", [])[:100],
+            },
         )
         return {
             "duplicate_decision": decision,

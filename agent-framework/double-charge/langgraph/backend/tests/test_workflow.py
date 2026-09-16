@@ -2,11 +2,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.application.records import ApprovalRequest, StartCaseRequest
 from model_to_harness_langgraph.application.service import WorkflowService
 from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
 from model_to_harness_langgraph.infrastructure.domain_gateway import ToolResult
 from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.testing.commands import approval_request as ApprovalRequest
+from model_to_harness_langgraph.testing.commands import resume_request
+from model_to_harness_langgraph.testing.commands import start_request as StartCaseRequest
 from model_to_harness_langgraph.testing.fakes import (
     FakeDomainGateway,
     FakeModel,
@@ -45,7 +47,7 @@ async def run_approved(scenario_id: str = "duplicate_confirmed"):
             reviewer_id="reviewer-1",
         ),
     )
-    resumed = await service.resume(started.case_id)
+    resumed = await service.resume(started.case_id, resume_request(started))
     return service, audit, gateway, started, resumed
 
 
@@ -144,7 +146,7 @@ async def test_denial_resumes_to_closed_without_refund():
             reason="Evidence requires offline review",
         ),
     )
-    resumed = await service.resume(started.case_id)
+    resumed = await service.resume(started.case_id, resume_request(started))
 
     assert resumed.status == "completed"
     case = await service.get_case(started.case_id)
@@ -244,7 +246,7 @@ async def test_missing_refund_identifier_stays_uncertain_until_resolved(
             reviewer_id="reviewer-1",
         ),
     )
-    resumed = await service.resume(started.case_id)
+    resumed = await service.resume(started.case_id, resume_request(started))
     assert resumed.status == ("completed" if recovers else "manual_review")
     case = await service.get_case(started.case_id)
     assert case.outcome is not None

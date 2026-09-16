@@ -163,6 +163,7 @@ def run_scenarios(
         result = send(
             {
                 "action": "start",
+                "operator_id": identifier,
                 "scenario_id": scenario,
                 "complaint": "Please investigate two captured charges for one purchase.",
                 "customer_id": identifier,
@@ -173,13 +174,17 @@ def run_scenarios(
         if decision:
             assert result["status"] == "paused" and result["approval_required"]
             assert result["refund_status"] == "not_requested"
-            command = {"run_id": result["run_id"], "checkpoint_id": result["checkpoint_id"]}
+            command = {
+                "run_id": result["run_id"], "checkpoint_id": result["checkpoint_id"],
+                "operator_id": identifier,
+            }
             recorded = send(
                 {
                     **command,
                     "action": "approval",
                     "decision": decision,
                     "reviewer_id": identifier,
+                    "reason": "Deterministic scenario evidence reviewed.",
                 },
             )
             assert recorded["status"] == "paused" and recorded["refund_status"] == "not_requested"

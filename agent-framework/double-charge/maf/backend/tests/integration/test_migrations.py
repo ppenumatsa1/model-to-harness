@@ -265,8 +265,14 @@ def test_canonical_migration_cli(
     }
     command = [
         sys.executable,
-        "-m",
-        "maf_double_charge.infrastructure.persistence.migrations",
+        "-c",
+        (
+            "import runpy; "
+            "from maf_double_charge.config import Settings; "
+            "Settings.model_config['env_file'] = None; "
+            "runpy.run_module('maf_double_charge.infrastructure.persistence.migrations', "
+            "run_name='__main__')"
+        ),
         "--migrations-dir",
         str(migration_directory),
     ]

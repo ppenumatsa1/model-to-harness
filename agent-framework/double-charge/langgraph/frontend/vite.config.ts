@@ -1,15 +1,12 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
+import { serverConfig } from "./server-config";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
-  server: {
-    port: 5173,
-    proxy: {
-      "/api": "http://localhost:8000",
-      "/health": "http://localhost:8000"
-    }
-  },
+  envDir: false as const,
+  envPrefix: [],
+  server: mode === "test" ? serverConfig({}) : serverConfig(),
   test: {
     environment: "jsdom",
     setupFiles: "./tests/setup.ts",
@@ -20,4 +17,4 @@ export default defineConfig({
       }
     }
   }
-});
+}));

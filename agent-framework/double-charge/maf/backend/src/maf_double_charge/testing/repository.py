@@ -3,14 +3,17 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from copy import deepcopy
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from maf_double_charge.application.errors import RefundIdempotencyConflictError
 from maf_double_charge.application.models import (
     ApprovalResponse,
+    CaseSummary,
     DurableEvent,
     RefundLedgerEntry,
     WorkflowState,
+    utc_now,
 )
 from model_to_harness_shared import WorkflowOutcome
 
@@ -21,6 +24,7 @@ if TYPE_CHECKING:
 class InMemoryRepository:
     def __init__(self) -> None:
         self.states: dict[str, WorkflowState] = {}
+        self.created_at: dict[str, datetime] = {}
         self.case_runs: dict[str, str] = {}
         self.events: dict[str, list[DurableEvent]] = defaultdict(list)
         self.approvals: dict[str, tuple[str, ApprovalResponse]] = {}
@@ -45,6 +49,7 @@ class InMemoryRepository:
             if state.run_id in self.states or state.case_id in self.case_runs:
                 raise ValueError("run or case already exists")
             self.states[state.run_id] = deepcopy(state)
+            self.created_at[state.run_id] = utc_now()
             self.case_runs[state.case_id] = state.run_id
 
     async def save_state(self, state: WorkflowState) -> None:
@@ -59,6 +64,26 @@ class InMemoryRepository:
         run_id = self.case_runs.get(case_id)
         return await self.get_state(run_id) if run_id else None
 
+    async def get_run_created_at(self, run_id: str) -> datetime:
+        return self.created_at[run_id]
+
+    async def list_cases(
+        self, limit: int, before: tuple[datetime, str] | None = None
+    ) -> list[CaseSummary]:
+        ordered = sorted(
+            self.states.values(),
+            key=lambda state: (self.created_at[state.run_id], state.run_id),
+            reverse=True,
+        )
+        return [
+            CaseSummary(
+                **state.model_dump(include=set(CaseSummary.model_fields) - {"created_at"}),
+                created_at=self.created_at[state.run_id],
+            )
+            for state in ordered
+            if before is None or (self.created_at[state.run_id], state.run_id) < before
+        ][:limit]
+
     async def save_memory(self, case_id: str, memory: dict[str, object]) -> None:
         self.memory[case_id] = deepcopy(memory)
 
@@ -72,8 +97,11 @@ class InMemoryRepository:
             self.events[event.run_id].append(saved)
             return deepcopy(saved)
 
-    async def list_events(self, run_id: str, after: int = 0) -> list[DurableEvent]:
-        return [deepcopy(event) for event in self.events[run_id] if event.sequence > after]
+    async def list_events(
+        self, run_id: str, after: int = 0, limit: int | None = None
+    ) -> list[DurableEvent]:
+        events = [deepcopy(event) for event in self.events[run_id] if event.sequence > after]
+        return events if limit is None else events[:limit]
 
     async def save_approval(
         self, run_id: str, checkpoint_id: str, response: ApprovalResponse

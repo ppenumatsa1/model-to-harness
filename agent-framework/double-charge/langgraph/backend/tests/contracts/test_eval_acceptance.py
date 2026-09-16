@@ -102,7 +102,7 @@ async def test_reviewed_seed_matches_real_native_hosted_dispatch(setup):
 
     _, rows = setup.load_intent(setup.AGENT_ROOT / "eval.yaml")
     async with open_runtime(
-        Settings(_env_file=None),
+        Settings(_env_file=None, telemetry_enabled=False),
         audit=InMemoryAuditRepository(),
         gateway=SharedDomainGateway(),
         model=FakeModel(),
@@ -148,6 +148,7 @@ async def test_read_only_business_evidence_covers_real_postgres_matrix(setup):
     schemas = (f"langgraph_app_{suffix}", f"langgraph_checkpoints_{suffix}")
     settings = Settings(
         _env_file=None,
+        telemetry_enabled=False,
         database_url=database,
         langgraph_schema=schemas[0],
         langgraph_checkpoint_schema=schemas[1],
@@ -170,6 +171,7 @@ async def test_read_only_business_evidence_covers_real_postgres_matrix(setup):
                     await send(
                         {
                             "action": "start",
+                            "operator_id": identifier,
                             "case_id": identifier,
                             "scenario_id": scenario,
                             "customer_id": identifier,
@@ -186,9 +188,13 @@ async def test_read_only_business_evidence_covers_real_postgres_matrix(setup):
                             "checkpoint_id": started["checkpoint_id"],
                             "decision": decision,
                             "reviewer_id": identifier,
+                            "reason": "Deterministic evaluation evidence reviewed",
                         }
                     )
-                    await send({"action": "resume", "case_id": identifier})
+                    await send({
+                        "action": "resume", "case_id": identifier,
+                        "checkpoint_id": started["checkpoint_id"], "operator_id": identifier,
+                    })
                 rows.append(
                     {
                         "scenario": scenario,

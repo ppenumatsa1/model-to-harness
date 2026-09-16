@@ -11,6 +11,7 @@ from langgraph.errors import GraphInterrupt
 from opentelemetry import trace
 from opentelemetry.trace import Status, StatusCode
 
+from ..config import Settings
 from .domain_gateway import ToolResult
 
 HOSTED_TRANSPORT_OPTOUTS = frozenset({"requests", "urllib3", "httpx"})
@@ -33,13 +34,19 @@ class Telemetry:
                 stack.callback(provider.force_flush)
 
 
-def verify_telemetry_policy(*, hosted: bool = False) -> None:
+def _verify_capture_policy(settings: Settings) -> None:
     for variable in (
         "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT",
         "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED",
     ):
-        if os.getenv(variable, "false").lower() not in {"false", "0", ""}:
+        values = (os.getenv(variable, "false"), getattr(settings, variable.lower()))
+        if any(value.lower() not in {"false", "0", ""} for value in values):
             raise RuntimeError("Telemetry message-content capture must be disabled")
+
+
+def verify_telemetry_policy(settings: Settings | None = None, *, hosted: bool = False) -> None:
+    settings = settings if settings is not None else Settings(_env_file=None)
+    _verify_capture_policy(settings)
     if hosted:
         from azure.core.settings import settings as azure_settings
 
@@ -57,7 +64,9 @@ def verify_telemetry_policy(*, hosted: bool = False) -> None:
             raise RuntimeError(
                 "Redundant hosted transport instrumentation is active: " + ", ".join(active)
             )
-    if not hosted and not os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
+    if not hosted and (
+        not settings.telemetry_enabled or not settings.applicationinsights_connection_string
+    ):
         return
     provider = trace.get_tracer_provider()
     sampler = getattr(provider, "sampler", None)
@@ -73,12 +82,14 @@ def verify_telemetry_policy(*, hosted: bool = False) -> None:
             raise RuntimeError("Workflow telemetry requires complete native trace retention")
 
 
-def configure_telemetry(*, hosted: bool = False) -> Telemetry:
+def configure_telemetry(settings: Settings | None = None, *, hosted: bool = False) -> Telemetry:
+    settings = settings if settings is not None else Settings(_env_file=None)
+    _verify_capture_policy(settings)
     if hosted:
-        verify_telemetry_policy(hosted=True)
+        verify_telemetry_policy(settings, hosted=True)
         return Telemetry()
-    if not os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
-        verify_telemetry_policy()
+    if not settings.telemetry_enabled or not settings.applicationinsights_connection_string:
+        verify_telemetry_policy(settings)
         return Telemetry()
     from azure.monitor.opentelemetry import configure_azure_monitor
     from opentelemetry import metrics
@@ -101,12 +112,12 @@ def configure_telemetry(*, hosted: bool = False) -> Telemetry:
 
     try:
         configure_azure_monitor(
-            connection_string=os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"],
+            connection_string=settings.applicationinsights_connection_string,
             logger_name="model_to_harness_langgraph",
             resource=Resource.create(
                 {
-                    "service.name": os.getenv("OTEL_SERVICE_NAME", "model-to-harness-langgraph"),
-                    "deployment.environment": os.getenv("APP_ENV", "local"),
+                    "service.name": settings.otel_service_name,
+                    "deployment.environment": settings.app_env,
                 }
             ),
             sampling_ratio=1.0,
@@ -128,7 +139,7 @@ def configure_telemetry(*, hosted: bool = False) -> Telemetry:
         raise
     owned = owned_providers()
     try:
-        verify_telemetry_policy()
+        verify_telemetry_policy(settings)
     except BaseException:
         owned.close()
         raise

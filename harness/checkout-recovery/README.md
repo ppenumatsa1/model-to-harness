@@ -18,5 +18,7 @@ independent siblings, not adapters around the MAF application.
 6. [Technology stack](docs/techstack.md)
 7. [Project structure](docs/projectstructure.md)
 
-The root [`docs/design/`](../../docs/design/) remains the canonical contract for
-the separate double-charge framework comparison.
+The separate double-charge implementations own their
+[MAF design](../../agent-framework/double-charge/maf/docs/design/) and
+[LangGraph design](../../agent-framework/double-charge/langgraph/docs/design/)
+documentation.

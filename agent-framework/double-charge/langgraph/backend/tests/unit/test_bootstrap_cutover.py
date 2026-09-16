@@ -20,7 +20,7 @@ async def test_injected_resources_are_borrowed_and_never_replaced(monkeypatch):
     monkeypatch.setattr(bootstrap, "setup_storage", forbidden)
     audit, model, saver = InMemoryAuditRepository(), FakeModel(), InMemorySaver()
     async with bootstrap.open_runtime(
-        Settings(_env_file=None),
+        Settings(_env_file=None, telemetry_enabled=False),
         audit=audit,
         model=model,
         gateway=FakeDomainGateway(),
@@ -54,7 +54,12 @@ async def test_partial_audit_open_failure_closes_owned_pool(monkeypatch):
     monkeypatch.setattr(bootstrap, "setup_storage", verify)
     monkeypatch.setattr(bootstrap, "PostgresAuditRepository", Audit)
     with pytest.raises(RuntimeError, match="opening failed"):
-        async with bootstrap.open_runtime(Settings(_env_file=None)):
+        async with bootstrap.open_runtime(
+            Settings(
+                _env_file=None, telemetry_enabled=False, database_url="postgresql://localhost/test",
+                azure_openai_endpoint="https://example.test", azure_openai_deployment="fake",
+            )
+        ):
             pytest.fail("Startup should fail")
     assert calls == ["verify", "open", "close"]
 
@@ -93,7 +98,12 @@ async def test_model_startup_failure_unwinds_saver_and_audit(monkeypatch, caplog
     monkeypatch.setattr(bootstrap.AsyncPostgresSaver, "from_conn_string", saver)
     monkeypatch.setattr(bootstrap, "open_model", model)
     with pytest.raises(RuntimeError, match="model construction"):
-        async with bootstrap.open_runtime(Settings(_env_file=None)):
+        async with bootstrap.open_runtime(
+            Settings(
+                _env_file=None, telemetry_enabled=False, database_url="postgresql://localhost/test",
+                azure_openai_endpoint="https://example.test", azure_openai_deployment="fake",
+            )
+        ):
             pytest.fail("No fake production fallback is permitted")
     assert calls == ["audit_open", "saver_open", "saver_close", "audit_close"]
     failures = [r for r in caplog.records if r.message == "runtime_startup_failed"]

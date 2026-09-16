@@ -1,5 +1,19 @@
-import { describe, expect, it } from "vitest";
-import { parseAguiSse } from "./api";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { api, parseAguiSse } from "./api";
+
+afterEach(() => vi.unstubAllGlobals());
+
+it("sends independent operator identities on Start and Resume command bodies", async () => {
+  const fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify({}), { status: 200 }));
+  vi.stubGlobal("fetch", fetch);
+  await api.start({
+    complaint: "Charged twice", customer_id: "customer-test", scenario_id: "duplicate-confirmed",
+    existing_case_id: "case-test", idempotency_key: "refund-test", operator_id: "case-opener"
+  });
+  await api.resume("run-test", "checkpoint-test", "different-resumer");
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ operator_id: "case-opener" });
+  expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ checkpoint_id: "checkpoint-test", operator_id: "different-resumer" });
+});
 
 describe("parseAguiSse", () => {
   it("orders valid projection events and counts malformed frames", () => {
@@ -13,4 +27,3 @@ describe("parseAguiSse", () => {
     expect(result.lastSequence).toBe(6);
   });
 });
-

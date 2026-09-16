@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from langgraph.checkpoint.memory import InMemorySaver
 from model_to_harness_langgraph.application.service import InvalidCommandError, WorkflowService
 from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
@@ -31,6 +32,7 @@ async def test_hosted_commands_keep_approval_and_resume_separate_and_return_safe
             json.dumps(
                 {
                     "action": "start",
+                    "operator_id": "hosted-test-operator",
                     "complaint": "I was charged twice for one purchase.",
                     "customer_id": "hosted-customer",
                 }
@@ -57,6 +59,7 @@ async def test_hosted_commands_keep_approval_and_resume_separate_and_return_safe
                     "checkpoint_id": checkpoint_id,
                     "decision": "approve",
                     "reviewer_id": "reviewer-1",
+                    "reason": "Evidence reviewed",
                 }
             )
         ),
@@ -66,16 +69,19 @@ async def test_hosted_commands_keep_approval_and_resume_separate_and_return_safe
 
     resumed = await dispatch_hosted_command(
         service,
-        parse_hosted_command(json.dumps({"action": "resume", "case_id": case_id})),
+        parse_hosted_command(json.dumps({
+            "action": "resume", "case_id": case_id,
+            "checkpoint_id": checkpoint_id, "operator_id": "hosted-test-operator",
+        })),
         "conversation-1",
     )
     assert resumed["case"]["status"] == "completed"
     assert resumed["case"]["outcome"]["approval_decision"] == "approved"
 
 
-def test_plain_text_defaults_to_start_and_errors_are_redacted():
-    command = parse_hosted_command("I was charged twice for the same purchase.")
-    assert command.action == "start"
+def test_plain_text_cannot_supply_implicit_identity_and_errors_are_redacted():
+    with pytest.raises(ValueError, match="explicit JSON"):
+        parse_hosted_command("I was charged twice for the same purchase.")
 
     error = safe_hosted_error(RuntimeError("postgresql://user:secret@example/db"))
     assert error == {

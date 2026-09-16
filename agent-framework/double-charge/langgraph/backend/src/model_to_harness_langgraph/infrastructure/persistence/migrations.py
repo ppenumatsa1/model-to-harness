@@ -198,6 +198,7 @@ async def require_unused_schemas(connection: AsyncConnection, schemas: list[str]
 async def setup_storage(
     settings: Settings, *, verify_only: bool = False, require_fresh: bool = False
 ) -> None:
+    settings.require_storage()
     if verify_only and require_fresh:
         raise ValueError("verify_only and require_fresh are mutually exclusive")
     validate_schema(settings.langgraph_schema)

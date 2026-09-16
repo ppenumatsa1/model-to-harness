@@ -4,6 +4,7 @@ from typing import Any
 from ..application.ports import AuditRepository
 from ..infrastructure.domain_gateway import DomainGateway
 from ..infrastructure.model_client import ComplaintModel
+from ..projections.state import persisted_state
 from .nodes.approval import ApprovalNodes
 from .nodes.completion import CompletionNodes
 from .nodes.investigation import InvestigationNodes
@@ -50,16 +51,48 @@ class DoubleChargeWorkflow(
     def config(run_id: str) -> dict[str, Any]:
         return {"configurable": {"thread_id": f"langgraph:{run_id}"}}
 
+    def graph_metadata(self) -> dict[str, Any]:
+        graph = self.graph.get_graph()
+        return {
+            "nodes": [
+                {"id": node, "label": node.strip("_").replace("_", " ").title()}
+                for node in graph.nodes
+            ],
+            "edges": [
+                {"source": edge.source, "target": edge.target, "label": edge.data}
+                for edge in graph.edges
+            ],
+            "parallel_groups": [["billing_validation", "policy_validation"]],
+        }
+
+    async def _invoke(self, value: Any, run_id: str) -> dict[str, Any]:
+        async for state in self.graph.astream(
+            value, config=self.config(run_id), stream_mode="values"
+        ):
+            if "case_id" not in state:
+                continue
+            await self.audit.update_run(
+                run_id,
+                {
+                    "state": persisted_state(state),
+                    "current_step": state.get("current_step", "start"),
+                },
+            )
+        snapshot = await self.snapshot(run_id)
+        if snapshot is None:
+            raise RuntimeError("Native execution did not persist a checkpoint")
+        return snapshot
+
     async def start(self, state: dict[str, Any]) -> dict[str, Any]:
-        return await self.graph.ainvoke(state, config=self.config(state["run_id"]))
+        return await self._invoke(state, state["run_id"])
 
     async def resume(self, run_id: str, decision: dict[str, Any]) -> dict[str, Any]:
         from langgraph.types import Command
 
-        return await self.graph.ainvoke(Command(resume=decision), config=self.config(run_id))
+        return await self._invoke(Command(resume=decision), run_id)
 
     async def continue_run(self, run_id: str) -> dict[str, Any]:
-        return await self.graph.ainvoke(None, config=self.config(run_id))
+        return await self._invoke(None, run_id)
 
     async def snapshot(self, run_id: str) -> dict[str, Any] | None:
         snapshot = await self.graph.aget_state(self.config(run_id))

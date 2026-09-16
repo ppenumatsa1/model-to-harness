@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import Any, Concatenate
 from uuid import uuid4
 
-from ..projections.state import public_state, selected_memory
+from ..projections.state import persisted_state, public_state, selected_memory
+from ..projections.workspace import CasePage, CaseSummary, WorkspaceView, workspace_view
+from .history import decode_cursor, encode_cursor
 from .ports import (
     ApprovalCommandConflictError,
     AuditRepository,
@@ -18,6 +22,7 @@ from .records import (
     CaseView,
     NativeEvent,
     OutcomeView,
+    ResumeRequest,
     RunStatus,
     StartCaseRequest,
     StartCaseResponse,
@@ -92,7 +97,7 @@ class WorkflowService:
                 "current_step": "start",
                 "checkpoint_id": None,
                 "approval_required": False,
-                "state": {},
+                "state": persisted_state(state),
                 "outcome": None,
             }
         )
@@ -103,6 +108,7 @@ class WorkflowService:
             summary="Double-charge workflow started",
             node="start",
             status="running",
+            actor_id=request.operator_id,
         )
         with self.workflow.trace_run(run_id, case_id=case_id, command="start"):
             result = await self.workflow.start(state)
@@ -133,24 +139,53 @@ class WorkflowService:
             summary=f"Reviewer command recorded: {approval.decision}",
             node="request_approval",
             status="pending_resume",
-            data={"decision": approval.decision, "checkpoint_id": approval.checkpoint_id},
+            data={
+                "decision": approval.decision, "checkpoint_id": approval.checkpoint_id,
+                "reason": approval.reason,
+            },
+            actor_id=approval.reviewer_id,
             dedupe_key=f"approval-command:{run['run_id']}",
         )
 
     @serialized_command
-    async def resume(self, case_id: str) -> StartCaseResponse:
+    async def resume(self, case_id: str, request: ResumeRequest) -> StartCaseResponse:
         run = await self._require_run(case_id)
         approval = await self.audit.get_pending_approval(run["run_id"])
         if not approval:
             raise InvalidCommandError("Record an approval command before resuming")
+        if request.checkpoint_id != approval["checkpoint_id"]:
+            raise InvalidCommandError("Checkpoint does not match the recorded approval")
         snapshot = await self.workflow.snapshot(run["run_id"])
         if snapshot is None:
             raise InvalidCommandError("No durable graph checkpoint is available")
+        if snapshot.get("__interrupt__"):
+            bound = await self.results.persist(snapshot)
+            if bound.checkpoint_id != request.checkpoint_id:
+                raise InvalidCommandError("Recorded approval does not match the native interrupt")
+        elif run.get("checkpoint_id") not in {
+            request.checkpoint_id, snapshot.get("approval_checkpoint_label")
+        }:
+            raise InvalidCommandError("Checkpoint does not match the current run")
         if not snapshot.get("__interrupt__"):
             if not snapshot.get("approval_decision"):
                 raise InvalidCommandError("Run is not waiting for this approval")
             if snapshot["approval_decision"] != approval["decision"]:
                 raise InvalidCommandError("Native checkpoint conflicts with recorded approval")
+        intent = hashlib.sha256(
+            json.dumps(request.model_dump(), sort_keys=True).encode()
+        ).hexdigest()
+        await self.audit.append_event(
+            case_id=case_id,
+            run_id=run["run_id"],
+            event_type="resume_command_recorded",
+            summary="Operator requested continuation from the recorded approval checkpoint",
+            node="request_approval",
+            status="pending_resume",
+            data={"checkpoint_id": request.checkpoint_id},
+            actor_id=request.operator_id,
+            dedupe_key=f"resume-command:{run['run_id']}:{intent}",
+        )
+        if not snapshot.get("__interrupt__"):
             with self.workflow.trace_run(run["run_id"], case_id=case_id, command="resume"):
                 result = (
                     snapshot
@@ -160,19 +195,6 @@ class WorkflowService:
             response = await self.results.persist(result)
             await self.audit.consume_approval(run["run_id"])
             return response
-        bound = await self.results.persist(snapshot)
-        if bound.checkpoint_id != approval["checkpoint_id"]:
-            raise InvalidCommandError("Recorded approval does not match the native interrupt")
-        await self.audit.append_event(
-            case_id=case_id,
-            run_id=run["run_id"],
-            event_type="run_resumed",
-            summary="Durable run resumed from the approval checkpoint",
-            node="request_approval",
-            status="running",
-            data={"checkpoint_id": run["checkpoint_id"]},
-            dedupe_key=f"resume:{run['run_id']}",
-        )
         command = {
             "decision": approval["decision"],
             "reviewer_id": approval["reviewer_id"],
@@ -203,6 +225,26 @@ class WorkflowService:
             outcome=OutcomeView.model_validate(run["outcome"]) if run.get("outcome") else None,
         )
 
+    async def list_cases(self, limit: int = 10, cursor: str | None = None) -> CasePage:
+        if not 1 <= limit <= 100:
+            raise ValueError("Case history limit must be between 1 and 100")
+        rows = await self.audit.list_runs(limit + 1, decode_cursor(cursor))
+        items = [CaseSummary.model_validate(row) for row in rows[:limit]]
+        more = len(rows) > limit
+        return CasePage(
+            items=items,
+            has_more=more,
+            next_cursor=encode_cursor(items[-1].created_at, items[-1].run_id) if more else None,
+        )
+
+    async def workspace(self, case_id: str) -> WorkspaceView:
+        records = await self.audit.workspace_records(case_id)
+        if records is None:
+            raise CaseNotFoundError(case_id)
+        events = await self.audit.list_events(records["run"]["run_id"])
+        metadata = self.workflow.graph_metadata()
+        return workspace_view(records, events, metadata)
+
     @serialized_command
     async def continue_run(self, case_id: str) -> StartCaseResponse:
         """Continue a durable graph after a worker-level recovery breakpoint."""
@@ -231,9 +273,11 @@ class WorkflowService:
             await self.audit.consume_approval(run["run_id"])
         return response
 
-    async def list_events(self, case_id: str, after: int = 0) -> list[NativeEvent]:
+    async def list_events(
+        self, case_id: str, after: int = 0, limit: int | None = None
+    ) -> list[NativeEvent]:
         run = await self._require_run(case_id)
-        return await self.audit.list_events(run["run_id"], after)
+        return await self.audit.list_events(run["run_id"], after, limit)
 
     async def explain(self, case_id: str, question: str) -> tuple[str, list[int]]:
         events = await self.list_events(case_id)

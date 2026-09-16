@@ -1,10 +1,12 @@
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.application.records import ApprovalRequest, StartCaseRequest
 from model_to_harness_langgraph.application.service import WorkflowService
 from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
 from model_to_harness_langgraph.infrastructure.domain_gateway import SharedDomainGateway
 from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.testing.commands import approval_request as ApprovalRequest
+from model_to_harness_langgraph.testing.commands import resume_request
+from model_to_harness_langgraph.testing.commands import start_request as StartCaseRequest
 from model_to_harness_langgraph.testing.fakes import FakeModel
 from model_to_harness_shared import EVALUATION_CASES, get_fixture
 from pydantic import ValidationError
@@ -39,7 +41,7 @@ async def test_shared_fixture_matches_framework_neutral_outcome(evaluation_case)
                 reviewer_id="shared-contract-test",
             ),
         )
-        await service.resume(started.case_id)
+        await service.resume(started.case_id, resume_request(started))
 
     outcome = (await service.get_case(started.case_id)).outcome
     assert outcome is not None
@@ -77,7 +79,7 @@ async def test_shared_simulator_state_is_isolated_per_run():
                 reviewer_id="isolation-test",
             ),
         )
-        await service.resume(started.case_id)
+        await service.resume(started.case_id, resume_request(started))
         events = await service.list_events(started.case_id)
         assert any(event.event_type == "tool_call_retried" for event in events)
 

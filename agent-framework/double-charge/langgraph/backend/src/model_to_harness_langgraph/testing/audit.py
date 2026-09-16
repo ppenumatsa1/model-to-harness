@@ -6,12 +6,12 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from ..application.audit import audit_data
 from ..application.ports import (
     ApprovalCommandConflictError,
     CommandInProgressError,
     RefundIdempotencyConflictError,
     _approval_identity,
-    safe_event_data,
 )
 from ..application.records import NativeEvent
 
@@ -27,6 +27,7 @@ class InMemoryAuditRepository:
         self._dedupe: dict[tuple[str, str], NativeEvent] = {}
         self._lock = asyncio.Lock()
         self._commands: set[str] = set()
+        self._sequence = 0
 
     @asynccontextmanager
     async def command_lock(self, case_id: str):
@@ -47,15 +48,46 @@ class InMemoryAuditRepository:
     async def create_run(self, record: dict[str, Any]) -> None:
         async with self._lock:
             self.runs[record["run_id"]] = deepcopy(record)
+            self.runs[record["run_id"]].setdefault("created_at", datetime.now(UTC))
+            self.runs[record["run_id"]].setdefault("updated_at", datetime.now(UTC))
             self.case_to_run[record["case_id"]] = record["run_id"]
 
     async def update_run(self, run_id: str, updates: dict[str, Any]) -> None:
         async with self._lock:
             self.runs[run_id].update(deepcopy(updates))
+            self.runs[run_id]["updated_at"] = datetime.now(UTC)
 
     async def get_run_by_case(self, case_id: str) -> dict[str, Any] | None:
         run_id = self.case_to_run.get(case_id)
         return deepcopy(self.runs.get(run_id)) if run_id else None
+
+    async def list_runs(
+        self, limit: int, before: tuple[Any, str] | None = None
+    ) -> list[dict[str, Any]]:
+        records = [
+            {
+                **deepcopy(run),
+                "scenario_id": run["state"].get("scenario_id"),
+                "terminal_status": (run.get("outcome") or {}).get("terminal_status"),
+            }
+            for run in self.runs.values()
+            if before is None or (run["created_at"], run["run_id"]) < before
+        ]
+        return sorted(
+            records, key=lambda run: (run["created_at"], run["run_id"]), reverse=True
+        )[:limit]
+
+    async def workspace_records(self, case_id: str) -> dict[str, Any] | None:
+        async with self._lock:
+            run_id = self.case_to_run.get(case_id)
+            if run_id is None:
+                return None
+            run = self.runs[run_id]
+            return deepcopy({
+                "run": run,
+                "approval": self.approvals.get(run_id),
+                "memory": self.memories.get((run["customer_id"], case_id), {}),
+            })
 
     async def append_event(self, **kwargs: Any) -> NativeEvent:
         dedupe_key = kwargs.pop("dedupe_key", None)
@@ -63,11 +95,12 @@ class InMemoryAuditRepository:
         async with self._lock:
             if dedupe_key and (run_id, dedupe_key) in self._dedupe:
                 return self._dedupe[(run_id, dedupe_key)]
+            self._sequence += 1
             event = NativeEvent(
-                sequence=len(self.events[run_id]) + 1,
+                sequence=self._sequence,
                 event_id=str(uuid4()),
                 timestamp=datetime.now(UTC),
-                data=safe_event_data(kwargs.pop("data", None)),
+                data=audit_data(kwargs.pop("data", None), actor_id=kwargs.pop("actor_id", None)),
                 **kwargs,
             )
             self.events[run_id].append(event)
@@ -75,11 +108,13 @@ class InMemoryAuditRepository:
                 self._dedupe[(run_id, dedupe_key)] = event
             return event
 
-    async def list_events(self, run_id: str, after: int = 0) -> list[NativeEvent]:
-        return [deepcopy(event) for event in self.events[run_id] if event.sequence > after]
+    async def list_events(
+        self, run_id: str, after: int = 0, limit: int | None = None
+    ) -> list[NativeEvent]:
+        return [deepcopy(event) for event in self.events[run_id] if event.sequence > after][:limit]
 
     async def save_approval(self, run_id: str, approval: dict[str, Any]) -> None:
-        candidate = {**deepcopy(approval), "consumed": False}
+        candidate = {**deepcopy(approval), "consumed": False, "created_at": datetime.now(UTC)}
         async with self._lock:
             existing = self.approvals.get(run_id)
             if existing is None:

@@ -1,0 +1,525 @@
+# MAF issues, changes and fixes
+
+## Provenance and reading this ledger
+
+This independently owned ledger was split on **2026-09-16** from the MAF sections
+and MAF portions of mixed sections in the working-tree
+`docs/design/issues-changes-fixes.md`. Original dates, source hashes, run/evaluation
+identities, failure evidence and historical limitations are retained below.
+Other-lane incidents, deployments and validation are not MAF evidence and are
+excluded. Neutral lessons are stated only where they apply to MAF.
+
+Historical observations are not fresh health checks. In particular, hosted **v8**
+and API/frontend revision **0000005** predate the local outcome corrections,
+three-pane workspace, command actors and business audit v2. Older "complete"
+release gates remain dated results, not claims that today's source is deployed.
+The initial docs/configuration implementation performed no cloud rollout, cloud
+model invocation, application-database write, commit or push. Authorized integration
+tests wrote only their random schemas in the dedicated disposable local database.
+Subsequent parent-run local acceptance is recorded separately below.
+
+## 2026-09-16 - Preserving foundation during application updates
+
+Added a supported MAF-owned `--app-only --update-existing` release mode and
+`infra/app/update-existing.bicep`. The template manages only the existing API/UI
+Container Apps; it does not reapply PostgreSQL, identities, role assignments,
+registry, networking or the Foundry monitoring connection. This resolves the
+earlier unintended monitoring-sharing change for application-only releases.
+`--update-existing` alone still uses the full-foundation path.
+
+The new mode preserves existing app configuration and secrets, rejects unrelated
+changes and drift, and retains clean-source/archive, immutable-image,
+verify-only schema, full-resource Provider what-if, rollout-readiness and hosted
+package verification. It rejects foundation/firewall flags rather than silently
+ignoring them. Secrets remain in private secure parameters, never release output.
+
+All **129 release contract tests**, Ruff and Bicep compilation passed. Actual
+baseline and existing locked-image-digest previews each reported **2 app Modify /
+22 Ignore**, with no foundation modifications or resource creation/deletion.
+Early diagnostic previews failed closed while API shapes and secure parameter
+structure were corrected; only the final Provider-level previews passed the
+release checks. These are implementation and read-only preview results, not
+deployment or post-deployment acceptance.
+
+## 2026-09-16 - Requested Foundry release blocked at source provenance
+
+**Subsequent authorization:** the user approved committing to the feature branch
+and deploying to Foundry. The commit-approval blocker below is historical.
+The release must still preserve existing foundation and monitoring-sharing
+settings; deployment and acceptance results will be recorded after execution.
+
+The user authorized deploying the completed MAF changes to the existing Foundry
+project, followed by smoke, E2E, evaluations and telemetry acceptance. Local
+acceptance is complete, but **this source has not been deployed**.
+
+The release tooling requires clean, committed lane/shared source. The approved
+workspace, audit, configuration and documentation changes remain uncommitted.
+Permission to create a local release commit without pushing was requested; the
+user was unavailable. The existing no-commit boundary and release guard were
+preserved rather than bypassed or deploying the old HEAD.
+
+The earlier read-only infrastructure preview also reported non-application
+foundation changes, including database/storage, monitoring and role-assignment
+properties. Unresolved ARM/default-value differences are not proof of a safe
+change. These require review before any foundation apply; no database reset,
+schema migration, credential rotation or role change was performed.
+
+The final read-only review confirmed that the Application Insights connection
+would change **`isSharedToAll: false -> true`**: this broadens sharing and is not
+expression noise. Six RBAC principal differences matched existing live identities
+and were confirmed reference-expression noise. Other writable/default property
+omissions remain unresolved. There is currently no supported app-only MAF release
+mode: both the initial foundation phase and final rollout use the full template.
+`--update-existing` prevents SQL migration, not foundation changes. Before release,
+preserve existing foundation semantics through a reviewed lane-owned release
+change, or obtain explicit approval for the reconciled foundation changes.
+
+At **21:07:47 UTC**, fresh read-only checks confirmed the existing database/schema,
+public liveness/readiness, API/UI revision **0000005**, and hosted **v8 active**.
+The isolated source guard rejected the current dirty source as expected.
+These are existing-deployment health results, not a rollout of the new workspace.
+
+Fresh deployed smoke, E2E, hosted evaluations and exact Foundry/Application
+Insights trace checks were **not run for the new source**. Earlier versions,
+evaluation results and telemetry gaps below remain historical evidence.
+Read-only preservation checks still retain all eight MAF runs, 779 events,
+92 native checkpoints and every baseline primary key. The normal preview remains
+available on **5174 / 8010**, with its existing Azure-backed configuration.
+
+## 2026-09-16 - Independent local PostgreSQL
+
+Added a lane-owned PostgreSQL-only `compose.yaml`, private `.env.compose` template
+and explicit `scripts/with_local_db.py` child-command wrapper. The MAF stack uses
+loopback port 15432 and independently scoped network/volume; the application's
+Azure-backed `.env` and existing database history were not changed.
+
+All 353 MAF backend tests passed with PostgreSQL integration enabled against this
+local stack and fake models. Independent writes, stop/restart isolation and volume
+persistence were verified. The existing MAF preview was restarted after its
+development reload stalled, then direct and UI-proxied readiness passed.
+Root Compose/configuration were retired without deleting the old database volume;
+root `shared/` remained unchanged. Foundry deployment is deferred.
+
+## 2026-09-16 - Six demo scenarios and consolidated business rules
+
+Merged the separate human-approval document into
+[business scenarios and rules](business-rules.md). MAF now owns seven design
+documents, with a six-scenario overview, plain-English walkthroughs, approval
+eligibility, separate resume, refund safeguards and a compact command reference.
+Lane references and the MAF links in repository navigation/article companions
+were repaired; article prose and LangGraph documents were not changed.
+
+`GET /api/scenarios` no longer advertises `verification-mismatch`, so the MAF
+demo picker has six choices. The fixture, verification guard, negative
+regression/evaluation coverage and existing audit history remain intact.
+This is not a new manual-resolution workflow or a removal of failure handling.
+
+Targeted API contracts, workflow tests and business-audit tests passed, as did
+lint and documentation-link checks. After restarting the local MAF backend,
+the real UI showed exactly the six documented choices and could still open the
+existing mismatch case read-only. LangGraph's live catalogue remained at seven.
+No business commands, history deletion, migration, cloud deployment, commit or
+push were performed for this simplification.
+
+## 2026-09-16 - Independent design and local configuration
+
+Created exactly eight lane-owned design topics, with actual MAF 4+1 architecture
+and workflow/boundary diagrams folded into architecture/user flow. Root design
+and diagrams are source provenance only, not runtime documentation dependencies.
+The lane README links every topic; existing infra/observability/cache guidance
+remains operationally authoritative.
+
+| Issue | Change and boundary |
+| --- | --- |
+| `.env` depended on launch cwd | Editable-source layout plus lane manifest selects only `maf/.env`. No parent/root/sibling scan; wheel/hosted packages stay environment-driven. |
+| Real storage had a credential-bearing fallback | Default is empty; real runtime/storage command construction explicitly requires `DATABASE_URL`. Fully injected fakes remain usable without database/model settings. |
+| Launcher bypassed canonical Settings | Root/venv-aware script invokes `maf_double_charge.main`; existing Settings host, port and development reload semantics now apply. |
+| Origin default disagreed with UI | Default `FRONTEND_ORIGIN` is `http://localhost:5174`; API default stays 8010. |
+| Vite port fixed; proxy process-only | `MAF_UI_PORT` and optional `MAF_API_PROXY_TARGET` use process-over-dotenv precedence. Absent proxy override derives from `HOST`/`PORT`; wildcard API binds map to loopback. |
+| Browser environment exposure risk | Server config returns only validated port and credential-free HTTP(S) origin. Client dotenv loading is disabled; production build does not read lane dotenv. |
+| Future private dotenv could alter tests | Autouse backend fixture disables dotenv and isolates Settings environment fields/cache; explicit fake app/evaluation factories use `_env_file=None` and disable model/export destinations. The migration CLI test also disables dotenv in its child interpreter. Browser fixtures use Vite test mode and explicit local proxies, refusing existing UI servers. |
+
+Settings precedence is constructor values > process environment > selected dotenv
+> safe defaults. Explicit `_env_file=path`/`None` overrides are preserved.
+See [.env.example](../../.env.example) and
+[local configuration](../../README.md#local-configuration).
+
+Initial offline validation: **322 backend tests passed, 30 PostgreSQL tests
+skipped** because the dedicated server was stopped. After the parent enabled
+`127.0.0.1:5434/maf_cutover_tests`, the full backend suite passed **352 tests with
+zero skips** in 49.42 seconds, including migration CLI isolation, checkpoint/restart,
+event ordering and guarded history maintenance. Fixtures created/dropped only
+their random MAF test schemas, not another lane's schemas or application data.
+One existing Starlette/httpx deprecation warning remained. Ruff and changed shell
+syntax passed. **57 frontend tests passed**, including 15 server-config/privacy
+cases and a real temporary production-build secret-negative check. Production
+TypeScript/Vite build, all **seven offline deterministic evaluations**, and the
+**one mocked Playwright workspace test** on isolated port 5189 passed.
+Vite emitted non-failing dependency directive and large-chunk warnings.
+All 101 checked local documentation links/anchors resolved. The shared disposable
+test server remains parent-owned; this task did not stop or reset it.
+Parent-owned private dotenv preparation, process restarts and new local acceptance
+were separate follow-up gates, now recorded in the dated entry below. Existing
+demonstrations and stored history were preserved.
+
+## 2026-09-16 - Business audit and command actors (local)
+
+Original source section: "Business audit and command actors - 2026-09-16".
+
+The right pane now shows business milestones rather than another technical log.
+Recorded time, explicit actor, decision/reason and restricted evidence belong to
+each event; the header is a current snapshot. Terminal event facts determine
+historical resolution rather than later state being substituted retrospectively.
+
+Start/Resume require trimmed operators; decisions require reviewer/reason.
+These are supplied identities, not authentication. System work is attributed
+to MAF. Version-2 actor/terminal/duplicate evidence uses existing JSON payloads,
+with no migration. Resume request is distinct from continuation emitted inside
+the resumed handler; refund recording, verification, uncertainty and simulated
+notice remain separate. Actors and reviewer reasons are excluded from model
+facts/general telemetry. API, hosted adapter, evaluation callers and the hosted
+seed allowlist changed together; unreviewed extra seed fields failed closed.
+
+Historical local verification: **338 backend tests with dedicated PostgreSQL,
+no skips**, Ruff; **42 frontend tests**, production build, mocked and isolated
+PostgreSQL/fake-model browser coverage, all seven API scenarios. Browser checks
+restored opener/reviewer/resumer after reload, required a fresh Resume operator
+and excluded technical identifiers from business evidence. These checks did not
+deploy the actor contract.
+
+### Authorized incompatible-history cleanup
+
+The earlier explicitly authorized operation removed **159 incompatible MAF cases**
+from `maf_double_charge_cutover` before `2026-09-16T16:30:33+00:00`.
+Preview found no running candidate and no refund record shared with retained
+cases. It removed 12,329 execution events, 84 approvals, 148 outcomes, 1,497 MAF
+checkpoints, 159 selected-memory rows and 67 simulated refund-ledger rows, plus
+the 159 cases/runs.
+
+The maintenance tool previews by default. Apply requires exact schema/count and
+executes one scoped locked transaction. Tests preserve compatible unfinished
+version-2 cases/checkpoints and newer cases, and reject running targets, shared
+refund evidence and changed counts. No schema reset or other-lane deletion
+occurred. This was intentional deletion, not archival or immutable retention.
+
+At the post-cleanup inspection there were zero incompatible pre-cutoff candidates,
+zero cases and a ready schema; those counts describe that instant, not today's
+history after subsequent demonstrations. The current task preserves existing
+demonstrations and performs no cleanup. Old deployed writers can create
+incompatible records again until upgraded. This local work does not imply a
+cloud deployment, smoke, evaluation or trace acceptance.
+
+## 2026-09-16 - Case workspace (local)
+
+Original source section: "MAF case workspace - local implementation".
+
+| Defect | Fix and historical evidence |
+| --- | --- |
+| Persisted cases not browsable | Safe `(created_at, run_id)` keyset history, ten/page and direct deep-link lookup; tests covered 25 cases, equal timestamps, inserts between pages, bad cursors and old-case lookup. |
+| Start hid progress until response | Browser provides fresh case/idempotency identity and observes persisted events while synchronous Start remains pending. Delayed fake-model checks proved this through Vite and the actual nginx template. No worker or auto-retry. |
+| Sequence allocation was not commit order | Short per-run transaction advisory lock before audit sequence allocation; delayed PostgreSQL commits proved later appends cannot skip an earlier event, while unrelated runs remain independent. |
+| Event-only refresh missed state changes | Native SSE follows committed batches plus independently changed safe workspace snapshots; delayed/terminal/paused/disconnect/cancel/error/idle-connection paths covered. |
+| Approval controls were browser-local | Read persisted decision/eligibility, support old reason-less records and require reasons for new commands. Approval alone never refunds. |
+| Typed UI declarations did not sanitize JSON | Server-owned positive field selection for state, memory, event and workspace responses; forbidden-field contracts keep checkpoint/key/raw payloads internal. |
+
+Historical backend/proxy gate: **318 backend tests**, dedicated local PostgreSQL,
+no skips, Ruff, all seven API scenarios. HTTPS nginx upstream delivered audit
+frames before delayed Start returned using the production template with only
+`BACKEND_HOST` substituted. No infrastructure change was needed.
+
+Historical frontend/browser gate: **21 frontend tests**, production build, mocked
+and isolated PostgreSQL-backed Playwright suites. Browser acceptance loaded ten
+of 25 seeded cases, reached all without duplicates, restored older deep links,
+saw pending-command events and reloaded an approval before explicit resume.
+The interactive Azure-connected preview was not used for mutating automation.
+
+### Independent review regressions
+
+The earlier read-only review reproduced and closed three lifecycle defects:
+
+| Finding | Resolution |
+| --- | --- |
+| Case A explanation appeared under case B | A callback guard was insufficient with one mutable runtime client; detach/settle the old invocation before clearing/reusing it. Regression uses the installed Copilot client and overlapping SSE. |
+| Refreshed history skipped cases | Bridge a new head to the loaded tail, handle initially empty history and queue refresh/load-more races. Coverage includes more than ten new cases and concurrent paging. |
+| Delayed history reverted newer live status | Track per-case revisions and reject stale list overwrites; regression retains the completed snapshot over an older paused response. |
+
+Six additional frontend regression cases were included in that final run. No
+second independent review or cloud release gate was claimed. These controls do
+not make application/ledger/audit writes globally atomic or add automatic crash
+recovery, real payment reconciliation or production reviewer authorization.
+
+## 2026-09-15 - Outcome corrections (local)
+
+MAF portions of "Article-driven outcome corrections - 2026-09-15":
+valid billing plus ineligible policy closes without refund; missing/invalid
+evidence still fails. Exhausted uncertain refunds route to manual review with
+`refund_outcome_uncertain`, not an assumed failed payment. Native routes, graph
+projection, normalized outcomes and focused tests changed independently.
+Retries remain per-invocation/recoverable, not a lifetime budget. These changes
+were not deployed. No other lane's missing-receipt or recovery feature is
+attributed to MAF here.
+
+## 2026-09-10 - Consolidated historical MAF cutover
+
+Original source: "2026-09-10 - Consolidated MAF refactor summary" and dated
+implementation/review/release incident sections. Source remained on
+`refactor/maf-backend-cutover`; no push/merge was claimed.
+
+The cutover separated `api`, `application`, native `maf`, `infrastructure`,
+`projections` and explicit `testing` packages. It preserved then-current 17 HTTP
+endpoints, 16 native graph nodes and seven scenarios; these are historical counts,
+not today's expanded workspace surface. SQL became version/checksum-tracked,
+transactionally locked and explicitly applied; startup only verifies readiness.
+Checkpoint backing became repository/run durable. There was no legacy reader,
+checkpoint conversion or schema reset.
+
+Local/API Python 3.12 and hosted Python 3.13 gained explicit lifecycle, installed
+SQL resources and independent hosted requirements. Local/wheel/container/hosted,
+real-model restart and native checkpoint acceptance were completed before release.
+
+| Stage / incident | Evidence and fix |
+| --- | --- |
+| Implementation baseline `e1299ba` | Consolidated **200 shared/backend tests**, seven deterministic evals, four UI tests/build/container/nginx, real-model API/browser and Python 3.13 hosted matrix; wheel SQL apply/repeat/evals passed outside checkout. Azure acceptance was still pending then. |
+| Dependency TLS failures | Container PyPI/npm downloads failed despite host success. Approved Microsoft mirrors fixed local/API/frontend builds without disabling TLS or changing 105 locked versions. NuGet feed was recorded but unused. |
+| CI target mismatch | Align dedicated `mafdev` / `maf_cutover_tests` / loopback 5434 settings without weakening guard. CI plus PostgreSQL directory passed 27 checks. |
+| Uvicorn logging regression | Clearing access arguments broke formatting; safe formatter retained allowlisted method/status only. Three real-Uvicorn tests; full suite then 192. |
+| Hosted import regression | Unconditional Uvicorn import broke Hypercorn-only hosted startup; detect already-loaded formatter classes without importing Uvicorn. Isolated 3.13 logging and later 200-test gate passed. |
+| Brittle browser wording | Require successful nonempty streamed explanation and exact rendering of actual output, not fake phrase `Current status is`. Real-model browser passed with deterministic outcome assertions retained. |
+| Preview `b9ddab2` | Existing stopped PostgreSQL caused `DeploymentWhatIfResourceError` / `ServerStoppedError`. Only approved server was started; Burstable `Standard_B1ms` SKU unchanged. |
+| What-if parsing | Require `--no-pretty-print` and `FullResourcePayloads`; coarse `Deploy`, incomplete/unknown results fail closed. Detail review preserved region/registry/database/storage/network boundaries, no creates/deletes. **210 tests** and Ruff passed. |
+| Cutover rollout `c460769ae243f2b99fc4d4121262f98859a12737` | Explicit fresh `maf_double_charge_cutover` migration, app image tag `c460769ae243f2b99fc4d4121262f98859a12737-06f843a1afb4`, API/frontend `0000004`, public smoke/seven API/browser passed. Hosted deploy exit 1 was not acceptance. |
+| Failed hosted v4 | `agent_version_failed`/`CodeError`: forced mirror failed in Foundry remote dependency resolution. Remove hosted-only index override, retain API/npm mirrors and TLS. Public PyPI resolved same 94 versions; 210 tests and isolated packaging passed. |
+| Hosted v5 session exhaustion | Two partial harness attempts reached four and six scenarios; failed-session pool readiness and read-only connection exhaustion established slot pressure. Stop uniquely owned sessions in `finally`, no capacity change or command retry. **214 tests** passed; 28 identified sessions stopped, original 50-slot server retained. |
+| CLI session invocation | Version belongs on session creation, not `invoke --session-id`; fixed arguments and finally cleanup. All seven v5 scenarios then passed. |
+| Follow-up update mode | `--update-existing` verifies complete current migration history/checksums read-only and never migrates/resets/adopts. **224 tests**, seven evals, four UI tests/build, Bicep/shell and source preparation passed. |
+| Refreshed app source `6948226` | API/frontend `0000005`, private API/public frontend preserved. Stopped server restarted unchanged; smoke/seven API/browser passed. Hosted-only retry reused identical v5 source; authoritative active status/environment/archive/files, not version increment, proved identity. |
+
+### Historical immutable artifacts
+
+| Artifact | Identity |
+| --- | --- |
+| Revision `0000004` backend digest | `sha256:594877bb8e146999a58cf81f6f523e775c9a16b894d71ff2af6fa9c30efd356f` |
+| Revision `0000004` frontend digest | `sha256:f407b8faa9fd0a57bc5f22b6730e8245e9420fd47aaab01f71c96ad25e7143bc` |
+| Revision `0000005` locked image tag | `6948226a3f3ac5c01741e88f708384cd4335c074-4591ddccd6c4` |
+| Revision `0000005` backend digest | `sha256:836750e74900e1459e2304369b7e79d9601c55362c88e8ef6ebe036d56fbb25c` |
+| Revision `0000005` frontend digest | `sha256:ab24e11e3c20ff2664eb2fa49e6d68f93af898e6b426b2870457868ec391a745` |
+| Hosted v5/v6/v7 runtime archive | `3064504d0bd63845c1122ce48fb55828e685f061528f537b12cf982695b21b52` |
+| Hosted v8 archive, source `73c8693` | `5875ffe17d0ce5f7446cc282861cbd19d573f5d5e07ea431dbec3d147e202f7b` |
+
+V5 initially matched 60 prepared source/SQL files; later full verification matched
+73 (58 MAF, 13 shared/resources, hosted main and requirements). Both hosts selected
+the cutover schema; old schema records were neither converted nor reset.
+
+### Evaluation failures, correction and reproduced pass
+
+Original sections: "Foundry evaluation executed, but scoring returned four
+errors", "Cloud behavior verified; evaluation scoring still blocks acceptance",
+"Refreshed apps and restored cloud evaluation scoring", and "Reproducible pinned
+evaluation and final regression checkpoint".
+
+| Evaluation group / run | Historical result |
+| --- | --- |
+| `eval_1ea80594fa1c4ec2bde07ba500bd90d1` / `evalrun_c4f502016b1941f1b3636ae7aecd4221` | V5, 0 passed / 0 failed / 4 errored / 0 unscored; responses existed, evaluator lists empty, no item reason. Not a pass. |
+| `eval_ed89748454c24176acc778f8f1f02911` / `evalrun_c99898759e204f6a9f98b39cd5867719` | Same four errors despite catalog pins 19/12. |
+| Historical `evalrun_bb44034286ee4a2486b4e42e04b5b90e` | Verified successful definition targeted v2, not v3; both judge `model`/`deployment_name` and response-items mappings informed correction. |
+| `eval_dce0330d3e4540218f41ebaf449ab449` / `evalrun_442be10affd04ea7b22fb2052792ecdb` | 3 passed / 1 failed / 0 errored; exposed contradictory complaint asking investigation despite unavailable reads. |
+| `eval_ac18caecd4694ce4bd49e7f3380708ec` / `evalrun_4d35eb5713e94a4c8469631a52ed26df` | 4 passed / 0 failed / 0 errored / 0 unscored. Task completion 1/1/1/1, relevance 5/4/4/5. |
+| `eval_117e25f434094efbadb14b1e5b51d0c1` / `evalrun_36f2ca4232df4adc9642a91d7ee32734` | Fresh repository-driven v5 reproduction: 4/0/0/0, all eight decisions inspected; task completion 1/1/1/1, relevance 4/4/3/5. |
+
+All eight responses from the two errored jobs matched their business expectations;
+that did not make judge errors passes. Second-job runs were `run-2e0a12e6a25e`,
+`run-eab1c0c7129c`, `run-0802759076fa`, `run-8bd374f96058`.
+The judge rejected `temperature=0` with HTTP 400 and accepted default temperature;
+this was a model constraint, not a proven full cause of opaque scoring failures.
+
+The approval seed was corrected from null to the actual MAF `waiting_approval`
+projection. Only contradictory bounded-failure complaint wording changed;
+negative behavior, ground truth, thresholds, model and SDK stayed unchanged.
+Nested generated caches gained scoped ignore rules while reviewed seeds stayed
+tracked. Old outputs remained historical.
+
+`prepare_hosted_eval.py` verifies active target, reviewed contracts and catalog
+pins, creates one fresh group, writes a private exact batch request and never
+creates a run or mutates `LAST_EVAL_ID`. Task completion 19 and relevance 12 are
+pinned. Beta12 CLI ignored requested evaluator overrides and could reuse criteria;
+ordinary CLI/binder invocation was not accepted as the pinned gate. Cloud judges
+were not rerun for subsequent sampling/noise-only v6-v8 releases.
+
+### Business, SQL, telemetry and retirement evidence
+
+The first broad v5 gate independently checked 15 durable runs (seven API, seven
+hosted, one recovered after old sessions stopped), approvals/checkpoints, matching
+refunds/retries/verification and no false-success notice. A scoped 5,550-record
+safety scan found no tested prohibited content/keys. Two HTTP 409s were intended
+duplicate-resume rejections. **217 tests** passed; absent trace parents remained
+an explicit limitation, not hidden by successful business outcomes.
+
+Intermittent local `AzureDeveloperCLICredential: signal: killed` persisted despite
+delegated auth/prewarming. The Go ten-second subprocess deadline was consistent
+with symptoms, not proven cause. Explicit `--transport sdk` preserved version-bound
+sessions, fresh conversations, no command retries and finally-stop without
+changing global auth or production runtime.
+
+Final v5 hosted runs, in seven-scenario order:
+`run-68a87c8fe665`, `run-5fbe5725d7fd`, `run-168e8cab7163`,
+`run-7bf92842ae76`, `run-ba82ac26e070`, `run-44a4fd047326`,
+`run-f8b3aa6184b8`. All seven plus the seven refreshed API cases passed direct
+read-only SQL assertions; the prior 15 accepted records also survived update.
+Approval correlation could occur in logs without a nonexistent workflow span.
+Sampling still prevented complete-tree claims at this checkpoint.
+
+Failed v4 was deleted without force. V1/v2/v3 retained five/two/three idle sessions;
+nonforced deletion returned 409, and force would cascade-delete sessions/files.
+That destructive retirement stayed held. V5's 81 sessions, later 83 after the
+reproduced eval, were idle at inspection. Old SQL schema/audit remained.
+Final tooling gate: **280 shared/backend tests**, seven deterministic evals,
+Ruff/shell; final typed SDK smoke `run-f844320e26e4`. Application images were still
+`6948226`, not rebuilt for tooling documentation.
+
+## 2026-09-10 - Native trace completeness and noise repair
+
+Original source: screenshot review, sampling repair, SDK setup/transport noise
+and lessons sections. These historical repairs followed functional acceptance.
+
+The verified host is `ResponsesAgentServerHost`/`response_handler` with manifest
+`responses` and agent-bound `responses.create`; MAF's internal model client also
+uses Responses. A span named `invoke_agent` does not imply the Invocations API.
+One supplied screenshot showed the wrong component; the MAF component was
+`mth-maf-wh2su65huqw5o-appi`, application ID
+`39d900dd-2761-41a6-8841-2cf18592b62a`, hosted role `agentsv2` and application role
+`model-harness-maf`. No sibling resource was changed to repair MAF.
+
+The exact broken operation `91fe6312caef546b7c059f420242d780` around `14:09:51Z`
+correlated to successful no-duplicate `run-f844320e26e4`, not billing failure.
+Its HTTP 404 target was deliberately redacted and not established. Referenced
+workflow `3db4c10f9628143f`, normalizer `b26dbfaa664350d0` and model parent
+`4146816a605b0bce` were missing as spans; `itemCount=2` confirmed sampling,
+not which layer lost each record.
+
+V5 operation `902c13fc62e39a434db29761ffd9da8b` at `14:08:13Z` did contain
+`workflow.run` `1c393a0466695413` -> normalizer `2672f8e91a1c1dd5` ->
+`invoke_agent ComplaintNormalizer` `27a4e38fc48a21c4` ->
+`chat model-harness-gpt-5-6-sol` `ed8c6a8572bd2f4a`. One complete trace was not
+evidence that all selected operations were complete.
+
+Pinned agentserver 2.0.0 / Microsoft distro 1.3.9 defaulted to
+`RateLimitedSampler(5.0)`. Exporter 1.0.0b57 with OTel 1.44 reproduced implicit
+parent context bypassing explicit-parent inheritance as rates changed. Supported
+`microsoft.fixed_percentage` / `1.0` retained complete native trees without
+replacing the hosted provider or synthetic production spans. The new per-operation
+gate rejected missing telemetry, orphaned parents and the old broken trace.
+
+| Release | Source and exact evidence |
+| --- | --- |
+| V6 | Config `092f284`; 98 local focused tests. Seven scenarios passed; 17 sessions idle. Queried 427 request/dependency rows: 12 workflows with exact branches, actual model parents/usage, weights one; five approval-only commands with no invented workflows. |
+| V6 no-duplicate | `a6fe2589bfbd976dc4eb48e9c62d48ee`, `2026-09-10T15:28:21Z`: 15 native spans, four edge groups, three message sends, normalizer/model chain, 41 input/19 output tokens. Gate passed; old trace and empty input failed. Reserved KQL alias `kind` became `spanType`. |
+| V7 | Config `4afca7d`; 101 local tests. Public SDK opt-outs cut setup spans from 17 to zero; HTTP fell 212 to 12 (ten command POSTs and two standalone GETs). All seven scenarios passed, but residual HTTP required investigation. |
+| V8 | Source `73c8693`; 105 focused tests. Distro's second instrumentation pass ignored its resolved opt-outs; public `uninstrument()` applied after SDK setup to only five allowed outgoing-HTTP instrumentors, failing visibly if unsuccessful. Native/inbound/provider/log ownership unchanged. |
+| V8 final | Seven scenarios, 12 workflows and 10 model calls passed exact parent/branch checks; 236 native dependencies, zero orphaned parents, weights one; **zero SDK setup and zero HTTP transport spans**. All 17 command sessions idle. |
+| V8 no-duplicate | `5a2f13378426a7b2691f2a9ab1692dd2`, `2026-09-10T16:07:48Z`: 15 native spans, four edge groups, three message sends; completeness gate passed. |
+
+V6 scenario runs: `run-7451272727d9`, `run-1f9b2c3f4aaa`,
+`run-776f829012fa`, `run-b90ca25d38b7`, `run-aea7c8e1faa4`,
+`run-efb8cf37e360`, `run-1112ed8dcbc8`.
+V8 scenario runs: `run-747f8f26d14b`, `run-2f8b65e7a388`,
+`run-fda93ec3ee33`, `run-393ad2ee5766`, `run-895f1256a1ee`,
+`run-f422f2462a26`, `run-f079540eaf6b`.
+
+V6/V7/V8 workflow/model counts stayed 12/10 while setup/HTTP changed 17/212,
+0/12, 0/0. The user confirmed full v6 flows in both portals. V7/v8 sessions were
+idle and no retained sessions/files/versions were deleted. Scoped prohibited-key
+checks passed. A command-only index retained failed and approval-only commands;
+operational logs remained separately available. Old sampled/noisy records cannot
+be repaired retroactively, and full retention has an ingestion-cost tradeoff.
+
+Lessons retained: test actual SDK initialization, not just configuration parsing;
+prove native parent IDs per selected operation, keep negative controls, do not
+hide missing ancestry with synthetic spans or arbitrary span dropping, and
+distinguish native model failures from intentionally disabled HTTP diagnostics.
+Use focused local reproduction and one affected scenario between candidates,
+then a final relevant matrix rather than repeatedly rerunning unrelated gates.
+Record version/source/archive/UTC window, stop only owned sessions and report
+completed/blocked scopes honestly. These are future guidance, not new tasks.
+
+Reuse [trace-completeness.kql](../../observability/trace-completeness.kql),
+[command-traces.kql](../../observability/command-traces.kql) and
+[observability guidance](../../observability/README.md).
+
+## Initial implementation and 2026-09-01/02 MAF incidents
+
+MAF portions of the root initial implementation/safeguards/validation and mixed
+Azure/monitoring verification sections:
+
+| Historical issue | MAF evidence, correction and limit |
+| --- | --- |
+| Domain and independence | Neutral validated models, deterministic simulators/fixtures/evaluation contracts; independent MAF FastAPI/React/native workflow, PostgreSQL, approval/resume and safe projections. Root PostgreSQL remained a developer dependency. |
+| Side effects | Deterministic IDs/timestamps, atomic simulator idempotency, persistent fingerprint/receipt and explicit conflict rejection; AG-UI tool result/end events and real read-only selected-run runtime. |
+| Initial validation limits | Shared/doc checks ran offline; Docker unavailable, PostgreSQL reconstruction tests then skipped but wired to dedicated CI; model smoke needed explicit credentials, browser checks needed local dependencies. Later gates above supersede only their corresponding limits. |
+| Tool heap exhaustion, Sept 1 | Node report showed heap exhaustion around 6.1 GiB resident / 6.3 GiB peak, no JS stack or env values. Narrow discovery replaced broad recursion; local diagnostic reports ignored. Not an application defect. |
+| First MAF ACR build, Sept 1 | Shared package referenced root LICENSE missing from build context; copy it before package installation. Root dockerignore excluded dependency trees/caches/private artifacts. |
+| Checkpoint codec, Sept 1 | Hosted local smoke could not deserialize `RunStatus`; narrowly allowlist status/approval enums. Remote approval timestamp then required Pydantic Core `TzInfo`; focused round-trip regressions, no unrestricted codec. |
+| MAF proxy 502, Sept 1 | Healthy revisions/readiness hid upstream SSL handshake reset. Nginx now sends backend FQDN as SNI via `proxy_ssl_server_name`/`proxy_ssl_name` for API and health. Revision/container logs, not unsupported AppLens/Resource Health, established diagnosis. |
+| Initial hosted eval, Sept 1 | Bare `task_completion` rejected; use `builtin.*`. Completed jobs then errored because target expected `item.query`, not old `input`. Initial generic smoke used completed cases after intentional HITL pause was scored incomplete; later v5 four-case suite explicitly covers correct pause behavior. |
+| MAF verification, Sept 2 | Hosted v2 active, public proxy smoke passed, MAF Insights had 141 traces without severity errors in the inspected 24-hour window. Other-lane counts/eval IDs are not reproduced as MAF results. |
+| MAF deployment automation, Sept 2 | Historical script generated credentials each invocation, used latest tags, assumed `python` and wrong relative Dockerfile paths. Explicit MAF environment, persisted credentials, configurable interpreter, resolved paths and release-specific tags fixed it. No rebuild solely for script cleanup; deployed smoke/status/ledger/telemetry checked independently. Current release behavior is in infra README. |
+| Monitoring connection, Sept 2 | MAF had App Insights but no Foundry project connection. Lane Bicep adds its ApplicationInsights connection and project reader access; hosted manifest stops setting platform-reserved connection string, API keeps secret injection. One matching MAF AppInsights resource verified. |
+| Trace deployment, Sept 2 | MAF hosted v3 active; fresh no-duplicate, denial and retry-safe refund with separate approval/resume. MAF operation `d75d9e816211ea239f3a31f077faef34` showed hosted request, native workflow/edge/executor/model/message and same conversation key. |
+| Lane guidance | `AGENTS.md` documents independence, durable approval, PostgreSQL authority, packaging, telemetry safety and required checks. No other-lane trace implementation or incident is a MAF feature. |
+
+## Remaining boundaries
+
+Current source remains local and uncommitted. Parent-run local dotenv acceptance
+is recorded below; cloud actor-contract rollout and fresh Foundry/telemetry
+acceptance remain deferred. Prior telemetry gaps are not resolved by this run. Old
+version/session retirement remains an explicitly destructive decision, not
+authorized by an idle session. No real provider reconciliation, production
+reviewer identity, global transaction or automatic crash-recovery guarantee is
+claimed. Existing component READMEs retain operational detail; this ledger does
+not duplicate a new deployment-flow design document.
+
+## 2026-09-16 - Parent-run local dotenv acceptance
+
+Provenance: parent acceptance report supplied at 14:11 CDT on 2026-09-16;
+this documentation sync records that evidence without repeating runtime operations.
+The parent removed exactly eight superseded root design documents and two root
+diagrams and verified links. At that point MAF retained eight independently owned
+design topics, before the later approval-document consolidation above.
+
+The parent created the private lane-root `.env` from the existing `maf-dev`
+configuration, with mode 0600 and Git exclusion. Resolved Settings matched that
+source in a private comparison launched from repository-root cwd. The backend
+was restarted through `scripts/dev-backend.sh` and the UI through `npm run dev`,
+without injected `.azure` values. Local API/UI ran on 8010/5174; readiness through
+the UI proxy passed.
+
+With the real `.env` present, the parent reran **352 backend tests**, **57 frontend
+tests** and the production build successfully. A private scan of all **426
+production output files** found none of the actual database URL, Application
+Insights connection string or Foundry endpoint. This is scoped evidence for that
+build and those tested values, not an unrestricted secrecy guarantee.
+
+| Fresh case | Recorded result | Native events | Elapsed |
+| --- | --- | ---: | ---: |
+| `dotenv-maf-no-refund-10b222f3` | `completed_no_refund` | 37 | 31.74 s |
+| `dotenv-maf-retry-10b222f3` | `completed_refunded`, verified recovery | 123 | 50.19 s |
+| `dotenv-maf-review-10b222f3` | `manual_review` | 109 | 39.05 s |
+| `dotenv-maf-approval-10b222f3` | Paused, no decision recorded | 69 | 24.79 s |
+
+Browser acceptance selected each fresh case and checked its exact native-event
+count, live subscription and persisted memory/outcome tabs. The retry audit showed
+**Existing refund reused**, then **Refund verified**, with the reviewer recorded.
+Actors used the `dotenv-demo-operator`, `dotenv-demo-reviewer` and
+`dotenv-demo-resumer` identifiers; System actions remained distinct. Historical
+cases remained visible after reload.
+
+The full baseline primary-key preservation check passed: all four existing runs
+were retained, with eight runs afterward. Counts changed as expected: events
+391 -> 729, outcomes 3 -> 6, approvals 4 -> 6, checkpoints 46 -> 86, memory 4 -> 8,
+and refund records 2 -> 4. The existing user-interacted
+`demo-approval-cd3bd932` case was untouched.
+
+Current source is **local and uncommitted**. This acceptance involved no
+deployment, provisioning, application-schema migration, history deletion, commit
+or push. Foundry-hosted and telemetry acceptance remain deferred; the local run
+does not resolve prior telemetry gaps or promote historical hosted-v8 evidence
+into acceptance of the current workspace/actor changes.
