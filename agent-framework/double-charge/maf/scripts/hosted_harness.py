@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -121,8 +122,10 @@ def invoke_sdk(
 ) -> dict[str, Any]:
     from azure.ai.projects.models import VersionRefIndicator
     from azure.core.exceptions import AzureError
+    from openai import OpenAIError
 
     session_id = f"maf-check-{uuid4().hex}"
+    phase = "session.create"
     try:
         session = project.agents.create_session(
             agent_name=SERVICE,
@@ -132,6 +135,7 @@ def invoke_sdk(
         deadline = time.monotonic() + 300
         while session.status == "creating" and time.monotonic() < deadline:
             time.sleep(2)
+            phase = "session.get"
             session = project.agents.get_session(agent_name=SERVICE, session_id=session_id)
         if (
             session.agent_session_id != session_id
@@ -140,7 +144,9 @@ def invoke_sdk(
             or session.status not in {"active", "idle"}
         ):
             raise ReleaseError("Hosted session is not ready on the requested version")
+        phase = "conversation.create"
         conversation = client.conversations.create()
+        phase = "response.create"
         response = client.responses.create(
             input=json.dumps(command),
             conversation=conversation.id,
@@ -148,6 +154,18 @@ def invoke_sdk(
             extra_body={"agent_session_id": session_id},
         )
         return response_result(response.model_dump_json())
+    except (AzureError, OpenAIError) as error:
+        status = getattr(error, "status_code", None)
+        print(
+            json.dumps({
+                "phase": phase,
+                "session_id": session_id,
+                "http_status": status if type(status) is int else None,
+                "error_type": type(error).__name__,
+            }),
+            file=sys.stderr,
+        )
+        raise
     finally:
         try:
             project.agents.stop_session(agent_name=SERVICE, session_id=session_id)

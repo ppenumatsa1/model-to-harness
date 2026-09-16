@@ -14,7 +14,6 @@ from ..application.models import (
     WorkflowState,
 )
 from ..application.ports import Repository
-from .agui import _DETAIL_FIELDS, _TOOL_NAMES
 from .workflow_graph import WORKFLOW_GRAPH
 
 Detail = str | bool | int | float | list[str] | None
@@ -114,6 +113,8 @@ def safe_state(state: WorkflowState) -> StateView:
 
 
 def safe_event(event: DurableEvent) -> SafeEvent:
+    from .agui import _DETAIL_FIELDS, _TOOL_NAMES
+
     fields = set(_DETAIL_FIELDS.get(event.event_type, frozenset())) | {
         "audit_version", "actor_id", "actor_type", "actor_source",
     }

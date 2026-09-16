@@ -18,6 +18,61 @@ model invocation, application-database write, commit or push. Authorized integra
 tests wrote only their random schemas in the dedicated disposable local database.
 Subsequent parent-run local acceptance is recorded separately below.
 
+## 2026-09-16 - Hosted v10 import defect and optional dependency isolation
+
+The corrected release from `dd14df9708db552b47c6cf02985d61ca876b1a67`
+deployed API/UI revisions **0000007** and hosted **v10**. Hosted source/environment
+readback passed, but two fresh SDK smoke attempts failed before business
+invocation. Control-plane activation was not treated as runtime acceptance.
+
+The new hosted investigation projection imported `workspace.safe_state`, whose
+module-level AG-UI constants import also loaded `ag_ui.core`. Hosted requirements
+do not include `ag-ui-protocol`; the fully provisioned backend test environment
+does. A fresh Python environment restored from the unchanged hosted
+`requirements.txt`, without installing the backend package dependencies or
+AG-UI, reproduced `ModuleNotFoundError: No module named 'ag_ui'` while importing
+the actual hosted adapter from the deployed source commit. This used the real
+agentserver SDK, not a stub or an artificial missing-module hook.
+
+Moved the AG-UI constants import into `safe_event()`, its only consumer.
+`safe_state()` and the hosted four-field investigation projection are unchanged;
+API event allowlists and behavior remain intact. The actual corrected adapter
+then imported successfully in that same isolated hosted environment, without
+creating a runtime, database connection, cloud session or invocation. No
+dependency declarations or versions were changed.
+
+A permanent isolated-subprocess regression denies `ag_ui` imports and verifies
+safe-state findings and the hosted subset's privacy exclusions. It failed before
+the fix and passes afterward. Workspace, AG-UI and release contracts passed
+**196 targeted tests**; the full backend suite, including the concurrent SDK
+diagnostic tests, passed **447 tests, zero skipped**, against the dedicated
+loopback PostgreSQL on port 15432. Ruff passed for the isolation source and test.
+The suite retained one existing Starlette/httpx deprecation warning.
+
+The related SDK lifecycle diagnostic improvement in `scripts/hosted_harness.py`
+reports only the failing SDK phase, owned session ID, numeric HTTP status and
+error class to stderr, never raw server messages. It preserves the original
+exception, session cleanup and no-retry behavior. All **five** independent
+`test_hosted_harness_diagnostics.py` tests are included in the **447-test**
+PostgreSQL result above; the parent also verified their targeted run and Ruff.
+
+This is a **reproduced local startup defect, not a recovered remote exception**.
+Console/system logs for the stopped failed sessions returned `stream_interrupted`;
+doctor skipped its hosted-active probe. The remote failure mechanism remains
+unconfirmed until usable runtime evidence is available. No additional cloud
+retry, commit or deployment was performed for this fix. Hosted v10 acceptance
+remains blocked; the original three missing trace roots and v9 **3/4** evaluation
+remain failed historical evidence.
+
+Private session evidence is under
+`files/release-20260916-workspace/maf-corrected/`: the
+`maf-hosted-real-import-baseline` and `maf-hosted-real-import-fixed` receipts/logs,
+`maf-agui-isolation-targeted.log`, and
+`maf-agui-isolation-full-backend.log` / `.xml`.
+The next fresh release/acceptance cohort will use the separate private directory
+`files/release-20260916-workspace/maf-hosted-repair/`; the corrected-v10 failure
+receipts remain intact.
+
 ## 2026-09-16 - First workspace rollout and acceptance findings
 
 The approved app-only release from `275bc7e609fe0adb55775a3f257984e46e2d51a1`
