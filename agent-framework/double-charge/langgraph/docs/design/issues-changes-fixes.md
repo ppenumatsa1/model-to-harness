@@ -12,6 +12,26 @@ and validation results are not LangGraph evidence.
 Related: [requirements](prd.md), [architecture](architecture.md),
 [configuration](techstack.md), [source map](projectstructure.md).
 
+## 2026-09-16 - Release build context includes frontend server configuration
+
+The first release attempt from source `275bc7e` stopped before building an image:
+ACR run `cpp` received an external HTTP **502** while pulling `python:3.12-slim`.
+A bounded retry passed the backend build (`cpq`) but failed the frontend build
+(`cpr`) with `TS2307: Cannot find module './server-config'`.
+
+The full working-tree frontend build had passed, but the release's positive
+source allowlist omitted the new `frontend/server-config.ts` imported by Vite.
+Added exactly that file to the existing allowlist and extended its regression
+test; unrelated frontend configuration, private dotenv, caches and other lanes
+remain excluded. The release contract checks and Ruff passed, and an actual
+frontend build from the allowlisted staging directory passed. This verifies the
+shipping context rather than using the full working tree as a substitute.
+
+Neither failed attempt applied app revisions or deployed a hosted version.
+Their failures are retained as build evidence, not reported as successful
+deployments. The correction requires its own committed source and a guarded
+release retry.
+
 ## 2026-09-16 - Requested Foundry release blocked at source provenance
 
 **Subsequent authorization:** the user approved committing to the feature branch
