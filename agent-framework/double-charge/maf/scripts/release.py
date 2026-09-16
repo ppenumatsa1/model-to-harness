@@ -868,31 +868,44 @@ class Release:
                         "false",
                     )
                 )
-                if self.args.app_only:
-                    metadata = self.runner.json(self.az(
-                        "acr", "repository", "show", "--name", self.registry_name,
-                        "--image", image,
-                    ))
-                    digest = metadata.get("digest", "")
-                    outputs = result.get("outputImages", [])
-                    if (
-                        not isinstance(digest, str) or not DIGEST.fullmatch(digest)
-                        or not isinstance(outputs, list) or len(outputs) != 1
-                        or not isinstance(outputs[0], dict)
-                        or outputs[0].get("digest") != digest
-                        or outputs[0].get("registry") != self.registry_server
-                        or outputs[0].get("repository") != f"model-harness-maf-{kind}"
-                        or outputs[0].get("tag") != tag
-                        or metadata.get("changeableAttributes", {}).get("writeEnabled") is not False
-                        or metadata.get("changeableAttributes", {}).get("deleteEnabled")
-                        is not False
-                    ):
-                        raise ReleaseError(
-                            "Built image digest, provenance or immutability is unverified"
-                        )
-                    images[kind + "Image"] = (
-                        f"{self.registry_server}/model-harness-maf-{kind}@{digest}"
+                metadata = self.runner.json(self.az(
+                    "acr", "repository", "show", "--name", self.registry_name,
+                    "--image", image,
+                ))
+                digest = metadata.get("digest", "")
+                outputs = result.get("outputImages", [])
+                if (
+                    not isinstance(digest, str) or not DIGEST.fullmatch(digest)
+                    or not isinstance(outputs, list) or len(outputs) != 1
+                    or not isinstance(outputs[0], dict)
+                    or outputs[0].get("digest") != digest
+                    or outputs[0].get("registry") != self.registry_server
+                    or outputs[0].get("repository") != f"model-harness-maf-{kind}"
+                    or outputs[0].get("tag") != tag
+                    or metadata.get("changeableAttributes", {}).get("writeEnabled") is not False
+                    or metadata.get("changeableAttributes", {}).get("deleteEnabled") is not False
+                ):
+                    raise ReleaseError(
+                        "Built image digest, provenance or immutability is unverified"
                     )
+                manifest = f"model-harness-maf-{kind}@{digest}"
+                self.runner.run(self.az(
+                    "acr", "repository", "update", "--name", self.registry_name,
+                    "--image", manifest, "--write-enabled", "false", "--delete-enabled", "false",
+                ))
+                for reference in (manifest, image):
+                    actual = self.runner.json(self.az(
+                        "acr", "repository", "show", "--name", self.registry_name,
+                        "--image", reference,
+                    ))
+                    attributes = actual.get("changeableAttributes", {})
+                    if (
+                        actual.get("digest") != digest
+                        or attributes.get("writeEnabled") is not False
+                        or attributes.get("deleteEnabled") is not False
+                    ):
+                        raise ReleaseError("Built manifest and tag protection readback failed")
+                images[kind + "Image"] = f"{self.registry_server}/{manifest}"
         return images
 
     def execute(self) -> None:

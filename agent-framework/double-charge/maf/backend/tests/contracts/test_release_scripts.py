@@ -743,13 +743,19 @@ def test_app_only_parameters_separate_secrets_from_nonsecret_objects(modules):
 
 @pytest.mark.parametrize("invalid", [
     None, "digest", "registry", "repository", "tag", "write-lock", "delete-lock",
-    "missing-output", "bad-status",
+    "missing-output", "bad-status", "manifest-digest", "manifest-write-lock",
+    "manifest-delete-lock", "tag-drift", "post-tag-write-lock", "post-tag-delete-lock",
 ])
-def test_app_only_build_checks_archive_image_provenance_and_locks(modules, tmp_path, invalid):
+@pytest.mark.parametrize("app_only", [False, True])
+def test_build_checks_archive_image_provenance_and_both_lock_scopes(
+    modules, tmp_path, invalid, app_only,
+):
     release, *_ = modules
     runner = Mock()
     subject = release.Release(
-        release.parser().parse_args(["--app-only", "--update-existing"]), runner
+        release.parser().parse_args(
+            ["--app-only", "--update-existing"] if app_only else []
+        ), runner
     )
     subject.workspace = tmp_path
     subject.subscription = "subscription"
@@ -767,6 +773,12 @@ def test_app_only_build_checks_archive_image_provenance_and_locks(modules, tmp_p
             {"digest": digest, "changeableAttributes": {
                 "writeEnabled": False, "deleteEnabled": False,
             }},
+            {"digest": digest, "changeableAttributes": {
+                "writeEnabled": False, "deleteEnabled": False,
+            }},
+            {"digest": digest, "changeableAttributes": {
+                "writeEnabled": False, "deleteEnabled": False,
+            }},
         ])
     if invalid in {"digest", "registry", "repository", "tag"}:
         responses[0]["outputImages"][0][invalid] = "mismatch"
@@ -778,6 +790,18 @@ def test_app_only_build_checks_archive_image_provenance_and_locks(modules, tmp_p
         responses[0]["outputImages"] = None
     elif invalid == "bad-status":
         responses[0]["status"] = "Failed"
+    elif invalid == "manifest-digest":
+        responses[2]["digest"] = "sha256:" + "c" * 64
+    elif invalid == "manifest-write-lock":
+        responses[2]["changeableAttributes"]["writeEnabled"] = True
+    elif invalid == "manifest-delete-lock":
+        responses[2]["changeableAttributes"]["deleteEnabled"] = True
+    elif invalid == "tag-drift":
+        responses[3]["digest"] = "sha256:" + "c" * 64
+    elif invalid == "post-tag-write-lock":
+        responses[3]["changeableAttributes"]["writeEnabled"] = True
+    elif invalid == "post-tag-delete-lock":
+        responses[3]["changeableAttributes"]["deleteEnabled"] = True
     runner.json.side_effect = responses
 
     def run(command, **kwargs):
@@ -806,9 +830,16 @@ def test_app_only_build_checks_archive_image_provenance_and_locks(modules, tmp_p
             c.args[0] for c in runner.run.call_args_list
             if c.args[0][1:3] == ["acr", "repository"]
         ]
-        assert len(locks) == 2
+        assert len(locks) == 4
         assert all(c[c.index("--write-enabled") + 1] == "false" for c in locks)
         assert all(c[c.index("--delete-enabled") + 1] == "false" for c in locks)
+        assert {c[c.index("--image") + 1] for c in locks} == {
+            reference
+            for kind in ("backend", "frontend")
+            for reference in (
+                f"model-harness-maf-{kind}:{tag}", f"model-harness-maf-{kind}@{digest}"
+            )
+        }
     assert not list(tmp_path.iterdir())
 
 
@@ -1297,9 +1328,19 @@ async def test_hosted_adapter_executes_explicit_workflow_commands(
                 identifier,
             )
             assert started["case_id"] == identifier
+            assert len(started["events"]) <= 20
+            investigation = started["investigation"]
+            assert set(investigation) == {
+                "duplicate_found", "duplicate_summary", "billing_validation", "policy_validation",
+            }
+            assert identifier not in json.dumps(investigation)
             result = started
             if decision:
                 assert started["status"] == "paused" and started["approval_required"]
+                assert investigation["duplicate_found"] is True
+                assert investigation["duplicate_summary"]
+                assert investigation["billing_validation"]["ok"] is True
+                assert investigation["policy_validation"]["ok"] is True
                 checkpoint = {
                     "operator_id": identifier,
                     "run_id": started["run_id"],

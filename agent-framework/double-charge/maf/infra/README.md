@@ -18,6 +18,10 @@ Projects SDK `2.3.0` and OpenAI client `2.54.0` versions.
 Hosted platform distro `microsoft-opentelemetry==1.3.9` supports the tested OTel
 `1.44` family; the SDK initializes its provider before MAF adds safety processors.
 The API's Azure Monitor distro is not installed as a competing hosted provider.
+API export explicitly requests fixed 100% source sampling (`sampling_ratio=1.0`)
+instead of the distro's implicit rate limit, preserving native roots during bursts.
+Hosted tracing retains its platform-owned provider. Ingestion completeness still
+requires the exact-run telemetry acceptance gate; source sampling is not that proof.
 The SDK content-capture flag is forced to `false` before host construction and is
 also declared in `azure.yaml`; inherited local settings cannot enable prompt capture.
 API package downloads use the approved HTTPS mirror
@@ -74,7 +78,8 @@ AZURE_DEV_USER_AGENT=microsoft_foundry_skill \
 4. Explicitly execute the versioned SQL runner with `--require-empty` against the
    new schema in the existing database. No runtime performs migrations or resets.
 5. Build only archived committed sources into unique commit-prefixed ACR tags and
-   lock those images against overwrite/deletion.
+   lock both those tags and their digest-scoped manifests against overwrite/deletion.
+   Read back both lock scopes and require their digests to match the build output.
 6. Apply new app images/schema and await successful, ready revisions.
 7. Set the nonsecret hosted schema/project endpoint, prepare source plus SQL
    resources, run `azd deploy model-harness-maf`, and verify the authoritative active
@@ -151,8 +156,12 @@ The ordered app-only gates are:
    only the intended image change and narrowly checked service-default omissions
    are allowed. A preview stops here without mutation.
 4. Build only the selected git archive into unique commit-prefixed tags, lock
-   overwrite/deletion, and cross-check ACR build output against registry digest,
-   repository, tag, and lock readback. Deploy by verified digest, not a mutable tag.
+   overwrite/deletion on both the tags and the exact digest-scoped manifests, and
+   cross-check ACR build output against registry digest, repository, tag, and both
+   lock readbacks. A tag lock does not protect the manifest's independent deletion
+   scope: the helper separately uses `acr repository update --image repository@digest`.
+   Re-read the tag after locking the manifest to reject retargeting or lost locks.
+   Deploy by verified digest, not a mutable tag.
 5. Run a second strict Provider what-if with the actual built digests, re-read app
    configuration and secrets to reject drift, and recheck the clean source before
    applying only the two apps.

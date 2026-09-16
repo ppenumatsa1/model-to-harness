@@ -12,6 +12,59 @@ and validation results are not LangGraph evidence.
 Related: [requirements](prd.md), [architecture](architecture.md),
 [configuration](techstack.md), [source map](projectstructure.md).
 
+## 2026-09-16 - Workspace release and fresh Foundry acceptance
+
+Committed the independent workspace/configuration/documentation changes as
+`275bc7e`, then the shipping-context correction below as
+`de7b27f1a9b7e7385ef62d3dbfeabf5e20c7e68e`, on
+`refactor/maf-backend-cutover`. No push was performed.
+
+The guarded existing-environment rollout passed without schema/foundation changes.
+API revision **0000015** and UI revision **0000010** are Running and match their
+latest-ready revisions. Build source fingerprint:
+`771a2c7516ebb7cb5d01ace2a3ee9d73ed30a0c09b1aecac7b93f2e759523ab6`.
+
+| Artifact | Verified identity |
+| --- | --- |
+| API image digest | `24c6d25720894ef494ef761147e03eb6b3563a51bf657c560c4be9b734536ad4` |
+| UI image digest | `caa6c6ded2616dc73550928cd7d3b9f0e76b8e758d819aadeadcc686ffe7c9d6` |
+| Foundry hosted agent | `model-harness-langgraph`, version **16 active** |
+| Hosted archive SHA-256 | `4e125ef9117eaa6c1ff9b66ddbca3631fef04872a6857b36022d8124fa411f51` |
+
+API and pinned hosted smoke passed; both seven-scenario E2E matrices passed, as
+did the deployed-browser workflow and seven deterministic evaluations. Read-only
+PostgreSQL checks verified all 14 E2E runs' native checkpoints, audit-v2 actors,
+explicit approval/continuation ordering, terminal facts and idempotent refund
+receipts. Native `completed` remains distinct from normalized refunded/no-refund/
+denied outcomes; the acceptance helper was corrected to compare those contracts
+separately, without changing application behavior or replaying cases.
+
+The four-case Foundry evaluation completed **4/4 passed**, with no failed,
+errored or unscored items. Group `eval_e5043dd197d3480692a8ee5af5d538ab`, run
+`evalrun_c5f3908c7d93493d80b35fe17f21bbed`, targets version 16 with reviewed
+`builtin.task_completion` **19** and `builtin.relevance` **12**.
+Per-item responses/scores are retained in the lane's ignored Foundry result cache;
+older evaluation failures remain historical evidence.
+
+All **16** fresh API/hosted smoke/E2E runs had correlated `workflow.run` traces.
+All eight hosted runs matched the actual Foundry agent name/version in the linked
+Application Insights resource. Exact smoke operation
+`56cfeee169cbb63c872ba17f06e23b70` passed native completeness: one workflow, nine
+native spans, four expected nodes, one normalizer model span, no missing or
+misparented spans, and retention weight one. The Foundry project's monitoring
+connection was independently confirmed to target this same App Insights resource,
+with sharing still false. This is programmatic trace verification, not a visual
+portal check.
+
+Release-time fixes and diagnostic corrections were retained: the first hosted
+command used the old generated package and returned version 15, so acceptance
+stopped; regenerating the package produced the verified version 16. Archive
+verification needed external private temporary staging because the preparation
+helper rejects alternate destinations inside the checkout. Hosted smoke initially
+failed locally for a missing `azure-ai-projects` SDK; restoring the existing hosted
+requirement allowed it to run. None of these failed attempts is counted as a
+successful fresh-version check.
+
 ## 2026-09-16 - Release build context includes frontend server configuration
 
 The first release attempt from source `275bc7e` stopped before building an image:

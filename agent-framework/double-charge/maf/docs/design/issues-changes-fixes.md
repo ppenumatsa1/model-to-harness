@@ -18,6 +18,49 @@ model invocation, application-database write, commit or push. Authorized integra
 tests wrote only their random schemas in the dedicated disposable local database.
 Subsequent parent-run local acceptance is recorded separately below.
 
+## 2026-09-16 - First workspace rollout and acceptance findings
+
+The approved app-only release from `275bc7e609fe0adb55775a3f257984e46e2d51a1`
+deployed API/UI revisions **0000006** and hosted **v9 active**. Schema checksums,
+app readiness, exact hosted source/environment and the unchanged
+`ApplicationInsights.isSharedToAll=false` setting passed.
+
+| Artifact | Verified identity |
+| --- | --- |
+| API image digest | `69af88f3a2339209156f7c1742140b4b2b97fb8ce99dee50d715f463f43bfbfc` |
+| UI image digest | `02627bc499ec4e5c2662ffde5b5d42c0128bd74af3a3c237e4c0fa01cb07d538` |
+| Hosted archive SHA-256 | `253161cb7e46d388a0705d097c660354f518c9115da0f60b074d24f8f55ecb8b` |
+
+API and pinned hosted smoke passed; both seven-case E2E matrices, the deployed
+browser workflow and seven deterministic evaluations passed. Read-only native
+PostgreSQL verification passed for all 14 E2E cases, including explicit
+approval/resume actors, actual terminal-status facts, native checkpoints and
+verified refund receipts.
+
+Three distinct issues were found rather than waived:
+
+| Issue | Evidence and correction |
+| --- | --- |
+| Tag locks did not protect digest-scoped manifests | Independent readback found write/delete flags still true on both new manifests. Only those two manifests were locked in place; subsequent manifest/tag/digest readback passed, without rebuilding or redeploying. The release helper now locks and verifies both scopes, with regression coverage. |
+| API sampling dropped workflow roots | Three of 16 fresh smoke/E2E runs lacked `workflow.run` after the ingestion deadline: `run-3faa770bca28`, `run-85b1c4dbe626`, `run-1aaa672bf6d5`. Exact-operation queries found sampled weights 2/3 and prompt ingestion, not merely missing run hashes. Azure Monitor 1.8.10 selected default `RateLimitedSampler(5.0)` because API setup omitted `sampling_ratio`. The correction is explicit 100% sampling; a new API rollout and fresh cohort are required. |
+| Hosted pause response omitted investigation findings | The last 20 events were almost entirely native lifecycle events, crowding out earlier duplicate/billing/policy findings. Add a bounded `investigation` subset using the existing safe-state projection; retain the technical tail without exposing complaint, operator/reason, credentials or raw checkpoint/tool data. |
+
+The v9 Foundry evaluation remains **3/4 passed, 1 failed**, with no errored or
+unscored items: group `eval_83565352d667435bb44679dc47b6c2fd`, run
+`evalrun_5c2c17bdebd0491a80c15c6432cfcbf8`. The approval-pause case safely paused
+without a refund, but task-completion scoring failed because the response did not
+communicate the investigation findings. The judge/rubric/threshold was not
+changed to turn this result green. Per-item responses and reasons are retained.
+
+The manifest-lock and hosted-finding corrections passed **150 release contracts**
+and Ruff. Explicit `sampling_ratio=1.0` is now implemented: **43 targeted telemetry
+tests** verified actual distro sampler selection without environment overrides,
+including **32/32 nested workflow roots retained** with parentage/privacy intact.
+The integrated backend suite passed **441 tests, zero skipped**, against isolated
+local PostgreSQL. This entry does not claim the sampling fix is deployed or that the
+original trace/evaluation failures disappeared. A corrected release must record
+its own version, new cases and fresh acceptance separately.
+
 ## 2026-09-16 - Preserving foundation during application updates
 
 Added a supported MAF-owned `--app-only --update-existing` release mode and

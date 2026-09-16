@@ -463,6 +463,7 @@ def _configure_azure(settings: Settings, processor: SafetySpanProcessor) -> Tele
 
     configure_azure_monitor(
         connection_string=settings.applicationinsights_connection_string,
+        sampling_ratio=1.0,
         resource=_resource(settings),
         logger_name="maf_double_charge",
         instrumentation_options={name: {"enabled": False} for name in _INSTRUMENTATIONS},

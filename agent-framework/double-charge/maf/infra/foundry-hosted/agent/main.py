@@ -13,6 +13,7 @@ from maf_double_charge.infrastructure.telemetry import (
     apply_hosted_instrumentation_policy,
     telemetry_context,
 )
+from maf_double_charge.projections.workspace import safe_state
 
 _lock = asyncio.Lock()
 _active_runtime: Runtime | None = None
@@ -150,6 +151,12 @@ async def _execute(command: dict[str, Any], conversation_id: str) -> dict[str, A
         "refund_status": state.refund_status,
         "retry_count": sum(event.event_type == "tool.call.retried" for event in events),
         "outcome": outcome.model_dump(mode="json") if outcome else None,
+        "investigation": safe_state(state).model_dump(
+            mode="json",
+            include={
+                "duplicate_found", "duplicate_summary", "billing_validation", "policy_validation",
+            },
+        ),
         "events": [
             {
                 "sequence": event.sequence,
