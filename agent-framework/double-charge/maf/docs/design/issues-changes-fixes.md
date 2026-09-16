@@ -18,6 +18,59 @@ model invocation, application-database write, commit or push. Authorized integra
 tests wrote only their random schemas in the dedicated disposable local database.
 Subsequent parent-run local acceptance is recorded separately below.
 
+## 2026-09-16 - Repaired workspace release and complete Foundry acceptance
+
+The guarded app-only rollout from committed source
+`1b4ce1098f32ece0294d5b4b3213a7d3786c0d1e` passed in `maf-dev` on
+`refactor/maf-backend-cutover`. No push was performed. Hosted **11** passed its
+first SDK smoke, resolving the runtime acceptance blocker after the import fix;
+the unavailable v10 remote exception is not retroactively claimed as recovered.
+
+| Artifact | Verified identity |
+| --- | --- |
+| Foundry agent | `model-harness-maf`, version **11 active** |
+| Hosted archive SHA-256 | `4948522a8d8640d4f4902ed0922332b34cc996db4e105cb1279dca98e245becb` |
+| API revision | `mth-maf-wh2su65huqw5o-api--0000008` |
+| API image digest | `da282d8954ebd706e32e81e1239d03a1efd24733473090254701b9b9a22434aa` |
+| UI revision | `mth-maf-wh2su65huqw5o-web--0000008` |
+| UI image digest | `cb0cb0afe069bfe006dea7e8f82361ccfb2cb4bb6f9bff7689934c4f233ed486` |
+
+Both revisions were healthy/latest-ready, with exact source/archive/environment
+readback and both tag- and manifest-scoped write/delete locks. The full-resource
+preview reported **2 Modify / 22 Ignore**. Foundation and monitoring sharing were
+unchanged; schema verification was read-only.
+
+API and pinned hosted smoke passed, followed by **7/7 API E2E**, **7/7 hosted
+E2E**, the deployed-browser workflow, **7/7 deterministic evaluations**, and
+**14/14 native audit checks**. Explicit approval/resume, actor attribution,
+framework checkpoints and verified idempotent refund receipts remained intact.
+
+The fresh Foundry evaluation completed **4/4 passed**, with zero failed, errored
+or unscored items, including the previously failing approval-pause case. Group
+`eval_b5c821553456403885a387b3ca932990`, run
+`evalrun_5ab9ea4b876b4f988b9346ad1afeb836`, targets version 11 with unchanged
+`builtin.task_completion` **19** and `builtin.relevance` **12**. All four
+per-item outputs/scores were downloaded to the ignored lane-owned Foundry cache;
+metadata retains the earlier v9 result under previous evaluations.
+
+All **16/16** fresh smoke/E2E workflow roots were present in Application Insights,
+and all **8/8** hosted runs matched agent/version 11. Exact smoke operation
+`300cb318e065cc55ca1b238caeac3eda` passed the hierarchy gate: one workflow root,
+15 native spans, one normalizer chain, four edge groups, three messages, no
+missing/orphan spans, no failed request, and maximum sampling weight one. The
+Foundry project connection independently targeted the same App Insights resource
+with `isSharedToAll=false`. This is programmatic verification of Foundry-linked
+telemetry, not visual portal inspection.
+
+Read-only preservation retained every original baseline key, including all
+eight baseline runs. The post-acceptance snapshot contained 60 runs, 4,767 events
+and 574 native checkpoints; the application migration count remained one.
+The local API/UI and independent PostgreSQL stayed running; private lane `.env`
+remained ignored with mode 0600. No history reset or old-case replay occurred.
+New private receipts are under
+`files/release-20260916-workspace/maf-hosted-repair/`. The failed v9 telemetry/eval
+cohort and both failed v10 smoke receipts remain unchanged historical evidence.
+
 ## 2026-09-16 - Hosted v10 import defect and optional dependency isolation
 
 The corrected release from `dd14df9708db552b47c6cf02985d61ca876b1a67`
@@ -566,9 +619,10 @@ Azure/monitoring verification sections:
 
 ## Remaining boundaries
 
-Current source remains local and uncommitted. Parent-run local dotenv acceptance
-is recorded below; cloud actor-contract rollout and fresh Foundry/telemetry
-acceptance remain deferred. Prior telemetry gaps are not resolved by this run. Old
+At the initial local-only documentation sync, source was uncommitted and cloud
+actor-contract rollout and fresh Foundry/telemetry acceptance were deferred.
+The dated release entries above supersede that deployment status, not historical
+failed evidence. Parent-run local dotenv acceptance is recorded below. Old
 version/session retirement remains an explicitly destructive decision, not
 authorized by an idle session. No real provider reconciliation, production
 reviewer identity, global transaction or automatic crash-recovery guarantee is
@@ -616,7 +670,7 @@ were retained, with eight runs afterward. Counts changed as expected: events
 and refund records 2 -> 4. The existing user-interacted
 `demo-approval-cd3bd932` case was untouched.
 
-Current source is **local and uncommitted**. This acceptance involved no
+At this local acceptance checkpoint, source was **local and uncommitted**. It involved no
 deployment, provisioning, application-schema migration, history deletion, commit
 or push. Foundry-hosted and telemetry acceptance remain deferred; the local run
 does not resolve prior telemetry gaps or promote historical hosted-v8 evidence

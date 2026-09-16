@@ -65,6 +65,13 @@ failed locally for a missing `azure-ai-projects` SDK; restoring the existing hos
 requirement allowed it to run. None of these failed attempts is counted as a
 successful fresh-version check.
 
+A final read-only preservation check retained every original baseline key,
+including all **104** baseline runs. Its snapshot contained 125 runs, 3,011
+native events and 1,199 framework checkpoints; application/native migration
+counts remained **1/10**. Local API/UI readiness and the independent PostgreSQL
+were healthy, and the private lane `.env` remained ignored with mode 0600.
+No historical data was reset or replayed during acceptance.
+
 ## 2026-09-16 - Release build context includes frontend server configuration
 
 The first release attempt from source `275bc7e` stopped before building an image:
