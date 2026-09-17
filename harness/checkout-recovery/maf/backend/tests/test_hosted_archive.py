@@ -22,6 +22,7 @@ def source(tmp_path):
         "main.py": b"print('hosted')\n",
         "requirements.txt": b"example==1.0\n",
         "README.md": b"Hosted source\n",
+        "eval.yaml": b"name: checkout-start-contract\n",
         ".agentignore": (LANE / "infra/foundry-hosted/agent/.agentignore").read_bytes(),
         "checkout_recovery_maf/__init__.py": b"",
         "checkout_recovery_maf/maf/skills/checkout-triage/SKILL.md": b"Read-only triage\n",
@@ -68,6 +69,7 @@ def test_clean_archive_exactly_matches_canonical_source(source, include_ignore, 
         ".pytest_cache/sentinel",
         ".ruff_cache/sentinel",
         "unreviewed.py",
+        "unreviewed.yaml",
         "../outside.py",
         "/absolute.py",
         "checkout_recovery_maf/.env",
@@ -92,12 +94,13 @@ def test_private_or_unexpected_archive_files_are_rejected(source, extra):
 
 
 @pytest.mark.parametrize("change", ["missing", "changed"])
-def test_missing_or_changed_canonical_source_is_rejected(source, change):
+@pytest.mark.parametrize("name", ["checkout_recovery_maf/__init__.py", "eval.yaml"])
+def test_missing_or_changed_canonical_source_is_rejected(source, change, name):
     root, files = source
     if change == "missing":
-        del files["checkout_recovery_maf/__init__.py"]
+        del files[name]
     else:
-        files["checkout_recovery_maf/__init__.py"] = b"changed"
+        files[name] = b"changed"
     content = code_zip(files)
     with pytest.raises(ValueError, match="file set|content mismatch"):
         prepare.verify_code_archive(root, content, sha256(content).hexdigest())

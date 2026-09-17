@@ -142,6 +142,17 @@ The independent reviewer found no significant issues in these new corrections.
 Actual downloaded-source verification is required for the replacement release;
 unit tests alone do not establish that the uploaded archive is clean.
 
+Replacement Hosted **4**, deployed from `38d24df`, passed its fresh pinned smoke.
+Its downloaded ZIP contains **48 canonical files**, no local environment, and
+matches platform SHA-256
+`c022380336a7b4f4fc81b6c0d4783443ac82336b3d79be8e118d7f06233ae1bc`.
+The first archive check exposed a verifier-only omission: tracked root
+`eval.yaml` was not in its canonical list. Requiring that exact file, with
+missing/changed/unexpected-YAML regressions, corrected the gate without changing
+the deployed source or requiring another Hosted version. All **151 backend
+tests** and Ruff pass. Runtime/environment and actual archive readback pass;
+the broader API/UI rollout and cloud matrix remain subsequent gates.
+
 Private evidence is retained in session
 `78c6c3f4-5e02-4c4f-93a4-068df29dc2aa`,
 `files/release-20260916-workspace/checkout-service-20260917/`.

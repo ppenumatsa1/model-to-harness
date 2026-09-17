@@ -21,7 +21,7 @@ def verify_code_archive(root: Path, content: bytes, expected_hash: str) -> dict[
         raise ValueError("Hosted archive digest mismatch")
 
     expected: dict[str, Path] = {}
-    for name in ("main.py", "requirements.txt", "README.md"):
+    for name in ("main.py", "requirements.txt", "README.md", "eval.yaml"):
         path = root / name
         if path.is_symlink() or not path.is_file():
             raise ValueError("Required Hosted source file is missing or not a regular file")

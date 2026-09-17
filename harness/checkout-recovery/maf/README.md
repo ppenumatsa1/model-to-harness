@@ -137,6 +137,13 @@ explicitly. `prepare` accepts `--operator-ip`; `apps` accepts immutable
 before creating resources. The application release and Hosted Agent deployment
 are separate commands; both use the same canonical backend source.
 
+`scripts/prepare_hosted.py` also provides `verify_code_archive` for read-only
+downloaded ZIP verification. The required root files are `main.py`,
+`requirements.txt`, `README.md`, and the tracked `eval.yaml`; `.agentignore` is
+optional. Both package trees and every canonical file's bytes must match.
+Evaluation configuration is source; its referenced private `.foundry/` datasets,
+local environments, credentials, testing code, and caches remain excluded.
+
 For a refactor of the **existing** environment, do not rerun `foundation` or the
 broader `apps` template. Build API/UI images from the clean reviewed commit,
 using unique `<full-commit>-<release-id>` tags, then resolve their digests.
