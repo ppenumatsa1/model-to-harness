@@ -7,17 +7,25 @@ arguments/results, or provider credentials.
 
 ## Local development
 
-Start the lane's backend separately at `http://127.0.0.1:8000`. Then, from this
-directory:
+Start the lane's backend separately at `http://127.0.0.1:8000`. With frontend
+dependencies already installed, run from this directory:
 
 ```sh
-npm ci
-npm run dev -- --host 127.0.0.1
+npm run dev
 ```
 
 Vite proxies same-origin `/api` requests to that backend. Nginx and basic auth are
 not needed for loopback-only development. Do not expose the unauthenticated Vite
 server publicly. There are no `VITE_*` token or backend-host build variables.
+The default UI origin is `http://127.0.0.1:5173`, with strict port binding.
+The Node-only Vite configuration reads the lane-local `.env` allowlist, then lets
+process environment override it. `CHECKOUT_RECOVERY_API_HOST` and
+`CHECKOUT_RECOVERY_API_PORT` select the proxy target;
+`CHECKOUT_RECOVERY_FRONTEND_ORIGIN` selects the loopback HTTP UI origin.
+Automatic client environment injection is disabled, and builds do not read
+local settings. Vite does not inject backend authentication secrets.
+See [configuration and launchers](../docs/configuration.md) for precedence,
+temporary `18020` / `15175` overrides, and isolated tests.
 
 Each successful command selects its case through `?case=<case-id>`. Refreshing
 the page reloads all workflow state from the API, not browser-cached workflow

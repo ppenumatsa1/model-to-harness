@@ -19,6 +19,15 @@ idempotency key and sends one explicit Start. It discovers the persisted run and
 subscribes while that synchronous request is still pending; there is no worker
 queue or automatic command retry.
 
+Before sending, the browser saves the original command and its separate UUID
+`request_id` in tab session storage. After an ambiguous error or reload, **Retry
+same Start request** resends those exact identities, not a replacement case.
+PostgreSQL returns the original completed receipt or an explicit in-progress
+response with the original run IDs; changed intent is rejected. Storage errors
+block submission visibly. A failed process can leave a pending claim that requires
+inspection rather than automatic workflow replay. GET state and native evidence,
+not the old Start receipt, determine whether approval/resume is currently valid.
+
 The middle **Execution** pane shows case context and command controls, live
 technical timeline, state/memory/outcome inspectors, and collapsible workflow
 graph and read-only assistant. The right **Audit trail** shows deterministic

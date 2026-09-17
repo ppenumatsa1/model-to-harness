@@ -67,8 +67,29 @@ The functional workspace has three panes:
 
 Start and resume remain explicit synchronous HTTP commands. A new UI case has a
 fresh client-generated case identity and idempotency key so the browser can
-observe its persisted events while Start is still running. Losing a response
-does not authorize automatically repeating a business command.
+observe its persisted events while Start is still running. A separate optional
+UUID `request_id` deduplicates Start in PostgreSQL; the refund idempotency key
+does not deduplicate Start. Matching completed retries return the original Start
+receipt, while changed intent returns `409 start_request_conflict`. Legacy callers
+omitting `request_id` retain fresh-Start behavior.
+
+The UI retains the exact pending command in tab session storage before submitting
+it. After an ambiguous response or reload, **Retry same Start request** reuses its
+request, case and refund identities; it never silently opens a replacement case.
+Successful responses or definite rejections clear the retained command. Storage
+errors block submission visibly. The retained complaint is tab-local, not a
+credential, and is removed when that tab session ends.
+
+An unfinished durable claim returns `409 start_in_progress` with the original
+case/run IDs. A process failure between claim and receipt does **not** authorize
+automatic re-execution. Inspect the original case, audit and native checkpoint;
+use normal approval/resume commands only when their persisted preconditions hold.
+There is no automatic abandoned-claim recovery or claim deletion endpoint.
+The original Start receipt is immutable; GET state remains authoritative after
+subsequent approval/resume. Migration `002_start_requests.sql` must be applied
+explicitly before deploying this source to an existing installation. Startup
+only checks readiness and does not migrate. Claims and their referenced runs must
+be retained together; deleting a run cannot silently forget its Start identity.
 
 The native SSE stream replays committed PostgreSQL events and follows new writes.
 It reconnects from a sequence cursor; safe state/approval/outcome snapshots also

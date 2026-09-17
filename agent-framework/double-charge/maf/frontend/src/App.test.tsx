@@ -26,6 +26,7 @@ function paused(id: string): RunView {
 describe("persisted case workspace", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    window.sessionStorage.clear();
     window.history.replaceState({}, "", "/");
     MockEventSource.instances = [];
     vi.stubGlobal("EventSource", MockEventSource);
@@ -35,6 +36,42 @@ describe("persisted case workspace", () => {
   });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+  it.each([
+    new TypeError("connection lost"),
+    new ApiError("Start was claimed but execution failed.", 500, "start_execution_failed"),
+  ])("retains ambiguous Start intent across reload and retries the original command: %s", async (error) => {
+    mocked.start.mockRejectedValueOnce(error);
+    const first = render(<App />);
+    fireEvent.change(screen.getByLabelText("Operator identity"), { target: { value: "operator" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start workflow" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Start workflow" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Retry same Start request" })).toBeEnabled());
+    const original = mocked.start.mock.calls[0][0];
+    expect(original.request_id).toMatch(/^[0-9a-f-]{36}$/);
+    first.unmount();
+    mocked.start.mockResolvedValue({
+      case_id: original.existing_case_id, run_id: "original-run",
+      status: "paused", current_step: "approval_checkpoint", approval_required: true,
+    });
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Retry same Start request" }));
+    await waitFor(() => expect(mocked.start).toHaveBeenCalledTimes(2));
+    expect(mocked.start.mock.calls[1][0]).toEqual(original);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Retry same Start request" })).not.toBeInTheDocument());
+  });
+
+  it("keeps an in-progress receipt but clears a definite Start conflict", async () => {
+    mocked.start.mockRejectedValueOnce(new ApiError("Inspect original run.", 409, "start_in_progress"))
+      .mockRejectedValueOnce(new ApiError("Conflicting intent.", 409, "start_request_conflict"));
+    render(<App />);
+    fireEvent.change(screen.getByLabelText("Operator identity"), { target: { value: "operator" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start workflow" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Start workflow" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Retry same Start request" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Retry same Start request" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Retry same Start request" })).not.toBeInTheDocument());
+    expect(mocked.start.mock.calls[0][0]).toEqual(mocked.start.mock.calls[1][0]);
+  });
   it("loads 25 cases ten at a time, preserves older pages on refresh, and selects read-only context", async () => {
     mocked.cases.mockImplementation(async (cursor) => {
       const offset = cursor ? Number(cursor) : 0;

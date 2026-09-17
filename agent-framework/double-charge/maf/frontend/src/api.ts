@@ -8,7 +8,7 @@ import type {
 } from "./types";
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) {
+  constructor(message: string, public status: number, public code?: string) {
     super(message);
   }
 }
@@ -18,11 +18,23 @@ async function json<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T>
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: response.statusText }));
     throw new ApiError(
-      typeof body.detail === "string" ? body.detail : `Request failed: ${response.status}`,
-      response.status
+      typeof body.detail === "string" ? body.detail
+        : typeof body.detail?.message === "string" ? body.detail.message : `Request failed: ${response.status}`,
+      response.status,
+      typeof body.detail?.code === "string" ? body.detail.code : undefined
     );
   }
   return response.json() as Promise<T>;
+}
+
+export interface StartPayload {
+  request_id?: string;
+  complaint: string;
+  customer_id: string;
+  scenario_id: string;
+  operator_id: string;
+  existing_case_id: string;
+  idempotency_key: string;
 }
 
 export const api = {
@@ -32,14 +44,7 @@ export const api = {
     json<CasePage>(`/api/cases?limit=10${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { signal }),
   case: (caseId: string, signal?: AbortSignal) =>
     json<RunView>(`/api/cases/${encodeURIComponent(caseId)}`, { signal }),
-  start: (payload: {
-    complaint: string;
-    customer_id: string;
-    scenario_id: string;
-    operator_id: string;
-    existing_case_id: string;
-    idempotency_key: string;
-  }) =>
+  start: (payload: StartPayload) =>
     json<{
       case_id: string;
       run_id: string;

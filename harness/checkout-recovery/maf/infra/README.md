@@ -1,6 +1,6 @@
 # Checkout-recovery MAF infrastructure
 
-`main.bicep` is lane-owned foundation infrastructure. It creates an isolated ACR,
+`app/main.bicep` is lane-owned application foundation infrastructure. It creates an isolated ACR,
 PostgreSQL Flexible Server/database, Log Analytics/App Insights, Container Apps
 environment, private FastAPI Container App, public React/nginx Container App, and
 separate user-assigned pull identities. Image references, operator IP, Foundry
@@ -23,4 +23,28 @@ scripts/preview_deploy.sh --resource-group <resource-group> --parameters <secure
 The parameter file must supply `backendImage`, `frontendImage`,
 `foundryProjectEndpoint`, `foundryModelDeployment`, and
 `postgresAdministratorPassword`; it must remain outside source control. Use immutable
-image digests or tags. Apply is intentionally not automated by this lane.
+image digests or tags. Foundation preview is not approval to apply changes.
+
+For an existing environment, `scripts/release.py` owns the guarded image-only
+release path: save and approve the preview, pin immutable images, and verify both
+apps' configuration and ready revisions before and after updates. Do not rerun
+foundation provisioning for an application-code rollout. Foundry Hosted source
+packaging and version selection remain separate lane-owned steps.
+
+## Acceptance sequence
+
+Keep the same evidence stages as the other independent MAF example, without
+sharing release scripts or assuming identical business cases:
+
+1. Local backend/frontend checks, dedicated local PostgreSQL restart/approval
+   scenarios, offline evaluation and sanitized telemetry-parentage checks.
+2. Later, explicitly approved Foundry packaging/deployment and guarded app-image
+   rollout, with additive migrations applied explicitly where required.
+3. Smoke, API and Hosted E2E, browser flow, native evaluations, then telemetry:
+   record case/run identities and verify both Foundry correlation and App Insights
+   ingestion, actual parent chains and content redaction.
+
+Use separate evidence directories for each attempt. Preserve failed receipts,
+existing database keys/checkpoints, resource identities and monitoring settings.
+Local test success is not proof of cloud deployment or trace ingestion. The
+current platform-pattern alignment is local-only; its cloud gates are deferred.

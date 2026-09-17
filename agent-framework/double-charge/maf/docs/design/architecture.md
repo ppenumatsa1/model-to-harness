@@ -65,12 +65,15 @@ sequenceDiagram
     actor Operator
     participant UI as MAF workspace
     participant API as MAF commands
+    participant Service as DoubleChargeService
     participant DB as MAF PostgreSQL
     participant WF as Native MAF workflow
     Operator->>UI: Draft plus operator
-    UI->>API: POST cases, fresh case/idempotency identity
-    API->>DB: Persist run, selected memory, opening audit
-    API->>WF: Start native workflow
+    UI->>API: POST cases, request UUID plus case/refund identities
+    API->>Service: Validated Start command
+    Service->>DB: Atomically claim Start and insert run
+    Service->>DB: Persist selected memory and opening audit
+    Service->>WF: Start native workflow
     par Evidence validation
         WF->>WF: Billing validation
     and Policy assessment
@@ -78,17 +81,21 @@ sequenceDiagram
     end
     WF->>WF: Native fan-in and route
     WF->>DB: Paused state, approval request, native checkpoint
-    WF-->>API: Return from invocation
-    API->>DB: Native events, current checkpoint ID
+    WF->>DB: Native events, current checkpoint ID
+    WF-->>Service: Return from invocation
+    Service->>DB: Persist original Start receipt
+    Service-->>API: Start receipt
     API-->>UI: Paused response
     Operator->>UI: Reviewer decision plus reason
     UI->>API: POST approval
-    API->>DB: Record decision and audit
+    API->>Service: Validated approval command
+    Service->>DB: Record decision and audit
     API-->>UI: Still paused, no refund
     Operator->>UI: Separate Resume operator
     UI->>API: POST resume with current checkpoint
-    API->>DB: Read decision, record resume request
-    API->>WF: workflow.run checkpoint plus typed response
+    API->>Service: Validated Resume command
+    Service->>DB: Read decision, record resume request
+    Service->>WF: workflow.run checkpoint plus typed response
     WF->>DB: Running state and continuation audit
     WF->>WF: Apply decision, refund or deny
     WF->>DB: Verify ledger and save result
@@ -99,6 +106,16 @@ The eligible route is shown above; [user flow](userflow.md#business-path) includ
 all failure/no-refund/manual-review branches. The HTTP Start/Resume calls remain
 synchronous. The native pause returns instead of keeping a request waiting for a
 human. The hosted adapter uses the same service through explicit JSON commands.
+
+The optional Start UUID is distinct from refund idempotency. A short PostgreSQL
+transaction claims it and inserts the run together, then commits before native
+execution. Matching completed retries return the stored original receipt; changed
+intent is rejected. A pending claim never authorizes another invocation, including
+after a crash. Post-claim validation-shaped failures return safe execution errors,
+not definite HTTP 422 rejections that would discard the browser's identity.
+Migration `002_start_requests.sql` is additive and requires explicit application
+before an existing-instance rollout. It does not change native checkpoints or
+make all workflow writes atomic.
 
 `MafWorkflowRunner` rebuilds the native graph for each execution, reconstructs
 deterministic action evidence from durable state, and uses

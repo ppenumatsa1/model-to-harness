@@ -14,6 +14,9 @@ from checkout_recovery_maf.application import (
     CaseNotFoundError,
     CheckoutRecoveryService,
     InvalidCaseCommandError,
+    RecordApprovalCommand,
+    ResumeCaseCommand,
+    StartCaseCommand,
 )
 from checkout_recovery_maf.bootstrap import Runtime, create_runtime
 from checkout_recovery_maf.config import Settings
@@ -30,6 +33,9 @@ class StartCommand(BaseModel):
     fixture_id: str = Field(min_length=1, max_length=120)
     request_id: UUID | None = None
 
+    def to_command(self) -> StartCaseCommand:
+        return StartCaseCommand(self.fixture_id, str(self.request_id) if self.request_id else None)
+
 
 class ApprovalCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -41,12 +47,24 @@ class ApprovalCommand(BaseModel):
     approval_request_id: UUID
     reason: str = Field(min_length=1, max_length=500)
 
+    def to_command(self) -> RecordApprovalCommand:
+        return RecordApprovalCommand(
+            self.case_id,
+            self.decision,
+            self.reviewer_id,
+            str(self.approval_request_id),
+            self.reason,
+        )
+
 
 class ResumeCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     action: str
     case_id: str = Field(min_length=1)
+
+    def to_command(self) -> ResumeCaseCommand:
+        return ResumeCaseCommand(self.case_id)
 
 
 _runtime_lock = asyncio.Lock()
@@ -100,7 +118,7 @@ async def _checkout_service() -> CheckoutRecoveryService:
     global _runtime
     async with _runtime_lock:
         if _runtime is None:
-            runtime = create_runtime(Settings(execution_mode="maf"), host="hosted")
+            runtime = create_runtime(Settings(_env_file=None, execution_mode="maf"), host="hosted")
             try:
                 await asyncio.to_thread(runtime.start)
             except BaseException:
@@ -122,27 +140,14 @@ async def _execute(command: dict[str, Any]) -> dict[str, Any]:
     service = await _checkout_service()
     action = command.get("action")
     if action == "start":
-        validated = StartCommand.model_validate(command)
-        case = await asyncio.to_thread(
-            service.start_case,
-            validated.fixture_id,
-            str(validated.request_id) if validated.request_id else None,
-        )
+        validated = StartCommand.model_validate(command).to_command()
     elif action == "approval":
-        validated = ApprovalCommand.model_validate(command)
-        case = await asyncio.to_thread(
-            service.record_approval,
-            validated.case_id,
-            decision=validated.decision,
-            reviewer_id=validated.reviewer_id,
-            approval_request_id=str(validated.approval_request_id),
-            reason=validated.reason,
-        )
+        validated = ApprovalCommand.model_validate(command).to_command()
     elif action == "resume":
-        validated = ResumeCommand.model_validate(command)
-        case = await asyncio.to_thread(service.resume_case, validated.case_id)
+        validated = ResumeCommand.model_validate(command).to_command()
     else:
         raise ValueError("action must be start, approval, or resume")
+    case = await asyncio.to_thread(service.execute, validated)
     return project_case(case).model_dump(mode="json")
 
 

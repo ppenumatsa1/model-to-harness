@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def settings():
     return Settings(
+        _env_file=None,
         execution_mode="scripted",
         environment="development",
         database_url="configured",
@@ -159,6 +160,7 @@ def test_development_defaults_to_scripted_without_foundry(monkeypatch):
     monkeypatch.delenv("CHECKOUT_RECOVERY_EXECUTION_MODE", raising=False)
     monkeypatch.delenv("APPLICATIONINSIGHTS_CONNECTION_STRING", raising=False)
     settings = Settings(
+        _env_file=None,
         foundry_project_endpoint=None,
         foundry_model_deployment=None,
         environment="development",
@@ -176,6 +178,7 @@ def test_development_defaults_to_scripted_without_foundry(monkeypatch):
 
 def test_explicit_maf_mode_requires_foundry_configuration():
     settings = Settings(
+        _env_file=None,
         execution_mode="maf",
         foundry_project_endpoint=None,
         foundry_model_deployment=None,

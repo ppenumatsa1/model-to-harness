@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from threading import RLock
@@ -8,7 +9,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from checkout_recovery_maf.application import CheckoutRecoveryService
 from checkout_recovery_maf.config import Settings
 from checkout_recovery_maf.infrastructure import InMemoryCaseRepository, PostgresCaseRepository
-from checkout_recovery_maf.infrastructure.telemetry import configure_api_telemetry
+from checkout_recovery_maf.infrastructure.telemetry import configure_api_telemetry, operation
 from checkout_recovery_maf.maf.investigation import MafInvestigator, ScriptedInvestigator
 
 
@@ -19,6 +20,8 @@ class Runtime:
     service: CheckoutRecoveryService
     host: Literal["api", "hosted"] = "api"
     _repository: PostgresCaseRepository | None = field(default=None, repr=False)
+    _health_check: Callable[[], bool] | None = field(default=None, repr=False)
+    _telemetry_connection_string: str | None = field(default=None, repr=False)
     _telemetry: TracerProvider | None = field(default=None, init=False, repr=False)
     _started: bool = field(default=False, init=False)
     _closed: bool = field(default=False, init=False)
@@ -32,15 +35,26 @@ class Runtime:
                 return
             try:
                 if self.host == "api":
-                    self._telemetry = configure_api_telemetry()
+                    self._telemetry = configure_api_telemetry(
+                        connection_string=self._telemetry_connection_string
+                    )
                 if self._repository is not None:
                     self._repository.open()
-                if not self.service.ready():
+                if not self._ready():
                     raise RuntimeError("database unavailable")
             except BaseException:
                 self.close()
                 raise
             self._started = True
+
+    def _ready(self) -> bool:
+        if self._health_check is not None:
+            return self._health_check()
+        return self.service.ready()
+
+    def ready(self) -> bool:
+        with self._lock:
+            return self._started and not self._closed and self._ready()
 
     def close(self) -> None:
         with self._lock:
@@ -61,10 +75,15 @@ def create_runtime(
     service: CheckoutRecoveryService | None = None,
     host: Literal["api", "hosted"] = "api",
 ) -> Runtime:
-    settings = settings if settings is not None else Settings()
+    if settings is None:
+        settings = Settings(_env_file=None) if host == "hosted" else Settings()
     settings.validate_runtime(host=host)
     if service is not None:
-        return Runtime(service=service, host=host)
+        return Runtime(
+            service=service,
+            host=host,
+            _telemetry_connection_string=settings.applicationinsights_connection_string,
+        )
     investigator = (
         MafInvestigator(settings.foundry_project_endpoint, settings.foundry_model_deployment)
         if settings.execution_mode == "maf"
@@ -84,9 +103,12 @@ def create_runtime(
                 repository,
                 max_auto_inventory_quantity=settings.max_auto_inventory_quantity,
                 investigator=investigator,
+                instrumentation=operation,
             ),
             host=host,
             _repository=owned_repository,
+            _health_check=repository.ready,
+            _telemetry_connection_string=settings.applicationinsights_connection_string,
         )
         stack.pop_all()
         return runtime

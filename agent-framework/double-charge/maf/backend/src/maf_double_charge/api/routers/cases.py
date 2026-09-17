@@ -5,6 +5,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from model_to_harness_shared import SCENARIO_FIXTURES
 
+from ...application.errors import (
+    StartExecutionError,
+    StartRequestConflictError,
+    StartRequestInProgressError,
+)
 from ..dependencies import ServiceDependency
 from ..schemas import CasePage, CaseView, ScenarioInput, StartResponse
 
@@ -43,6 +48,26 @@ async def start_case(command: ScenarioInput, service: ServiceDependency) -> Star
     try:
         result = await service.start(command.to_command())
         return StartResponse.model_validate(result, from_attributes=True)
+    except StartRequestConflictError as exc:
+        raise HTTPException(
+            status_code=409, detail={"code": "start_request_conflict", "message": str(exc)}
+        ) from exc
+    except StartRequestInProgressError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "start_in_progress", "message": str(exc),
+                "case_id": exc.case_id, "run_id": exc.run_id,
+            },
+        ) from exc
+    except StartExecutionError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "start_execution_failed", "message": str(exc),
+                "case_id": exc.case_id, "run_id": exc.run_id,
+            },
+        ) from exc
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

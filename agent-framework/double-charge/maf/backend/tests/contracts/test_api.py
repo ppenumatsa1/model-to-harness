@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -54,6 +55,57 @@ def invocation(thread_id: str, **updates: Any) -> dict[str, Any]:
         **updates,
     }
 
+
+async def test_start_request_identity_replays_and_conflicts_without_new_run() -> None:
+    app = create_test_app()
+    payload = {**scenario("no-duplicate"), "request_id": str(uuid4())}
+    async with api_client(app) as client:
+        first = await client.post("/api/cases", json=payload)
+        second = await client.post("/api/cases", json=payload)
+        conflict = await client.post(
+            "/api/cases", json={**payload, "complaint": "Different intent."}
+        )
+        invalid = await client.post("/api/cases", json={**payload, "request_id": "not-a-uuid"})
+        assert first.status_code == second.status_code == 200
+        assert first.json() == second.json()
+        assert conflict.status_code == 409
+        assert conflict.json()["detail"]["code"] == "start_request_conflict"
+        assert invalid.status_code == 422
+        assert len((await client.get("/api/cases")).json()["items"]) == 1
+
+
+async def test_start_request_in_progress_exposes_only_safe_reconciliation_ids() -> None:
+    app = create_test_app()
+    payload = {**scenario(), "request_id": str(uuid4())}
+    async with api_client(app) as client:
+        app.state.runtime.service.runner.start = AsyncMock(side_effect=RuntimeError("interrupted"))
+        with pytest.raises(RuntimeError, match="interrupted"):
+            await client.post("/api/cases", json=payload)
+        pending = await client.post("/api/cases", json=payload)
+        assert pending.status_code == 409
+        detail = pending.json()["detail"]
+        assert set(detail) == {"code", "message", "case_id", "run_id"}
+        assert detail["code"] == "start_in_progress"
+        assert (await client.get(f"/api/cases/{detail['case_id']}")).status_code == 200
+
+
+@pytest.mark.parametrize("failure", [ValueError, KeyError])
+async def test_post_claim_model_validation_failure_is_not_a_definite_rejection(failure) -> None:
+    app = create_test_app()
+    payload = {**scenario(), "request_id": str(uuid4())}
+    async with api_client(app) as client:
+        model = app.state.runtime.service.model
+        model.normalize_complaint = AsyncMock(side_effect=failure("PRIVATE model detail"))
+        failed = await client.post("/api/cases", json=payload)
+        assert failed.status_code == 500
+        detail = failed.json()["detail"]
+        assert detail["code"] == "start_execution_failed"
+        assert "PRIVATE" not in failed.text
+        pending = await client.post("/api/cases", json=payload)
+        assert pending.status_code == 409
+        assert pending.json()["detail"]["run_id"] == detail["run_id"]
+        assert len((await client.get("/api/cases")).json()["items"]) == 1
+        model.normalize_complaint.assert_awaited_once()
 
 async def test_demo_scenarios_exclude_internal_verification_mismatch() -> None:
     async with api_client(create_test_app()) as client:
@@ -248,6 +300,7 @@ def test_http_paths_and_workspace_request_schemas() -> None:
     }
     assert contracts["ScenarioInput"]["required"] == ["operator_id", "complaint", "customer_id"]
     assert set(contracts["ScenarioInput"]["properties"]) == {
+        "request_id",
         "operator_id",
         "complaint",
         "customer_id",

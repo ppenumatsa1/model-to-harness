@@ -10,6 +10,13 @@ independent siblings, not adapters around the MAF application.
 
 ## Design contract
 
+These parent documents define framework-neutral requirements and boundaries.
+They are not an inventory of implemented features. The
+[MAF implementation design](maf/docs/design/prd.md) provides its own seven-document
+set, including [architecture](maf/docs/design/architecture.md),
+[source map](maf/docs/design/projectstructure.md) and
+[release ledger](maf/docs/design/issues-changes-fixes.md).
+
 1. [Product requirements](docs/prd.md)
 2. [Business rules](docs/business-rules.md)
 3. [Human approval](docs/hitl-approval-conditions.md)

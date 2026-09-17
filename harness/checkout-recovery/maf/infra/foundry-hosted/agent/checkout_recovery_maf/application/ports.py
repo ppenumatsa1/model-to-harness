@@ -1,9 +1,27 @@
-from contextlib import AbstractContextManager
-from typing import Any, Protocol
+from contextlib import AbstractContextManager, nullcontext
+from typing import Any, Literal, Protocol
 
 from model_to_harness_shared import CheckoutApprovalDecision, CheckoutSimulator
 
 from .models import AuditEvent, CaseRecord, InvestigationResult, RemediationIntent
+
+type OperationName = Literal["start", "approval", "resume", "remediation", "verification"]
+
+
+class Instrumentation(Protocol):
+    def __call__(
+        self, name: OperationName, case_id: str | None = None
+    ) -> AbstractContextManager[None]: ...
+
+
+def no_instrumentation(
+    name: OperationName, case_id: str | None = None
+) -> AbstractContextManager[None]:
+    return nullcontext()
+
+
+class RuntimeHealth(Protocol):
+    def ready(self) -> bool: ...
 
 
 class InvestigationIncompleteError(RuntimeError):

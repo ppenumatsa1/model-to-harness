@@ -25,8 +25,8 @@ from model_to_harness_shared import (
     get_checkout_fixture,
 )
 
-from checkout_recovery_maf.infrastructure.telemetry import operation
-
+from .commands import CaseCommand, RecordApprovalCommand, ResumeCaseCommand, StartCaseCommand
+from .errors import CaseNotFoundError, FixtureNotFoundError, InvalidCaseCommandError
 from .models import (
     AuditCode,
     AuditEvent,
@@ -35,7 +35,13 @@ from .models import (
     RemediationIntent,
     WorkspaceArtifact,
 )
-from .ports import CaseRepository, InvestigationIncompleteError, Investigator
+from .ports import (
+    CaseRepository,
+    Instrumentation,
+    InvestigationIncompleteError,
+    Investigator,
+    no_instrumentation,
+)
 
 if TYPE_CHECKING:
     from checkout_recovery_maf.projections import (
@@ -43,14 +49,6 @@ if TYPE_CHECKING:
         SafeCaseResponse,
         SafeWorkspaceArtifactResponse,
     )
-
-
-class CaseNotFoundError(LookupError):
-    pass
-
-
-class InvalidCaseCommandError(ValueError):
-    pass
 
 
 class CheckoutRecoveryService:
@@ -62,10 +60,12 @@ class CheckoutRecoveryService:
         *,
         max_auto_inventory_quantity: int = 1,
         investigator: Investigator | None = None,
+        instrumentation: Instrumentation = no_instrumentation,
     ) -> None:
         if max_auto_inventory_quantity < 1:
             raise ValueError("max_auto_inventory_quantity must be at least one")
         self._repository = repository
+        self._instrumentation = instrumentation
         self._max_auto_inventory_quantity = max_auto_inventory_quantity
         if investigator is None:
             from checkout_recovery_maf.maf.investigation import ScriptedInvestigator
@@ -76,9 +76,24 @@ class CheckoutRecoveryService:
     def ready(self) -> bool:
         return self._repository.ready()
 
+    def execute(self, command: CaseCommand) -> CaseRecord:
+        if isinstance(command, StartCaseCommand):
+            return self.start_case(command.fixture_id, command.request_id)
+        if isinstance(command, RecordApprovalCommand):
+            return self.record_approval(
+                command.case_id,
+                decision=command.decision,
+                reviewer_id=command.reviewer_id,
+                approval_request_id=command.approval_request_id,
+                reason=command.reason,
+            )
+        if isinstance(command, ResumeCaseCommand):
+            return self.resume_case(command.case_id)
+        raise InvalidCaseCommandError("unsupported checkout command")
+
     def start_case(self, fixture_id: str, request_id: str | None = None) -> CaseRecord:
         case_id = str(UUID(request_id)) if request_id else str(uuid4())
-        with operation("start", case_id), self._repository.transaction(case_id):
+        with self._instrumentation("start", case_id), self._repository.transaction(case_id):
             existing = self._repository.get(case_id)
             if existing is not None:
                 if existing.fixture_id != fixture_id:
@@ -87,7 +102,10 @@ class CheckoutRecoveryService:
             return self._start_case(fixture_id, case_id)
 
     def _start_case(self, fixture_id: str, case_id: str) -> CaseRecord:
-        fixture = get_checkout_fixture(fixture_id)
+        try:
+            fixture = get_checkout_fixture(fixture_id)
+        except KeyError as error:
+            raise FixtureNotFoundError("fixture not found") from error
         now = self._now()
         order_id = f"order-8472-{case_id}"
         simulator = CheckoutSimulator(
@@ -172,7 +190,7 @@ class CheckoutRecoveryService:
         approval_request_id: str,
         reason: str,
     ) -> CaseRecord:
-        with operation("approval", case_id), self._repository.transaction(case_id):
+        with self._instrumentation("approval", case_id), self._repository.transaction(case_id):
             return self._record_approval(
                 case_id,
                 decision=decision,
@@ -219,7 +237,7 @@ class CheckoutRecoveryService:
         return case
 
     def resume_case(self, case_id: str) -> CaseRecord:
-        with operation("resume", case_id), self._repository.transaction(case_id):
+        with self._instrumentation("resume", case_id), self._repository.transaction(case_id):
             return self._resume_case(case_id)
 
     def _resume_case(self, case_id: str) -> CaseRecord:
@@ -291,7 +309,7 @@ class CheckoutRecoveryService:
             ),
         )
         approval = self._approval(case)
-        with operation("remediation", case.case_id):
+        with self._instrumentation("remediation", case.case_id):
             try:
                 result = simulator.submit_remediation(request, approval=approval)
             except UncertainCheckoutRemediationResponseError:
@@ -319,7 +337,7 @@ class CheckoutRecoveryService:
         self._event(case, AuditCode.REMEDIATION_COMPLETED, "Remediation recorded.")
         simulator = self._repository.simulator_for(self._case(case.case_id))
         expected = self._expected_states(action)
-        with operation("verification", case.case_id):
+        with self._instrumentation("verification", case.case_id):
             verification = simulator.verify(
                 operation_id=intent.operation_id,
                 expected_order_status=expected[0],

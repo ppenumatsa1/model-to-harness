@@ -10,7 +10,9 @@ from fastapi.testclient import TestClient
 
 
 def test_health_and_explicit_commands_have_safe_responses() -> None:
-    with TestClient(create_app(settings=Settings(execution_mode="scripted"))) as client:
+    with TestClient(
+        create_app(settings=Settings(_env_file=None, execution_mode="scripted"))
+    ) as client:
         assert client.get("/api/health/live").json() == {"status": "live"}
         started = client.post(
             "/api/cases", json={"fixture_id": "captured-payment-approved-remediation"}
@@ -39,7 +41,9 @@ def test_health_and_explicit_commands_have_safe_responses() -> None:
 
 
 def test_invalid_approval_and_unknown_case_are_safe_errors() -> None:
-    with TestClient(create_app(settings=Settings(execution_mode="scripted"))) as client:
+    with TestClient(
+        create_app(settings=Settings(_env_file=None, execution_mode="scripted"))
+    ) as client:
         missing = client.post(
             "/api/cases/missing/approval",
             json={
@@ -69,7 +73,11 @@ def test_invalid_approval_and_unknown_case_are_safe_errors() -> None:
 
 def test_configured_api_token_is_required_for_business_commands() -> None:
     with TestClient(
-        create_app(settings=Settings(api_token="test-proxy-token", execution_mode="scripted"))
+        create_app(
+            settings=Settings(
+                _env_file=None, api_token="test-proxy-token", execution_mode="scripted"
+            )
+        )
     ) as client:
         assert client.get("/api/health/ready").status_code == 200
         assert client.post("/api/cases", json={"fixture_id": "denied-approval"}).status_code == 401
@@ -83,10 +91,11 @@ def test_configured_api_token_is_required_for_business_commands() -> None:
 
 def test_production_refuses_scripted_or_missing_security_configuration() -> None:
     with pytest.raises(ValueError, match="production requires"):
-        create_app(settings=Settings(environment="production"))
+        create_app(settings=Settings(_env_file=None, environment="production"))
     with pytest.raises(ValueError, match="production requires"):
         create_app(
             settings=Settings(
+                _env_file=None,
                 environment="production",
                 database_url="configured",
                 api_token="configured",
@@ -96,7 +105,7 @@ def test_production_refuses_scripted_or_missing_security_configuration() -> None
 
 
 def test_openapi_exactly_matches_pre_refactor_baseline():
-    app = create_app(settings=Settings(execution_mode="scripted"))
+    app = create_app(settings=Settings(_env_file=None, execution_mode="scripted"))
     schema = json.dumps(app.openapi(), sort_keys=True, separators=(",", ":"))
     assert hashlib.sha256(schema.encode()).hexdigest() == (
         "e16d83e045dc63c2454acd74577e547da739e5da5d33b7b42c555cef6a5cbd42"
@@ -104,7 +113,9 @@ def test_openapi_exactly_matches_pre_refactor_baseline():
 
 
 def test_query_and_start_retry_http_contracts():
-    with TestClient(create_app(settings=Settings(execution_mode="scripted"))) as client:
+    with TestClient(
+        create_app(settings=Settings(_env_file=None, execution_mode="scripted"))
+    ) as client:
         command = {
             "fixture_id": "captured-payment-approved-remediation",
             "request_id": "00000000-0000-0000-0000-000000000123",
@@ -137,14 +148,16 @@ def test_query_and_start_retry_http_contracts():
 
 @pytest.mark.parametrize("suffix", ["", "/events", "/workspace-artifact"])
 def test_missing_query_http_contract(suffix):
-    with TestClient(create_app(settings=Settings(execution_mode="scripted"))) as client:
+    with TestClient(
+        create_app(settings=Settings(_env_file=None, execution_mode="scripted"))
+    ) as client:
         response = client.get(f"/api/cases/missing{suffix}")
         assert response.status_code == 404
         assert response.json() == {"detail": "case not found"}
 
 
 def test_auth_contract_covers_queries_docs_and_unknown_routes():
-    settings = Settings(execution_mode="scripted", api_token="test-proxy-token")
+    settings = Settings(_env_file=None, execution_mode="scripted", api_token="test-proxy-token")
     with TestClient(create_app(settings=settings)) as client:
         for path in ["/api/cases/missing", "/openapi.json", "/docs", "/unknown"]:
             rejected = client.get(path, headers={"X-Checkout-Token": "wrong"})
@@ -164,7 +177,7 @@ def test_auth_contract_covers_queries_docs_and_unknown_routes():
 def test_readiness_failure_preserves_safe_503(monkeypatch):
     service = CheckoutRecoveryService(InMemoryCaseRepository())
     with TestClient(
-        create_app(settings=Settings(execution_mode="scripted"), service=service)
+        create_app(settings=Settings(_env_file=None, execution_mode="scripted"), service=service)
     ) as client:
         monkeypatch.setattr(service, "ready", lambda: False)
         response = client.get("/api/health/ready")

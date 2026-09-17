@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from hashlib import sha256
 from typing import Any
 from uuid import uuid4
 
@@ -9,6 +11,7 @@ from ..projections.selected_run import selected_run_facts, selected_run_view
 from ..projections.workspace import WorkspaceView, workspace_view
 from .audit import Audit
 from .commands import ApprovalCommand, ResumeCommand, ScenarioInput
+from .errors import StartExecutionError
 from .history import CaseCursor, CasePage
 from .models import ApprovalResponse, DurableEvent, RunStatus, StartResult, WorkflowState
 from .ports import ModelClient, ModelResult, Repository, WorkflowRunner
@@ -40,24 +43,45 @@ class DoubleChargeService:
                 or f"refund-{case_id}"
             ),
         )
-        await self.repository.create_run(state)
-        await self.repository.save_memory(
-            case_id, {"customer_id": command.customer_id, "fixture_id": command.scenario_id}
-        )
-        await self.audit.emit(
-            state, "run.started", "Double-charge workflow started.", node="normalize_complaint",
-            actor_id=command.operator_id,
-        )
-        await self.runner.start(state)
-        current = await self.get_state(state.run_id)
-        return StartResult(
-            case_id=current.case_id,
-            run_id=current.run_id,
-            status=current.status,
-            current_step=current.current_step,
-            approval_required=current.approval_required,
-            checkpoint_id=current.checkpoint_id,
-        )
+        request_id = str(command.request_id) if command.request_id is not None else None
+        if request_id is not None:
+            fingerprint = sha256(
+                json.dumps(
+                    command.model_dump(mode="json", exclude={"request_id"}),
+                    sort_keys=True, separators=(",", ":"),
+                ).encode()
+            ).hexdigest()
+            recorded = await self.repository.claim_start(request_id, fingerprint, state)
+            if recorded is not None:
+                return recorded
+        else:
+            await self.repository.create_run(state)
+        try:
+            await self.repository.save_memory(
+                case_id, {"customer_id": command.customer_id, "fixture_id": command.scenario_id}
+            )
+            await self.audit.emit(
+                state, "run.started", "Double-charge workflow started.", node="normalize_complaint",
+                actor_id=command.operator_id,
+            )
+            await self.runner.start(state)
+            current = await self.get_state(state.run_id)
+            result = StartResult(
+                case_id=current.case_id,
+                run_id=current.run_id,
+                status=current.status,
+                current_step=current.current_step,
+                approval_required=current.approval_required,
+                checkpoint_id=current.checkpoint_id,
+            )
+            if request_id is not None:
+                await self.repository.complete_start(request_id, result)
+        except (KeyError, ValueError) as error:
+            if request_id is None:
+                raise
+            # Transport validation errors must not discard a committed Start identity.
+            raise StartExecutionError(case_id, state.run_id) from error
+        return result
 
     async def record_approval(self, run_id: str, command: ApprovalCommand) -> WorkflowState:
         state = await self.get_state(run_id)

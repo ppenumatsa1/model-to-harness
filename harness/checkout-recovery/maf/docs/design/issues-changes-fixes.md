@@ -1,5 +1,69 @@
 # Checkout-recovery MAF implementation ledger
 
+## 2026-09-17 - Local platform-pattern alignment
+
+**Implemented and accepted locally; cloud deployment is deferred.** The two MAF
+examples now use consistent responsibility boundaries without sharing runtime
+code or pretending their business workflows are identical. Checkout keeps its
+synchronous application state machine and bounded read-only harness;
+double-charge keeps async native workflow/checkpoint continuation. No LangGraph
+or framework-neutral shared source was changed.
+
+| Issue | Change and learning |
+| --- | --- |
+| The API exporter dropped native intermediate parents | Retain every received span's real IDs and parent, while replacing dynamic names with fixed safe categories and stripping content, events, links, trace state, unsafe scope/resource values and error descriptions. Native MAF tool-parent tests cover child-first export across batches of 1, 2 and 100. Never fabricate parent links or confuse local graph preservation with cloud ingestion. Hosted remains SDK-provider-owned. |
+| Configuration/launch behavior differed by lane | Add editable lane-only dotenv discovery, explicit > process > dotenv > default precedence, environment-only installed/Hosted behavior and `_env_file=None` isolation. Add configurable loopback launchers and server-only Vite settings without publishing secrets. Preserve the scripted development default and existing keys. |
+| Business code imported concrete telemetry | Add a checkout-owned injected instrumentation port. Runtime owns concrete wiring and health; business routers use the service, and health routes use the runtime-health dependency. API and Hosted dispatch application-owned command/error contracts while preserving existing public service methods. |
+| New dotenv discovery could contaminate older tests | Parent validation added suite-wide dotenv disabling to the existing process-isolation fixture. Explicit dotenv tests use their own synthetic files. Do not rely on a developer's current absence of private configuration. |
+| Double-charge refund idempotency did not deduplicate Start | Independently add optional Start UUID claims/receipts and same-intent browser retries. Its additive migration is double-charge-only; checkout keeps its existing transactional request identity and needs no schema change. Pending double-charge claims require inspection, not automatic replay. |
+| Review found a post-claim failure could look like definite validation rejection | A real double-charge model `ValueError` reproduced HTTP 422 after a run existed. Add a safe execution-error boundary after claim; API 500 and Hosted typed failures preserve the browser's original retry identity. The reviewer confirmed the fix. |
+| Operational/design guidance described older source | Update seven-file design navigation, actual command/instrumentation/configuration responsibilities and lane-owned release guidance. Keep failed cloud attempts and earlier telemetry limitations as dated history rather than rewriting them as current acceptance. |
+
+### Local evidence
+
+| Gate | Result |
+| --- | --- |
+| Checkout backend, real loopback PostgreSQL and Hosted contracts | **214 passed, zero skips** using `scripts/with_local_db.py -- .venv/bin/python -m pytest backend/tests`. Includes transactional/restart, business/evaluation, harness, packaging and telemetry coverage. |
+| Checkout frontend | **45 passed**, TypeScript/Vite build passed. A synthetic API-token/VITE sentinel was absent from the built browser JavaScript and HTML. |
+| Checkout browser | **Eight Chromium E2E tests passed**, covering all seven fixtures plus ambiguous Start retry, explicit approval/resume, persisted refresh and safe projections. Actual API/UI ran on temporary `18020/15175`, scripted investigator with real PostgreSQL in a fresh isolated acceptance schema. |
+| Double-charge local acceptance | **482 backend, 65 frontend and two Chromium tests passed**, build/Ruff passed. Includes native PostgreSQL restart, additive migration, concurrent Start claims, immutable receipts, API/Hosted errors and retained browser identity after reload. |
+| Fleet and independent rubber-duck | Checkout implementation and independent review were separated. The implementation agent ended before closeout; parent completed test isolation, docs, packaging and acceptance. Review found/fixed the double-charge post-claim error issue; subsequent review reported no significant checkout findings. |
+| Packaging and boundaries | Both lane-owned preparation scripts regenerated Hosted copies from canonical source. No dependency upgrades, shared runtime abstraction, private configuration edits, cloud actions, commit or push. Existing normal previews were not restarted. |
+
+Persistent local receipts are session artifacts `pattern-checkout-backend.xml`,
+`pattern-dc-backend.xml`, `pattern-dc-ui.log`, `pattern-dc-build.log` and
+`pattern-checkout-schema.json`; they are not deployed-release manifests. Local
+telemetry tests establish actual span-parent preservation and sanitization, not
+new trace presence in Foundry or App Insights.
+
+**Later release gates:** explicitly reviewed source, preservation baseline,
+Foundry Deploy and guarded existing-app rollout, Smoke, API/Hosted E2E, native
+evaluations, then exact-case Foundry/App Insights ingestion and hierarchy checks.
+Double-charge migration 002 must be explicitly applied before its existing-schema
+release readiness gate. Checkout schema and business semantics remain unchanged.
+The historical deployed API-parent gap below is not claimed fixed in Azure yet.
+
+## 2026-09-17 - Documentation layout and implementation coverage
+
+The initial service-refactor closeout updated the lane README and this ledger,
+but did not supply the reference MAF lane's seven-document implementation design.
+The parent checkout contract also mixed framework-neutral requirements with
+MAF-specific architecture and technology descriptions.
+
+Added independently maintained requirements, business rules with approval,
+user flow, 4+1 architecture, stack and source-map documents under `docs/design/`.
+Moved this ledger into the same set without removing its history, and repaired
+navigation. Parent architecture/stack now describe neutral responsibilities and
+point to this lane for implementation details.
+
+The design follows actual checkout source: service-owned synchronous commands
+and safe reads, one PostgreSQL authority, pure projections, read-only MAF
+investigation and application-owned approval/resume. It explicitly excludes
+double-charge-only SSE, history, chat and native checkpoint continuation.
+The existing API telemetry parentage limitation and dated release evidence
+remain explicit. This is documentation-only; no runtime, dependency, database
+or deployment change accompanies it.
+
 ## Scope
 
 This ledger records implementation decisions, defects, fixes, and observed

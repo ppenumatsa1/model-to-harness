@@ -12,6 +12,7 @@ from .models import (
     CaseSummary,
     DurableEvent,
     RefundLedgerEntry,
+    StartResult,
     WorkflowState,
 )
 
@@ -24,6 +25,12 @@ class Repository(Protocol):
     async def check_ready(self) -> None: ...
 
     async def create_run(self, state: WorkflowState) -> None: ...
+
+    async def claim_start(
+        self, request_id: str, fingerprint: str, state: WorkflowState
+    ) -> StartResult | None: ...
+
+    async def complete_start(self, request_id: str, result: StartResult) -> None: ...
 
     async def save_state(self, state: WorkflowState) -> None: ...
 

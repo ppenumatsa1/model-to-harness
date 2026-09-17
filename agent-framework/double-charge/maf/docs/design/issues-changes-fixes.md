@@ -1,5 +1,43 @@
 # MAF issues, changes and fixes
 
+## 2026-09-17 - Local platform alignment and durable Start identity
+
+Added optional UUID `request_id` for Start, separately from refund idempotency.
+The repository atomically claims the request and inserts its run, then releases
+the transaction before native execution. Matching completed retries return the
+original immutable receipt. Changed commands conflict; pending or abandoned
+claims return explicit existing run IDs without automatically invoking again.
+Legacy callers omitting the new identity keep their existing behavior.
+
+API and Hosted use the same service contract. Hosted retries can move between
+conversations without changing the Start fingerprint. The browser retains the
+exact pending payload in tab session storage and retries that same request after
+ambiguous responses or reload. Storage errors block new submission explicitly.
+Approval, native checkpoint continuation, refund verification and SSE remain
+unchanged.
+
+Independent rubber-duck review reproduced a post-claim model `ValueError` being
+mapped to HTTP 422, which could incorrectly clear the browser's retained command.
+The service now distinguishes post-claim execution failures from pre-claim
+validation; safe HTTP 500/Hosted execution errors retain the original identity.
+Real-runner `ValueError`/`KeyError` tests and browser reload regressions cover it.
+The reviewer confirmed the correction.
+
+Local acceptance: **482 backend tests, zero skips; 65 frontend tests; two isolated
+Chromium browser tests; frontend build and Ruff passed**. Backend coverage includes
+concurrent PostgreSQL claims, additive v1-to-v2 migration/history preservation,
+new repository reconstruction, native approval/resume after restart, unchanged
+single-recorded-refund checks, seven offline API/Hosted scenarios and command
+contracts. Native restart tests also replay the original Start before and after
+Resume without adding events or changing the returned original receipt.
+
+Migration `002_start_requests.sql` was applied only in unique local test schemas.
+Current source has **not** been deployed. Later Foundry Deploy, Smoke, cloud E2E,
+native evaluations and Foundry/App Insights ingestion remain deferred. There is
+no automatic abandoned-claim repair: inspect original durable evidence and use
+approval/resume only when its existing preconditions hold. Referenced runs and
+Start claims must be retained together; no new pruning/reset path was added.
+
 ## Provenance and reading this ledger
 
 This independently owned ledger was split on **2026-09-16** from the MAF sections

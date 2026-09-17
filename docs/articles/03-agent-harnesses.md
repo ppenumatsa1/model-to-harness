@@ -246,7 +246,7 @@ uses model-selected read tools, a triage skill, a scoped workspace, and optional
 delegation. The [application service](../../harness/checkout-recovery/maf/backend/src/checkout_recovery_maf/application/service.py)
 owns policy, durable approval/resume, and verification against PostgreSQL-persisted
 simulated business records. General shell and browser capabilities are deliberately
-disabled. The [delivery ledger](../../harness/checkout-recovery/maf/docs/issues-changes-fixes.md)
+disabled. The [delivery ledger](../../harness/checkout-recovery/maf/docs/design/issues-changes-fixes.md)
 distinguishes demonstrated local and Foundry behavior from future hardening.
 The Part 2 [MAF](../../agent-framework/double-charge/maf/README.md)
 and [LangGraph](../../agent-framework/double-charge/langgraph/README.md)

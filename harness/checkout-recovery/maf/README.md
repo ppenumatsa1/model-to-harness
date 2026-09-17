@@ -10,6 +10,22 @@ The companion [checkout-recovery contract](../README.md) is
 framework-neutral. This lane owns its own API, UI, telemetry, infrastructure,
 tests, and Foundry Hosted Agent adapter.
 
+## Implementation design
+
+This lane follows the same seven-document design layout as double-charge MAF,
+but documents checkout's own behavior rather than implying feature parity.
+The parent checkout documents remain the framework-neutral domain contract.
+
+| Document | Coverage |
+| --- | --- |
+| [Product requirements](docs/design/prd.md) | Current capabilities, safety, acceptance and exclusions. |
+| [Business rules](docs/design/business-rules.md) | Seven scenarios, approval/resume and verified outcomes. |
+| [User flow](docs/design/userflow.md) | Selected-case workspace, explicit commands and refresh/retry behavior. |
+| [4+1 architecture](docs/design/architecture.md) | Logical, process, development, physical and scenario views. |
+| [Technology stack](docs/design/techstack.md) | Technology roles and authoritative manifests. |
+| [Project structure](docs/design/projectstructure.md) | Source ownership, service/query flow and operational entrypoints. |
+| [Issues, changes and fixes](docs/design/issues-changes-fixes.md) | Preserved checkout release, review and incident history. |
+
 ## Run locally
 
 Use Python 3.13, uv, Node.js, and a dedicated PostgreSQL database. For an existing
@@ -177,7 +193,7 @@ The verified environment as of September 17, 2026 is `crmaf-20260912`, resource 
 `rg-crmaf-20260912`, region `northcentralus`. Its Hosted Agent is
 `checkout-recovery-maf:4`. The UI is
 <https://crmaf-q35uqmuqoh7co-web.icymoss-074cbdaa.northcentralus.azurecontainerapps.io>.
-See the [delivery ledger](docs/issues-changes-fixes.md) for evidence, image
+See the [delivery ledger](docs/design/issues-changes-fixes.md) for evidence, image
 digests, evaluation results, and the remaining production-hardening boundary.
 Fresh API/Hosted smoke, seven scenarios per transport, eight browser tests and
 seven native evaluations passed. Traces for all 15 selected smoke/E2E cases

@@ -5,6 +5,8 @@ from datetime import datetime
 
 from maf_double_charge.application.errors import (
     RefundIdempotencyConflictError,
+    StartRequestConflictError,
+    StartRequestInProgressError,
     StorageReadinessError,
 )
 from maf_double_charge.application.models import (
@@ -12,6 +14,7 @@ from maf_double_charge.application.models import (
     CaseSummary,
     DurableEvent,
     RefundLedgerEntry,
+    StartResult,
     WorkflowState,
 )
 from model_to_harness_shared import WorkflowOutcome
@@ -64,20 +67,68 @@ class PostgresRepository:
 
     async def create_run(self, state: WorkflowState) -> None:
         async with self.pool.connection() as conn:
-            await conn.execute(
-                """
+            await self._create_run(conn, state)
+
+    @staticmethod
+    async def _create_run(conn: AsyncConnection, state: WorkflowState) -> None:
+        await conn.execute(
+            """
                 INSERT INTO runs (run_id, case_id, status, current_step, state, checkpoint_id)
                 VALUES (%s, %s, %s, %s, %s::jsonb, %s)
                 """,
-                (
-                    state.run_id,
-                    state.case_id,
-                    state.status.value,
-                    state.current_step,
-                    state.model_dump_json(),
-                    state.checkpoint_id,
-                ),
+            (
+                state.run_id,
+                state.case_id,
+                state.status.value,
+                state.current_step,
+                state.model_dump_json(),
+                state.checkpoint_id,
+            ),
+        )
+
+    async def claim_start(
+        self, request_id: str, fingerprint: str, state: WorkflowState
+    ) -> StartResult | None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(1296123458, hashtext(%s))", (request_id,)
             )
+            cursor = await conn.execute(
+                """
+                SELECT s.command_fingerprint, s.result, s.run_id, r.case_id
+                FROM start_requests s JOIN runs r USING (run_id)
+                WHERE s.request_id = %s::uuid
+                """,
+                (request_id,),
+            )
+            row = await cursor.fetchone()
+            if row is not None:
+                if row["command_fingerprint"] != fingerprint:
+                    raise StartRequestConflictError("Start request is bound to another command.")
+                if row["result"] is None:
+                    raise StartRequestInProgressError(row["case_id"], row["run_id"])
+                return StartResult.model_validate(row["result"])
+            await self._create_run(conn, state)
+            await conn.execute(
+                """
+                INSERT INTO start_requests (request_id, command_fingerprint, run_id)
+                VALUES (%s::uuid, %s, %s)
+                """,
+                (request_id, fingerprint, state.run_id),
+            )
+        return None
+
+    async def complete_start(self, request_id: str, result: StartResult) -> None:
+        async with self.pool.connection() as conn:
+            cursor = await conn.execute(
+                """
+                UPDATE start_requests SET result = %s::jsonb, completed_at = now()
+                WHERE request_id = %s::uuid AND run_id = %s AND result IS NULL
+                """,
+                (result.model_dump_json(), request_id, result.run_id),
+            )
+            if cursor.rowcount != 1:
+                raise StartRequestConflictError("Start receipt cannot be replaced.")
 
     async def save_state(self, state: WorkflowState) -> None:
         async with self.pool.connection() as conn:
@@ -126,8 +177,12 @@ class PostgresRepository:
                 WHERE (%s::timestamptz IS NULL OR (created_at, run_id) < (%s, %s))
                 ORDER BY created_at DESC, run_id DESC LIMIT %s
                 """,
-                (before[0] if before else None, before[0] if before else None,
-                 before[1] if before else None, limit),
+                (
+                    before[0] if before else None,
+                    before[0] if before else None,
+                    before[1] if before else None,
+                    limit,
+                ),
             )
             rows = await result.fetchall()
         return [

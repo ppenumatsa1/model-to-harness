@@ -99,7 +99,7 @@ the checkout harness has a separately owned runtime triage procedure. See
 
 The checkout-recovery MAF harness is independently deployed in `northcentralus`
 under `rg-crmaf-20260912`, with Hosted Agent version 2, a private API, and an
-authenticated UI. Its [lane-local delivery ledger](harness/checkout-recovery/maf/docs/issues-changes-fixes.md)
+authenticated UI. Its [lane-local delivery ledger](harness/checkout-recovery/maf/docs/design/issues-changes-fixes.md)
 records the actual API, browser, hosted, evaluation, and telemetry results.
 
 The framework lanes record their own implementation and release evidence:

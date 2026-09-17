@@ -39,6 +39,18 @@ verification is never disabled.
 
 ## Local release gates and preview
 
+Pattern-alignment acceptance is currently local-only. Its additive
+`002_start_requests.sql` migration has been exercised only in isolated local test
+schemas. A later existing-environment release must explicitly apply and verify
+this migration before the read-only `--app-only --update-existing` schema gate;
+that release path never migrates automatically.
+
+Retain the common independently owned sequence: local tests/restart/browser and
+offline evaluations; later approved Foundry and app deployment; Smoke; API/Hosted
+E2E; native evaluations; then exact-case Foundry/App Insights trace correlation,
+parentage and redaction. Save each attempt's receipts separately, including
+failures. Local exporter tests do not prove remote ingestion.
+
 Run from the MAF lane, using the parent's reviewed, tested source commit. Supply
 CLI user-agent guidance in the calling environment when required; scripts never
 persist it in azd settings.

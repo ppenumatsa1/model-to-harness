@@ -6,12 +6,17 @@ from copy import deepcopy
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from maf_double_charge.application.errors import RefundIdempotencyConflictError
+from maf_double_charge.application.errors import (
+    RefundIdempotencyConflictError,
+    StartRequestConflictError,
+    StartRequestInProgressError,
+)
 from maf_double_charge.application.models import (
     ApprovalResponse,
     CaseSummary,
     DurableEvent,
     RefundLedgerEntry,
+    StartResult,
     WorkflowState,
     utc_now,
 )
@@ -32,6 +37,7 @@ class InMemoryRepository:
         self.memory: dict[str, dict[str, object]] = {}
         self.refunds: dict[str, RefundLedgerEntry] = {}
         self.run_checkpoints: dict[str, dict[str, WorkflowCheckpoint]] = {}
+        self.start_requests: dict[str, tuple[str, str, StartResult | None]] = {}
         self._lock = asyncio.Lock()
         self._sequence = 0
 
@@ -55,6 +61,33 @@ class InMemoryRepository:
     async def save_state(self, state: WorkflowState) -> None:
         async with self._lock:
             self.states[state.run_id] = deepcopy(state)
+
+    async def claim_start(
+        self, request_id: str, fingerprint: str, state: WorkflowState
+    ) -> StartResult | None:
+        async with self._lock:
+            existing = self.start_requests.get(request_id)
+            if existing is not None:
+                bound, run_id, result = existing
+                if bound != fingerprint:
+                    raise StartRequestConflictError("Start request is bound to another command.")
+                if result is None:
+                    raise StartRequestInProgressError(self.states[run_id].case_id, run_id)
+                return deepcopy(result)
+            if state.run_id in self.states or state.case_id in self.case_runs:
+                raise ValueError("run or case already exists")
+            self.states[state.run_id] = deepcopy(state)
+            self.created_at[state.run_id] = utc_now()
+            self.case_runs[state.case_id] = state.run_id
+            self.start_requests[request_id] = (fingerprint, state.run_id, None)
+        return None
+
+    async def complete_start(self, request_id: str, result: StartResult) -> None:
+        async with self._lock:
+            fingerprint, run_id, existing = self.start_requests[request_id]
+            if run_id != result.run_id or existing is not None:
+                raise StartRequestConflictError("Start receipt cannot be replaced.")
+            self.start_requests[request_id] = (fingerprint, run_id, deepcopy(result))
 
     async def get_state(self, run_id: str) -> WorkflowState | None:
         state = self.states.get(run_id)

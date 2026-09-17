@@ -1,5 +1,46 @@
 import { expect, test } from "@playwright/test";
 import { businessEvent, summaryFor, viewFor } from "../../src/test/workspaceFixtures";
+import { START_INTENT_KEY } from "../../src/startIntent";
+
+test("browser reload retries the same durably retained Start identity after an unknown response", async ({ page }) => {
+  const starts: Record<string, string>[] = [];
+  await page.addInitScript(() => {
+    class NativeStream extends EventTarget { close() {} }
+    Object.defineProperty(window, "EventSource", { value: NativeStream });
+  });
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (url.pathname === "/api/scenarios") {
+      await route.fulfill({ json: [{ id: "duplicate-confirmed", description: "Mock fixture", tags: [] }] });
+    } else if (url.pathname === "/api/cases" && request.method() === "POST") {
+      const payload = request.postDataJSON();
+      starts.push(payload);
+      expect(await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? "null"), START_INTENT_KEY)).toEqual(payload);
+      if (starts.length === 1) {
+        await route.fulfill({ status: 500, json: { detail: { code: "start_execution_failed", message: "Inspect the original run." } } });
+      } else {
+        await route.fulfill({ json: { case_id: payload.existing_case_id, run_id: "original-run", status: "paused", current_step: "approval_checkpoint", approval_required: true } });
+      }
+    } else if (url.pathname === "/api/cases") {
+      await route.fulfill({ json: { items: [], next_cursor: null, has_more: false } });
+    } else if (url.pathname.startsWith("/api/cases/")) {
+      await route.fulfill({ json: viewFor(url.pathname.split("/").at(-1)!) });
+    } else {
+      await route.fulfill({ status: 404, json: { detail: "Not part of this isolated mock." } });
+    }
+  });
+  await page.goto("/");
+  await page.getByLabel("Operator identity").fill("browser-operator");
+  await page.getByRole("button", { name: "Start workflow" }).click();
+  await expect(page.getByRole("button", { name: "Retry same Start request" })).toBeEnabled();
+  await page.reload();
+  await page.getByRole("button", { name: "Retry same Start request" }).click();
+  await expect(page.getByRole("button", { name: "Retry same Start request" })).toHaveCount(0);
+  expect(starts).toHaveLength(2);
+  expect(starts[1]).toEqual(starts[0]);
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), START_INTENT_KEY)).toBeNull();
+});
 
 test("isolated browser restores history, reads native evidence, and keeps controls persisted", async ({ page }) => {
   const requests: string[] = [];

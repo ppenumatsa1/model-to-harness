@@ -4,7 +4,9 @@ from checkout_recovery_maf.api.contracts import ApprovalCommandRequest, StartCas
 from checkout_recovery_maf.api.dependencies import ServiceDependency
 from checkout_recovery_maf.application import (
     CaseNotFoundError,
+    FixtureNotFoundError,
     InvalidCaseCommandError,
+    ResumeCaseCommand,
 )
 from checkout_recovery_maf.projections import (
     SafeAuditEventResponse,
@@ -23,14 +25,10 @@ router = APIRouter()
 )
 def start_case(command: StartCaseRequest, service: ServiceDependency) -> SafeCaseResponse:
     try:
-        return project_case(
-            service.start_case(
-                command.fixture_id, str(command.request_id) if command.request_id else None
-            )
-        )
+        return project_case(service.execute(command.to_command()))
     except InvalidCaseCommandError as error:
         raise HTTPException(status_code=409, detail="start request conflicts") from error
-    except KeyError as error:
+    except FixtureNotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="fixture not found"
         ) from error
@@ -53,15 +51,7 @@ def record_approval(
     service: ServiceDependency,
 ) -> SafeCaseResponse:
     try:
-        return project_case(
-            service.record_approval(
-                case_id,
-                decision=command.decision,
-                reviewer_id=command.reviewer_id,
-                approval_request_id=str(command.approval_request_id),
-                reason=command.reason,
-            )
-        )
+        return project_case(service.execute(command.to_command(case_id)))
     except CaseNotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="case not found"
@@ -75,7 +65,7 @@ def record_approval(
 @router.post("/cases/{case_id}/resume", response_model=SafeCaseResponse)
 def resume_case(case_id: str, service: ServiceDependency) -> SafeCaseResponse:
     try:
-        return project_case(service.resume_case(case_id))
+        return project_case(service.execute(ResumeCaseCommand(case_id)))
     except CaseNotFoundError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="case not found"

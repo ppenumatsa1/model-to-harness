@@ -1,14 +1,15 @@
 # Technology stack
 
-- Python 3.13, Microsoft Agent Framework Harness Agent, FastAPI, Uvicorn,
-  Pydantic v2, and Psycopg 3.
-- PostgreSQL for application state, approvals, remediation ledger, evidence, and
-  audit records.
-- Azure Identity and Foundry model integration; Foundry Hosted Agents run the
-  separately packaged Responses 2.0 adapter.
-- React, TypeScript, Vite, Vitest, and Playwright for the independent UI.
-- OpenTelemetry and Application Insights for safe operational telemetry.
-- Bicep, azd, ACR, Container Apps, a lane-owned Foundry project/agent, managed
-  identity, and lane-owned telemetry resources for deployment.
+The domain contract requires typed checkout records, deterministic simulators,
+fixture/evaluation expectations and PostgreSQL business authority. Neutral
+Python models and simulation behavior belong in the root `shared/` package.
 
-The Hosted Agent is the runtime. The MAF Harness Agent is the harness.
+Framework SDKs, web frameworks, database drivers, model clients, UI libraries,
+telemetry exporters and deployment tooling are implementation choices owned by
+each lane. Sharing the domain contract does not require sharing those adapters.
+
+The first implementation's Python/MAF, FastAPI, Psycopg, React and Foundry stack
+is documented in the [MAF technology stack](../maf/docs/design/techstack.md),
+with its actual manifests and packaging boundaries. Hosted runtime and
+investigation framework are separate roles; their concrete products are not
+part of a framework-neutral checkout specification.

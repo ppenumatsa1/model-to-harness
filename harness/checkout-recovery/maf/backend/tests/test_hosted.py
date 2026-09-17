@@ -205,7 +205,7 @@ async def test_hosted_rejections_never_return_or_log_input(hosted, caplog, text)
 
 async def test_hosted_persistence_failure_has_sanitized_traceback_and_logs(hosted, caplog):
     service = Mock()
-    service.start_case.side_effect = OperationalError("PRIVATE-CREDENTIAL-CANARY")
+    service.execute.side_effect = OperationalError("PRIVATE-CREDENTIAL-CANARY")
     hosted._checkout_service = AsyncMock(return_value=service)
     with caplog.at_level(logging.ERROR):
         try:

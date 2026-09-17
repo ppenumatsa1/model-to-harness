@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel, Field, field_validator
 
 from .models import ApprovalDecision
@@ -13,6 +15,7 @@ class OperatorCommand(BaseModel):
 
 
 class ScenarioInput(OperatorCommand):
+    request_id: UUID | None = None
     complaint: str = Field(min_length=3, max_length=4000)
     customer_id: str = Field(min_length=1, max_length=128)
     account_id: str | None = Field(default=None, max_length=128)

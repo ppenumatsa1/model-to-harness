@@ -1379,6 +1379,46 @@ async def test_hosted_adapter_executes_explicit_workflow_commands(
         await runtime.close()
 
 
+async def test_hosted_start_identity_survives_a_new_conversation(monkeypatch, runtime, repository):
+    from uuid import uuid4
+
+    from maf_double_charge.application.errors import StartRequestConflictError
+
+    adapter, _ = load_hosted_adapter(monkeypatch)
+    monkeypatch.setattr(adapter, "_runtime", AsyncMock(return_value=runtime))
+    command = {
+        "action": "start", "request_id": str(uuid4()), "operator_id": "hosted-operator",
+        "scenario_id": "no-duplicate",
+    }
+    first = await adapter._execute(command, "conversation-one")
+    second = await adapter._execute(command, "conversation-two")
+    assert first == second
+    assert len(repository.states) == 1
+    assert first["case_id"] not in {"conversation-one", "conversation-two"}
+    with pytest.raises(StartRequestConflictError):
+        await adapter._execute({**command, "operator_id": "another"}, "conversation-three")
+
+
+@pytest.mark.parametrize("pending", [False, True])
+async def test_hosted_handler_returns_explicit_start_reconciliation_errors(monkeypatch, pending):
+    from maf_double_charge.application.errors import (
+        StartRequestConflictError,
+        StartRequestInProgressError,
+    )
+
+    adapter, _ = load_hosted_adapter(monkeypatch)
+    error = (
+        StartRequestInProgressError("original-case", "original-run")
+        if pending else StartRequestConflictError("PRIVATE conflicting fingerprint")
+    )
+    monkeypatch.setattr(adapter, "_execute", AsyncMock(side_effect=error))
+    await adapter.response_handler({"input": '{"action":"start"}'})
+    result = json.loads(adapter.TextResponse.call_args.kwargs["text"])
+    assert result["code"] == ("start_in_progress" if pending else "start_request_conflict")
+    assert "PRIVATE" not in json.dumps(result)
+    assert ("case_id" in result) == pending
+
+
 def test_hosted_history_never_infers_approval_from_chat(monkeypatch):
     adapter, _ = load_hosted_adapter(monkeypatch)
     payload = {

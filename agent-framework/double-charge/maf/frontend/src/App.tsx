@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import { ApprovalPanel } from "./components/ApprovalPanel";
 import { AssistantPanel } from "./components/AssistantPanel";
 import { AuditPanel } from "./components/AuditPanel";
@@ -9,12 +9,23 @@ import { WorkflowGraph } from "./components/WorkflowGraph";
 import { useCaseHistory } from "./useCaseHistory";
 import { useCaseWorkspace } from "./useCaseWorkspace";
 import type { Scenario } from "./types";
+import { clearStartIntent, readStartIntent, saveStartIntent, type StartIntent } from "./startIntent";
 
 function urlCase() {
   return new URL(window.location.href).searchParams.get("case") || undefined;
 }
 
 export default function App() {
+  const [initialStart] = useState<{ payload?: StartIntent; error?: string }>(() => {
+    try {
+      return { payload: readStartIntent(window.sessionStorage) };
+    } catch {
+      return { error: "Pending Start storage could not be read. Resolve it before starting another case." };
+    }
+  });
+  const [startIntent, setStartIntent] = useState(initialStart.payload);
+  const [startStorageError, setStartStorageError] = useState(initialStart.error);
+  const starting = useRef(false);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [scenarioError, setScenarioError] = useState<string>();
   const [scenarioAttempt, setScenarioAttempt] = useState(0);
@@ -22,7 +33,7 @@ export default function App() {
   const [complaint, setComplaint] = useState("I was charged twice for the same purchase.");
   const [customerId, setCustomerId] = useState("customer-100");
   const [operatorId, setOperatorId] = useState("");
-  const [caseId, setCaseId] = useState<string | undefined>(urlCase);
+  const [caseId, setCaseId] = useState<string | undefined>(() => urlCase() ?? initialStart.payload?.existing_case_id);
   const [pendingStart, setPendingStart] = useState<string>();
   const [commands, setCommands] = useState<Record<string, string | undefined>>({});
   const [commandErrors, setCommandErrors] = useState<Record<string, string | undefined>>({});
@@ -94,17 +105,49 @@ export default function App() {
   }
 
   async function startRun() {
-    if (!operatorId.trim()) return;
+    if (!operatorId.trim() || startIntent || starting.current || startStorageError) return;
     const id = crypto.randomUUID();
     const payload = {
+      request_id: crypto.randomUUID(),
       complaint: complaint.trim(), customer_id: customerId.trim(), scenario_id: scenarioId,
       operator_id: operatorId.trim(),
       existing_case_id: id, idempotency_key: `refund-${id}-${crypto.randomUUID()}`
     };
+    try {
+      saveStartIntent(window.sessionStorage, payload);
+      setStartIntent(payload);
+    } catch {
+      setStartStorageError("Cannot retain the Start request. Nothing was submitted.");
+      return;
+    }
+    await submitStart(payload);
+  }
+
+  async function submitStart(payload: StartIntent) {
+    if (starting.current) return;
+    starting.current = true;
+    const id = payload.existing_case_id;
     setPendingStart(id);
     selectCase(id);
-    await command(id, "Starting workflow", () => api.start(payload));
-    setPendingStart(undefined);
+    try {
+      await command(id, "Starting workflow", async () => {
+        try {
+          await api.start(payload);
+        } catch (error) {
+          if (error instanceof ApiError && error.status >= 400 && error.status < 500
+            && ![408, 429].includes(error.status) && error.code !== "start_in_progress") {
+            clearStartIntent(window.sessionStorage);
+            setStartIntent(undefined);
+          }
+          throw error;
+        }
+        clearStartIntent(window.sessionStorage);
+        setStartIntent(undefined);
+      });
+    } finally {
+      setPendingStart(undefined);
+      starting.current = false;
+    }
   }
 
   return (
@@ -148,6 +191,11 @@ export default function App() {
           </div>
         </header>
 
+        {startStorageError && <div role="alert">{startStorageError}</div>}
+        {startIntent && <div role="status">
+          A Start request is pending. Retry its original command; do not create a replacement case.
+          <button disabled={Boolean(pendingStart)} onClick={() => void submitStart(startIntent)}>Retry same Start request</button>
+        </div>}
         {!caseId ? (
           <section className="panel composer" aria-labelledby="composer-title">
             <div className="composer-copy">
@@ -172,7 +220,7 @@ export default function App() {
               <label className="wide">Customer complaint
                 <textarea required minLength={3} maxLength={4000} value={complaint} onChange={(event) => setComplaint(event.target.value)} />
               </label>
-              <button className="primary-action" disabled={Boolean(pendingStart) || !scenarios.length || !customerId.trim() || !operatorId.trim() || complaint.trim().length < 3}>
+              <button className="primary-action" disabled={Boolean(pendingStart) || Boolean(startIntent) || Boolean(startStorageError) || !scenarios.length || !customerId.trim() || !operatorId.trim() || complaint.trim().length < 3}>
                 {pendingStart ? "Another case is starting…" : "Start workflow"}
               </button>
               {scenarioError && <div role="alert">{scenarioError} <button type="button" onClick={() => setScenarioAttempt((value) => value + 1)}>Retry scenarios</button></div>}
