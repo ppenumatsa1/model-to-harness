@@ -19,10 +19,10 @@ database, from this directory (for disposable local storage use the wrappers bel
 uv sync --extra dev
 export CHECKOUT_RECOVERY_DATABASE_URL='postgresql://<user>:<password>@localhost:5432/<database>'
 uv run python scripts/migrate.py --apply
-uv run uvicorn checkout_recovery_maf.bootstrap:app --host 127.0.0.1 --port 8000
+uv run uvicorn checkout_recovery_maf.main:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-The default `scripted` mode is explicitly offline. To exercise the actual harness,
+The default `scripted` development mode is explicitly offline. To exercise the actual harness,
 set `CHECKOUT_RECOVERY_EXECUTION_MODE=maf`,
 `CHECKOUT_RECOVERY_FOUNDRY_PROJECT_ENDPOINT`, and
 `CHECKOUT_RECOVERY_FOUNDRY_MODEL_DEPLOYMENT`, and sign in to Azure before starting
@@ -85,7 +85,7 @@ uv sync --extra dev
 .venv/bin/python scripts/with_local_db.py -- .venv/bin/python scripts/migrate.py --apply
 .venv/bin/python scripts/with_local_db.py -- .venv/bin/python -m pytest backend/tests
 # Optional separate offline API; do not replace the existing double-charge previews.
-.venv/bin/python scripts/with_local_db.py -- .venv/bin/python -m uvicorn checkout_recovery_maf.bootstrap:app --host 127.0.0.1 --port 18020
+.venv/bin/python scripts/with_local_db.py -- .venv/bin/python -m uvicorn checkout_recovery_maf.main:create_app --factory --host 127.0.0.1 --port 18020
 ```
 
 These PostgreSQL tests use deterministic/fake investigators, not a cloud model.
@@ -105,6 +105,26 @@ and unchanged.
 
 ## Delivery
 
+### Backend boundaries
+
+`config.py` owns settings and fail-closed validation. `bootstrap.py` constructs
+the checkout-owned synchronous runtime, shared only by this lane's API and
+Hosted adapter. `main.py` exports the API factory; importing it creates no app,
+database pool, investigator, or telemetry exporter. `api/app.py` owns lifespan
+and authentication, `api/dependencies.py` resolves the active service, and
+`api/routers/` contains explicit case commands, safe queries, and health checks.
+Safe query projection assembly belongs to the application service; projections
+remain pure and the original domain reads remain available internally.
+
+The lifespan constructs and opens resources only when started and closes owned
+resources on shutdown or startup failure. Injected services retain ownership of
+their repositories and investigators; no unused replacements are constructed.
+Hosted calls the same runtime via `asyncio.to_thread`, requires PostgreSQL and
+MAF, and never initializes API telemetry or requires the API proxy token.
+The Responses SDK remains the owner of Hosted telemetry and message capture
+stays disabled. Neither host changes synchronous transactions, approval
+binding, idempotency, framework state ownership, or browser-safe projections.
+
 `azure.yaml` provisions the independent Foundry project/model and directly
 packages the Python Responses 2.0 Hosted Agent. `infra/app/main.bicep` owns the
 ACR, PostgreSQL, monitoring, managed identities, and Container Apps. It deploys
@@ -116,6 +136,29 @@ explicitly. `prepare` accepts `--operator-ip`; `apps` accepts immutable
 `--backend-image` and `--frontend-image` references. Inspect the IaC preview
 before creating resources. The application release and Hosted Agent deployment
 are separate commands; both use the same canonical backend source.
+
+For a refactor of the **existing** environment, do not rerun `foundation` or the
+broader `apps` template. Build API/UI images from the clean reviewed commit,
+using unique `<full-commit>-<release-id>` tags, then resolve their digests.
+The image-only path requires a saved preview and refuses source, image or
+configuration drift between preview and apply:
+
+```bash
+uv run python scripts/release.py update-existing --environment crmaf-20260912 \
+  --source-commit <full-commit> --backend-image <registry/repository@sha256:digest> \
+  --frontend-image <registry/repository@sha256:digest> --output-dir <fresh-private-directory>
+# Repeat exactly the same arguments with --apply after reviewing the preview.
+```
+
+This path locks both tags and manifests and verifies both live revisions at
+completion. It does not change secrets, networking, identities, monitoring
+connections or migrations. It is not an atomic two-app transaction: a failed
+partial rollout retains its receipt for explicit reconciliation, not blind retry.
+Deploy the Hosted service separately with the same committed canonical source.
+For fresh acceptance, use `e2e --output-dir <directory>` followed by
+`evidence --output-dir <directory> --hosted-report <actual-version-report.json>`;
+the evidence step never assumes Hosted version 2. Hosted validation supports
+`scripts/verify_hosted.py --smoke` before the full seven-scenario matrix.
 
 Private generated values live in `.azure/<environment>/release-secrets.json`
 and `release.parameters.json`, with mode 0600. The former contains the UI login

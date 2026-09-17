@@ -6,7 +6,103 @@ This ledger records implementation decisions, defects, fixes, and observed
 validation evidence for the independent MAF checkout-recovery harness. It is
 not a substitute for the framework-neutral domain contract in `../../docs/`.
 
-## Initial decisions
+## 2026-09-17 - Runtime and service-boundary alignment
+
+This release aligns responsibilities with double-charge MAF without importing its
+runtime or adding its UI features. Checkout already had service-owned commands
+and reads plus pure projections. The requested changes separate configuration,
+runtime construction, API composition and transport routes, reuse checkout-owned
+wiring in the Hosted adapter, and make query projections service-orchestrated.
+Business transactions, approval/evidence binding, retry identities, safe response
+contracts and independent framework-state ownership must remain unchanged.
+
+Implementation, independent rubber-duck review and local acceptance are complete.
+Deployment and cloud acceptance are **pending** at source freeze. Results below
+are dated evidence, not a claim that the refactored source is already deployed.
+
+### Existing environment and preservation baseline
+
+Only checkout PostgreSQL `crmaf-q35uqmuqoh7co-pg` was started from Stopped to
+Ready. Local Compose PostgreSQL remained healthy on `127.0.0.1:35432`.
+Read-only cloud snapshots recorded **84 cases**, **481 audit events**,
+**84 MAF sessions**, **62 remediation records**, **nine approvals** and **two
+migrations**, including every primary key and complete migration ledger records.
+No reset, deletion or migration was performed.
+
+The existing environment `crmaf-20260912` selected active Hosted Agent **2**.
+Its `checkout-telemetry` connection targets the checkout App Insights component
+with **`isSharedToAll=false`**. The broader foundation template would set that
+value to true; it is deliberately excluded from this application release.
+
+### Release guard changes and lessons
+
+- New `scripts/release.py update-existing` previews or applies only two
+  existing Container App image updates. It requires clean exact source, lane
+  image digests with matching source tags, locks both tags and manifests, and
+  verifies unchanged configuration/identity/environment plus healthy revisions.
+  It does not submit the foundation Bicep template, rotate secrets or migrate.
+- The business-evidence step now requires `--hosted-report`; it no longer
+  silently reads `hosted-e2e-v2.json`. `--output-dir` selects fresh API/business
+  receipts so previous release artifacts remain intact.
+- `scripts/verify_hosted.py --smoke` permits a pinned one-scenario gate before
+  the complete existing seven-scenario matrix.
+- Focused release guard validation passed **10 tests**. Full integrated tests,
+  independent review and cloud gates were pending at that initial recording;
+  subsequent corrections and final local evidence follow.
+
+### Implementation and review closeout
+
+Settings now live in `config.py`; `bootstrap.py` owns construction and explicit
+start/close lifecycle. `main.py` and `api/app.py` provide the API factory and
+transport lifecycle, with separate dependencies and case/health routers.
+Service query methods own safe case/event/artifact projection orchestration.
+Pure allowlisted projection functions, business command bodies, transaction
+boundaries and native investigation remain unchanged.
+
+The Hosted adapter uses the same checkout-owned runtime factory with explicit
+MAF mode, retains thread offloading for synchronous operations, and leaves its
+telemetry provider under SDK ownership. Injected services no longer construct
+unused repositories/investigators. Startup failures clean up acquired resources.
+All affected entrypoints use `checkout_recovery_maf.main:create_app --factory`.
+Existing tracked Hosted package copies were regenerated using the lane's
+`prepare_hosted.py`; they remain generated copies, not a second implementation.
+
+| Finding | Fix and evidence |
+| --- | --- |
+| Initial extraction changed development's default execution mode | Restored `scripted`; production still requires explicit MAF, PostgreSQL and API token. Hosted selects MAF explicitly. This is a structural refactor, not a configuration-default change. |
+| Rubber duck: apply ignored the actual saved preview | Apply now requires matching source, subscription/group/registry, image identities and app snapshots from the saved preview before any mutation. Missing preview and intervening drift regressions pass. |
+| Rubber duck: backend could drift during frontend rollout | Recheck both apps' configuration, image and healthy revision immediately before completion. A simulated backend change during frontend update rejects success. |
+| Old evidence path selected Hosted v2 regardless of release | Require the actual Hosted report path and preserve each release's output directory. |
+
+The independent reviewer confirmed both material release findings resolved and
+reported no additional significant issues. These guards detect observed drift;
+they do not make a two-app rollout globally atomic or prevent later external edits.
+
+### Final local evidence
+
+- **115 backend tests passed**, zero skips, against isolated loopback PostgreSQL,
+  including **13 release-guard regressions**. Ruff passed for backend, scripts
+  and Hosted entrypoint; Hosted SDK boundary/redaction and evaluation-contract
+  scripts passed. Two deprecation warnings were retained, not suppressed.
+- Full OpenAPI equality passed against the pre-refactor baseline, canonical
+  SHA-256 `e16d83e045dc63c2454acd74577e547da739e5da5d33b7b42c555cef6a5cbd42`.
+- **16 frontend tests**, production build and **eight actual browser scenarios**
+  passed. No frontend application behavior was changed.
+- All **seven local API scenarios** passed with real MAF/Foundry inference and
+  PostgreSQL, not merely scripted mode. Separate acceptance ports were
+  `18020/15175`; normal double-charge previews were not replaced.
+- A fresh real-MAF approval case persisted across an actual API process stop
+  and restart. Approval still left it paused; a separate resume produced a
+  verified recovery, and repeating resume returned the same safe result.
+
+No Azure application migration or historical-record mutation was used for local
+tests. The cloud database baseline remains available for final preservation.
+
+Private evidence is retained in session
+`78c6c3f4-5e02-4c4f-93a4-068df29dc2aa`,
+`files/release-20260916-workspace/checkout-service-20260917/`.
+
+## Initial decisions (historical)
 
 | Decision | Reason |
 | --- | --- |

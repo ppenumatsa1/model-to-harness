@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from hashlib import sha256
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from model_to_harness_shared import (
@@ -33,6 +36,13 @@ from .models import (
     WorkspaceArtifact,
 )
 from .ports import CaseRepository, InvestigationIncompleteError, Investigator
+
+if TYPE_CHECKING:
+    from checkout_recovery_maf.projections import (
+        SafeAuditEventResponse,
+        SafeCaseResponse,
+        SafeWorkspaceArtifactResponse,
+    )
 
 
 class CaseNotFoundError(LookupError):
@@ -232,6 +242,21 @@ class CheckoutRecoveryService:
     def events(self, case_id: str) -> tuple[AuditEvent, ...]:
         self._case(case_id)
         return self._repository.events_for(case_id)
+
+    def get_case_response(self, case_id: str) -> SafeCaseResponse:
+        from checkout_recovery_maf.projections import project_case
+
+        return project_case(self.get_case(case_id))
+
+    def list_event_responses(self, case_id: str) -> list[SafeAuditEventResponse]:
+        from checkout_recovery_maf.projections import project_event
+
+        return [project_event(event) for event in self.events(case_id)]
+
+    def get_workspace_artifact_response(self, case_id: str) -> SafeWorkspaceArtifactResponse:
+        from checkout_recovery_maf.projections import project_artifact
+
+        return project_artifact(self.get_case(case_id).artifact)
 
     def _remediate_and_verify(self, case: CaseRecord) -> CaseRecord:
         simulator = self._repository.simulator_for(case)

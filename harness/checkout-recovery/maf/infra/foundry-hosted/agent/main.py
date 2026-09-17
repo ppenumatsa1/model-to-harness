@@ -15,8 +15,8 @@ from checkout_recovery_maf.application import (
     CheckoutRecoveryService,
     InvalidCaseCommandError,
 )
-from checkout_recovery_maf.infrastructure import PostgresCaseRepository
-from checkout_recovery_maf.maf.investigation import MafInvestigator
+from checkout_recovery_maf.bootstrap import Runtime, create_runtime
+from checkout_recovery_maf.config import Settings
 from checkout_recovery_maf.projections import project_case
 from model_to_harness_shared import CheckoutApprovalDecision
 from psycopg import Error as DatabaseError
@@ -50,8 +50,7 @@ class ResumeCommand(BaseModel):
 
 
 _runtime_lock = asyncio.Lock()
-_repository: PostgresCaseRepository | None = None
-_service: CheckoutRecoveryService | None = None
+_runtime: Runtime | None = None
 
 
 def _payload(create_response: Any) -> dict[str, Any]:
@@ -98,29 +97,25 @@ def _command(create_response: Any) -> dict[str, Any]:
 
 
 async def _checkout_service() -> CheckoutRecoveryService:
-    global _repository, _service
-    if _service is not None:
-        return _service
+    global _runtime
     async with _runtime_lock:
-        if _service is None:
-            database_url = os.getenv("CHECKOUT_RECOVERY_DATABASE_URL")
-            if not database_url:
-                raise RuntimeError("CHECKOUT_RECOVERY_DATABASE_URL is required")
-            repository = PostgresCaseRepository(database_url)
-            await asyncio.to_thread(repository.open)
-            await asyncio.to_thread(repository.ready)
-            _repository = repository
-            _service = CheckoutRecoveryService(
-                repository,
-                investigator=MafInvestigator(
-                    os.environ["CHECKOUT_RECOVERY_FOUNDRY_PROJECT_ENDPOINT"],
-                    os.environ["CHECKOUT_RECOVERY_FOUNDRY_MODEL_DEPLOYMENT"],
-                ),
-                max_auto_inventory_quantity=int(
-                    os.getenv("CHECKOUT_RECOVERY_MAX_AUTO_INVENTORY_QUANTITY", "1")
-                ),
-            )
-    return _service
+        if _runtime is None:
+            runtime = create_runtime(Settings(execution_mode="maf"), host="hosted")
+            try:
+                await asyncio.to_thread(runtime.start)
+            except BaseException:
+                await asyncio.to_thread(runtime.close)
+                raise
+            _runtime = runtime
+        return _runtime.service
+
+
+async def _close_runtime() -> None:
+    global _runtime
+    async with _runtime_lock:
+        runtime, _runtime = _runtime, None
+        if runtime is not None:
+            await asyncio.to_thread(runtime.close)
 
 
 async def _execute(command: dict[str, Any]) -> dict[str, Any]:
@@ -177,14 +172,10 @@ def create_host() -> ResponsesAgentServerHost:
 
 
 async def main() -> None:
-    global _repository, _service
     try:
         await create_host().run_async()
     finally:
-        if _repository is not None:
-            _repository.close()
-        _repository = None
-        _service = None
+        await _close_runtime()
 
 
 if __name__ == "__main__":

@@ -14,8 +14,14 @@ Approval and continuation are separate durable commands:
 {"action":"resume","case_id":"<case-id>"}
 ```
 
-The adapter creates the same `CheckoutRecoveryService` used by FastAPI with a
-PostgreSQL repository. It never runs SQL migrations, resets data, accepts
+The adapter lazily starts the same checkout-owned `bootstrap.create_runtime`
+used by FastAPI, with `host="hosted"` and a PostgreSQL repository. Settings come
+from `config.py`; the adapter explicitly selects MAF regardless of the development
+default. Hosted requires PostgreSQL and MAF configuration but not the
+API proxy token. It does not import the API factory, routers, or middleware.
+Synchronous startup, commands, and shutdown run through `asyncio.to_thread`;
+startup failures and host shutdown close the owned runtime exactly once.
+It never runs SQL migrations, resets data, accepts
 chat-derived decisions, or falls back to memory when the database setting is
 absent. Outputs are the existing safe case projection only.
 

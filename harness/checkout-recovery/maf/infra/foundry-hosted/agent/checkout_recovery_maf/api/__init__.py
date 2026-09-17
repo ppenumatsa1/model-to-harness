@@ -1,3 +1,1 @@
-from .routes import router
-
-__all__ = ["router"]
+"""Checkout-owned HTTP transport; construct the application with api.app.create_app."""

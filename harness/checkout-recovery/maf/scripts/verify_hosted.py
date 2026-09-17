@@ -105,6 +105,7 @@ def main() -> None:
     parser.add_argument("--agent-name", required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--smoke", action="store_true", help="Run only the first scenario.")
     args = parser.parse_args()
     session_id = f"checkout-recovery-verify-{uuid4().hex}"
     try:
@@ -131,7 +132,8 @@ def main() -> None:
 
         contract = Path(__file__).resolve().parents[1] / "evals/checkout_recovery_cases.json"
         results = []
-        for row in json.loads(contract.read_text()):
+        cases = json.loads(contract.read_text())
+        for row in cases[:1] if args.smoke else cases:
             result = invoke(
                 args.environment,
                 args.agent_name,
@@ -179,7 +181,11 @@ def main() -> None:
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(json.dumps(results, indent=2) + "\n")
-        print("Hosted seven-scenario explicit-command E2E passed")
+        print(
+            "Hosted single-scenario smoke passed"
+            if args.smoke
+            else "Hosted seven-scenario explicit-command E2E passed"
+        )
     finally:
         verification_failed = sys.exception() is not None
         try:

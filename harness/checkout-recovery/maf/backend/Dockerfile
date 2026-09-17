@@ -27,4 +27,4 @@ WORKDIR /app
 COPY harness/checkout-recovery/maf/backend/migrations ./migrations
 USER checkout
 EXPOSE 8000
-CMD ["uvicorn", "checkout_recovery_maf.bootstrap:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "checkout_recovery_maf.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
