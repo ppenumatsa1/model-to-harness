@@ -169,6 +169,97 @@ is present. Changed references and nonempty literal values remain drift errors,
 covered by regressions. The saved partial rollout is reconciled explicitly,
 not replayed or silently marked successful.
 
+### Final deployment and acceptance
+
+The partial image rollout was reconciled from its saved proposal. A read-only
+source comparison proved only release tooling, its tests and this ledger had
+changed since the image build; application build inputs were unchanged. Both
+tag and manifest locks were reverified before updating **only** the remaining
+frontend. Final readback verified both images, healthy ready revisions and
+unchanged effective configuration, identities, environment and secret references.
+
+| Surface | Accepted identity |
+| --- | --- |
+| API/UI image source | `9c2d7ff49bfa6b0db1b322d886e3033bf4a2c914` |
+| Reconciliation tooling | `0364b921c55937cf00fcdf2a3ca776bc43a9ed35` |
+| Hosted | `checkout-recovery-maf:4`, packaged from `38d24df`; package unchanged at image source |
+| API revision | `crmaf-q35uqmuqoh7co-api--0000001` |
+| UI revision | `crmaf-q35uqmuqoh7co-web--0000002` |
+| API digest | `sha256:b87ef7ad603021398aa474d4fd49c9ace126040016750c676d87e78ecc14f579` |
+| UI digest | `sha256:2683688904cfa18f1596afa342287064ae895fc73795be7adff0c2e7e0f977e0` |
+
+Final local acceptance passed **153 backend tests, zero skips**, **16 frontend
+tests**, frontend production build, Ruff, Hosted-boundary and evaluation-contract
+checks. The earlier live local acceptance additionally passed seven real-MAF
+API scenarios, eight browser scenarios and the real-process approval
+pause/restart/resume/idempotent-retry check. No runtime code changed afterward.
+
+Fresh cloud acceptance passed authenticated UI/API smoke (including all three
+service-owned case/audit/workspace queries), Hosted smoke, **7 API + 7 Hosted
+E2E scenarios**, **8 browser tests**, and independent PostgreSQL business,
+approval, remediation, audit and framework-session checks for all **14 E2E
+cases**. The explicit command boundary remains intact: approval does not resume,
+and approval-required evaluation cases remain paused.
+
+The unchanged native Python evaluation group
+`eval_188058e6d7424429b855697f94735630`, run
+`evalrun_589414300c88442ab76ad8af8c924db3`, passed **7/7** with numeric score
+**1.0**, explicit `passed: true`, and a separate exact-contract comparison for
+every output item. Grader source and threshold were verified before reuse.
+All output items were downloaded; metadata preserves the previous accepted v2
+run and older failed diagnostic experiments. Native Python results have no
+prose judge reason; that is not a missing score or a substituted LLM judgment.
+
+### Telemetry verification and retained limitation
+
+Exact case correlations verified **15/15** fresh smoke/E2E starts, associated
+harness/model spans, **8/8 Hosted v4 identities**, and **386 request/dependency
+spans** with sampling weight one. Hosted internal parent chains are complete.
+Example smoke operation: **`7a2e3b03b1e9665f1ef008e644b3ffd0`**.
+The top server spans reference upstream platform/client parents outside this
+application export; they are transport boundaries, not missing internal steps.
+
+**Full API hierarchy acceptance is not claimed.** The existing content-safe API
+exporter retains application tool spans but drops their intermediate framework
+parents: three missing internal parent spans per API case, **21** across the
+seven cases. Read-only queries of three pre-refactor operations confirmed the
+same three gaps. This is a documented pre-existing observability limitation,
+not a service-refactor regression; telemetry behavior was intentionally
+preserved rather than expanding this change into an exporter redesign.
+
+Scoped checks across requests, dependencies, traces and exceptions found **zero**
+prohibited message/tool-content attributes or credential text. The Foundry
+`checkout-telemetry` connection still targets App Insights
+`crmaf-q35uqmuqoh7co-appi` (app ID
+`09b81019-3462-4b1e-b934-b248d0679447`), with sharing **false**. This is
+programmatic verification of the Foundry-linked telemetry store, not a claim
+that both portal screens were manually inspected.
+
+### Preservation and lessons
+
+Every original primary key and both full migration records were retained.
+Final storage contains **116 cases, 670 audit events, 115 framework sessions,
+85 remediation records and 15 approvals**, with **2 unchanged migrations**.
+All **11 original Azure resource IDs**, the monitoring target and sharing
+setting remain unchanged. No foundation template, schema reset, secret rotation,
+historical cleanup, timeout increase or business-rule change was used.
+
+Keep canonical upload verification separate from runtime smoke: a successful
+upload can contain unintended local files, and removing them does not prove a
+model-latency incident's cause. Preserve command identities before invoking and
+reconcile ambiguous failures instead of creating replacement business commands.
+Normalize only proven serialization equivalents in release comparisons, and
+retain evidence when a multi-app rollout pauses. Distinguish trace presence,
+complete internal parentage and deliberate content filtering; baseline evidence
+is required before calling a gap pre-existing.
+
+Private receipts are under the session evidence directory
+`release-20260916-workspace/checkout-service-20260917`, including the original
+failed attempts, corrected acceptance, exact KQL, all evaluation items, and
+before/after storage/resource snapshots. Temporary acceptance processes were
+stopped; existing previews and databases were not removed. Double-charge MAF,
+LangGraph and canonical `shared/` remain unchanged by this checkout refactor.
+
 Private evidence is retained in session
 `78c6c3f4-5e02-4c4f-93a4-068df29dc2aa`,
 `files/release-20260916-workspace/checkout-service-20260917/`.

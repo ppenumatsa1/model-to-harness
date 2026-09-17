@@ -6,6 +6,18 @@ environments:
   crmaf-20260912:
     lastEval:
       evalId: eval_188058e6d7424429b855697f94735630
+      evalRunId: evalrun_589414300c88442ab76ad8af8c924db3
+      runName: crmaf-20260912-service-v4-20260917
+      agentVersion: "4"
+      startedAt: "2026-09-17T17:42:49Z"
+      status: passed
+      graderType: python
+      passed: 7
+      total: 7
+      exactContractPassed: 7
+      resultsFile: .foundry/results/crmaf-20260912/eval_188058e6d7424429b855697f94735630/evalrun_589414300c88442ab76ad8af8c924db3.json
+    previousAcceptedEval:
+      evalId: eval_188058e6d7424429b855697f94735630
       evalRunId: evalrun_2d6557a7f2f54c1dbef6f204e5fe2d48
       runName: crmaf-20260912-agent2-native-verified
       agentVersion: "2"

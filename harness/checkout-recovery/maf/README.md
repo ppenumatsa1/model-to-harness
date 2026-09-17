@@ -173,12 +173,18 @@ and API/database secrets; never commit or print it. Nginx authenticates the UI,
 injects the private API token server-side, and verifies TLS to the private API.
 It listens on **8080**, including the unauthenticated `/healthz` probe.
 
-The verified environment is `crmaf-20260912`, resource group
+The verified environment as of September 17, 2026 is `crmaf-20260912`, resource group
 `rg-crmaf-20260912`, region `northcentralus`. Its Hosted Agent is
-`checkout-recovery-maf:2`. The UI is
+`checkout-recovery-maf:4`. The UI is
 <https://crmaf-q35uqmuqoh7co-web.icymoss-074cbdaa.northcentralus.azurecontainerapps.io>.
 See the [delivery ledger](docs/issues-changes-fixes.md) for evidence, image
 digests, evaluation results, and the remaining production-hardening boundary.
+Fresh API/Hosted smoke, seven scenarios per transport, eight browser tests and
+seven native evaluations passed. Traces for all 15 selected smoke/E2E cases
+were verified in the Foundry-linked Application Insights resource. Hosted
+internal parent chains are complete; the pre-existing API exporter omits the
+framework parents of three diagnostic tool spans. That hierarchy limitation
+is documented in the ledger, not claimed fixed by the service refactor.
 
 ## Foundry evaluation
 
