@@ -98,6 +98,50 @@ they do not make a two-app rollout globally atomic or prevent later external edi
 No Azure application migration or historical-record mutation was used for local
 tests. The cloud database baseline remains available for final preservation.
 
+### First deployment attempt and retained failures
+
+Reviewed source `11ecae7dc18b7df6ead814da96a775aa37626e7a` produced active
+Hosted **3** and an API image. The remote frontend build `cp3` failed because
+ACR's legacy builder rejects the existing Dockerfile's `COPY --chmod`.
+Building that unchanged Dockerfile with local BuildKit from an exact Git archive
+and pushing the result succeeded. No application-code or Dockerfile workaround
+was needed; both failed and successful build receipts are retained.
+
+Hosted v3's first smoke returned a safe failed case rather than the expected
+recovery: `5f24a88e-433f-4a52-815f-6b0ca4d2973b`, `harness_failed`, with no
+remediation. Read-only reconciliation retained all original 84 cases and found
+only this new case. Its **120.291-second** duration matched the unchanged bounded
+investigation deadline. Exact trace **`8f2fb1a86f6dcf898cca58b22acd0cbf`** showed
+successful initialization, three HTTP-200 model calls, all three diagnostic
+reads and workspace write, followed by an unfinished final model request
+lasting about 110.8 seconds. This is not evidence of a startup or projection
+regression. Its underlying model/service delay is not claimed repaired, and no
+timeout, prompt, model, business rule or evaluation threshold was changed.
+
+The old verifier stopped its session on failure and did not retain the safe
+result. It now records private command/session identities and safe responses
+before acceptance assertions, supplies a fresh idempotent start request UUID,
+and retains explicit failed reports. A new regression covers mismatch evidence.
+Stopped-session console/system reads returned `stream_interrupted`; they are
+retained as unavailable diagnostics, not successful log retrieval.
+
+An independent archive check found local `.venv` files in the uploaded source:
+the old `.agentignore` excluded `.foundry` but not local environments. This is a
+confirmed packaging defect, **not proof that it caused the model timeout**.
+The application image rollout remains held while packaging exclusions and an
+exact source/archive validation gate are corrected. No old version, failed case,
+session or receipt was deleted.
+
+The packaging correction excludes local environments/private configuration/caches
+and adds `prepare_hosted.verify_code_archive`: exact canonical file set,
+service SHA-256, file bytes, duplicate-entry and symlink checks. **32 synthetic
+archive regressions** reject sentinel private files, altered/missing source and
+invalid archives. The complete corrected suite passed **148 tests, zero skips**,
+with Ruff, Hosted SDK boundaries and evaluation-contract checks also passing.
+The independent reviewer found no significant issues in these new corrections.
+Actual downloaded-source verification is required for the replacement release;
+unit tests alone do not establish that the uploaded archive is clean.
+
 Private evidence is retained in session
 `78c6c3f4-5e02-4c4f-93a4-068df29dc2aa`,
 `files/release-20260916-workspace/checkout-service-20260917/`.

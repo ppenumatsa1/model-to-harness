@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -108,6 +109,32 @@ def main() -> None:
     parser.add_argument("--smoke", action="store_true", help="Run only the first scenario.")
     args = parser.parse_args()
     session_id = f"checkout-recovery-verify-{uuid4().hex}"
+    commands = []
+    journal = args.output.with_name(args.output.stem + "-commands.json") if args.output else None
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        if args.output.exists() or journal.exists():
+            raise HostedVerificationError(
+                "Verification evidence already exists; reconcile it first"
+            )
+
+    def save(path: Path, value: Any) -> None:
+        with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as file:
+            json.dump(value, file, indent=2)
+
+    def execute(command: dict[str, Any]) -> dict[str, Any]:
+        entry = {"command": command, "status": "submitting"}
+        commands.append(entry)
+        if journal:
+            save(journal, {"session_id": session_id, "version": args.version, "commands": commands})
+        result = invoke(args.environment, args.agent_name, args.version, session_id, command)
+        entry.update(status="responded", result=result)
+        if journal:
+            save(journal, {"session_id": session_id, "version": args.version, "commands": commands})
+        return result
+
+    if journal:
+        save(journal, {"session_id": session_id, "version": args.version, "commands": commands})
     try:
         run_azd(
             [
@@ -134,12 +161,12 @@ def main() -> None:
         results = []
         cases = json.loads(contract.read_text())
         for row in cases[:1] if args.smoke else cases:
-            result = invoke(
-                args.environment,
-                args.agent_name,
-                args.version,
-                session_id,
-                {"action": "start", "fixture_id": row["fixture_id"]},
+            result = execute(
+                {
+                    "action": "start",
+                    "fixture_id": row["fixture_id"],
+                    "request_id": str(uuid4()),
+                }
             )
             case_id = result.get("case_id")
             if not isinstance(case_id, str):
@@ -147,11 +174,7 @@ def main() -> None:
             if row["approval_command"] is not None:
                 if result.get("phase") != "waiting_approval":
                     raise HostedVerificationError("Start did not durably pause")
-                result = invoke(
-                    args.environment,
-                    args.agent_name,
-                    args.version,
-                    session_id,
+                result = execute(
                     {
                         "action": "approval",
                         "case_id": case_id,
@@ -163,24 +186,25 @@ def main() -> None:
                 )
                 if result.get("phase") != "waiting_approval":
                     raise HostedVerificationError("Approval implicitly resumed remediation")
-                result = invoke(
-                    args.environment,
-                    args.agent_name,
-                    args.version,
-                    session_id,
+                result = execute(
                     {"action": "resume", "case_id": case_id},
                 )
+            recorded = {"fixture_id": row["fixture_id"], "passed": False, "actual": result}
+            results.append(recorded)
+            if args.output:
+                save(args.output, results)
             expected = get_checkout_fixture(row["fixture_id"]).expected.model_dump(mode="json")
             for field, value in expected.items():
                 if result.get(field) != value:
                     raise HostedVerificationError(f"Outcome mismatch: {row['fixture_id']}: {field}")
             if result.get("harness_mode") != "maf":
                 raise HostedVerificationError("Real MAF investigation is required")
-            results.append({"fixture_id": row["fixture_id"], "passed": True, "actual": result})
+            recorded["passed"] = True
+            if args.output:
+                save(args.output, results)
             print(f"Verified hosted {row['fixture_id']}")
         if args.output:
-            args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(json.dumps(results, indent=2) + "\n")
+            save(args.output, results)
         print(
             "Hosted single-scenario smoke passed"
             if args.smoke

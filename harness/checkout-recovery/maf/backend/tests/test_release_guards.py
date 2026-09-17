@@ -207,3 +207,48 @@ def test_final_readback_rechecks_backend_after_frontend_update(
     with pytest.raises(SystemExit, match="differs from the approved image"):
         release.update_existing(args, env, tmp_path)
     assert not (args.output_dir / "update-completed.json").exists()
+
+
+def test_hosted_mismatch_retains_response_and_start_identity(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        "checkout_verify_hosted", Path(__file__).resolve().parents[2] / "scripts/verify_hosted.py"
+    )
+    assert spec and spec.loader
+    hosted = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hosted)
+    output = tmp_path / "smoke.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "verify_hosted.py",
+            "--environment",
+            "test",
+            "--agent-name",
+            "checkout-recovery-maf",
+            "--version",
+            "3",
+            "--smoke",
+            "--output",
+            str(output),
+        ],
+    )
+    monkeypatch.setattr(hosted, "run_azd", lambda command: "{}")
+    failed = {
+        "case_id": "failed-case",
+        "failure_code": "harness_failed",
+        "terminal_status": "failed",
+        "diagnostic_disposition": None,
+    }
+    monkeypatch.setattr(hosted, "invoke", lambda *args: failed)
+    with pytest.raises(hosted.HostedVerificationError, match="Outcome mismatch"):
+        hosted.main()
+    assert json.loads(output.read_text())[0] == {
+        "fixture_id": "recoverable-inventory-reservation",
+        "passed": False,
+        "actual": failed,
+    }
+    journal = json.loads(output.with_name("smoke-commands.json").read_text())
+    assert journal["version"] == "3"
+    assert journal["commands"][0]["result"] == failed
+    assert journal["commands"][0]["command"]["request_id"]
+    assert output.stat().st_mode & 0o777 == 0o600

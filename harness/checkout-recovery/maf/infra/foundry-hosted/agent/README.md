@@ -28,6 +28,16 @@ absent. Outputs are the existing safe case projection only.
 `scripts/prepare_hosted.py` copies the checked-in backend and framework-neutral
 shared packages into this deployable source directory. It must run after the
 source has been reviewed and before `azd deploy checkout-recovery-maf`.
+`.agentignore` excludes local environments, credentials/configuration, and test
+caches from the upload. After downloading a deployed version's code ZIP,
+`scripts/prepare_hosted.py` exposes the read-only
+`verify_code_archive(root, content, expected_hash)` check: pass this prepared
+source directory, ZIP bytes, and the platform SHA-256 (bare hex or `sha256:`).
+It returns `archive_sha256` and `files` only after verifying the digest, exact
+canonical file set, and every file's contents. Only `main.py`, `requirements.txt`,
+`README.md`, the optional `.agentignore`, and the two prepared package trees are
+allowed; private/local artifacts, testing code, caches, and duplicate entries
+are rejected. This check neither extracts the ZIP nor calls Azure.
 Platform telemetry remains platform-owned; this adapter does not initialize or
 replace an OpenTelemetry provider, and message-content capture is disabled before
 host construction.
