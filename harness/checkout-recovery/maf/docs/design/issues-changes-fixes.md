@@ -1,8 +1,64 @@
 # Checkout-recovery MAF implementation ledger
 
+## 2026-09-17 - Platform-pattern cloud release accepted
+
+**Foundry Deploy, Smoke, E2E, Evals and Telemetry passed.** This entry supersedes
+the local-only deployment deferral below. Both independent MAF lanes deployed
+reviewed source `20fc44cfd7eda24dcd78996d9af562e456cdd8c1`; their distinct business
+workflows and ownership boundaries remain unchanged.
+
+Checkout environment `crmaf-20260912` now runs Hosted Agent
+`checkout-recovery-maf:5`, API revision `crmaf-q35uqmuqoh7co-api--0000002`
+and UI revision `crmaf-q35uqmuqoh7co-web--0000003`.
+[Open the checkout UI](https://crmaf-q35uqmuqoh7co-web.icymoss-074cbdaa.northcentralus.azurecontainerapps.io).
+The existing-app saved-preview/image-only path preserved application settings,
+identities and infrastructure; no foundation provisioning or schema change ran.
+
+| Gate | Fresh release evidence |
+| --- | --- |
+| Source and artifacts | Downloaded Hosted archive matched all **51 canonical files** and the selected environment. SHA256 `98e1d5a59c15e8e57ef93b616284fdf1e739e3340c8c020cc2e2bd9e7e7dd553`. API image SHA256 `6f5c8f00fe1594cc2d761b90afb02132047008a36a7d2f4d93dff8ecbc4ca05a`; UI image SHA256 `b20960de646f13322ad7f158eedb8b2e1c091f196ba028a728fb57a157975f74`. Source tags and manifests were locked. |
+| Local source recheck | **214 checkout and 482 double-charge backend tests passed** before source freeze; earlier frontend/build/browser evidence remains recorded below. |
+| Smoke and E2E | Hosted smoke and authenticated API/UI smoke passed; **7 API + 7 Hosted scenarios and 8 real-cloud Chromium tests passed**. |
+| Durable business evidence | **15 selected-case deterministic PostgreSQL audits**, all **38 added cases audited**, and **7 accepted evaluation-case audits** passed. Approval, remediation idempotency and verification were checked independently of traces. |
+| Native Foundry evaluation | Group `eval_188058e6d7424429b855697f94735630`, accepted run `evalrun_8ea16f99b9d947249f6f44d4bf5dcecf`: **7/7 exact-contract and scored passes**, zero errors. All output items downloaded and cached; metadata retains earlier evaluations and the failed current attempt. |
+| Foundry-linked App Insights | **15 selected cases, 23 operations, 475 spans**; Hosted version **5** verified. All selected graphs rooted and acyclic, **zero internal orphans**, sampling weight **1**, zero prohibited-content/credential findings. **21 native diagnostic-parent edges** previously missing from API traces are now present. |
+| Preservation | Every original primary key, both full migration records and all **11 Azure resource IDs** retained. Monitoring target unchanged, `isSharedToAll=false`. Counts changed only through acceptance activity: **116 to 154 cases**, **670 to 894 audit events**, **115 to 153 sessions**, **85 to 113 remediation records**, **15 to 21 approvals**. |
+
+### Issues, corrections and lessons
+
+| Issue | Resolution and learning |
+| --- | --- |
+| Read-only smoke harness assumed public API health | Corrected the harness to authenticate. No application authorization was weakened and no runtime source change was needed. Retained the failed smoke receipt. |
+| First native evaluation encountered Azure OpenAI grader setup HTTP 500 | Retained `evalrun_06e051a3f9b54f098da6e3b64481d4ce` with zero scored outputs. Database accounting identified seven additional executed, unscored target cases; attribution to that failed run is **inferred from accounting**, not proven by scored items. Corrected the initial reconciliation, preserved/audited those cases and completed a separate successful seven-case run. Grader failure does not imply the target performed no work. |
+| Local telemetry-parent coverage did not prove cloud ingestion | Exact-operation cloud queries confirmed all 21 repaired edges and unchanged sanitization. Preserve actual native IDs/parents; never synthesize parent spans or enable message capture to make a graph look complete. |
+| Double-charge's additive migration was not rolling-compatible with its exact manifest guard | The separate lane needed reviewed compatibility commit `df843b5960fdf683d1ce383b34a6c07f8e3025b1`, 36 focused tests and Hosted **13** as a transition. Smoke passed before and after explicit migration 002, then final source deployed as Hosted **14**, API/UI **0000011**. Checkout required neither migration nor that bridge. |
+| New Start UI could contact an old API that ignores request identity | Double-charge deployed and health-checked its new API **before** its new UI. Schema compatibility alone does not prove command compatibility. The final application retains strict migration validation; the temporary bridge was not merged into it. |
+| Release failures and old evidence could be mistaken for current acceptance | Kept separate immutable attempt receipts and exact artifact/version provenance. Fleet split checkout release from parent-owned double-charge; independent rubber-duck review approved the bridge and found no high-confidence checkout closeout issues, while requiring the failed-evaluation attribution qualifier above. |
+
+Double-charge's independent final gates also passed: smoke, **7 API + 7 Hosted
+E2E**, one live browser test, API/Hosted Start replay and conflict probes, seven
+deterministic evaluations, 14 native audits and **4/4 native Foundry evaluations**.
+Its selected traces contain **16 workflow roots**, **8 Hosted-14 identities** and
+**536 spans across 34 operations**, with 502 native spans, zero internal native
+orphans, sampling weight 1 and zero prohibited attributes. See its
+[release ledger](../../../../../agent-framework/double-charge/maf/docs/design/issues-changes-fixes.md)
+for the exact evaluation, migration and preservation evidence.
+
+Session evidence is retained under `release-20260917-patterns/checkout/` (including
+`checkout-release-summary.json`, corrected failed-evaluation reconciliation,
+source proofs, output items, trace graphs and preservation receipts).
+Double-charge command evidence is under
+`release-20260916-workspace/maf-pattern-final-20260917/`; deployment/preservation
+receipts are under `release-20260917-patterns/double-charge/`.
+Final independent evidence/ledger review approved closeout with no
+high-confidence blockers or overclaims.
+No LangGraph/shared-runtime changes, dependency upgrades, role changes,
+credential rotation, data deletion or push accompanied this release.
+
 ## 2026-09-17 - Local platform-pattern alignment
 
-**Implemented and accepted locally; cloud deployment is deferred.** The two MAF
+**At local source freeze, cloud deployment was deferred; the accepted release is
+recorded above.** The two MAF
 examples now use consistent responsibility boundaries without sharing runtime
 code or pretending their business workflows are identical. Checkout keeps its
 synchronous application state machine and bounded read-only harness;

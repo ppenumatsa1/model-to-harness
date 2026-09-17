@@ -70,6 +70,11 @@ export across batches, unknown intermediates, and metadata/content redaction.
 These local checks do not assert a new deployment or ingestion result.
 
 The deployed `crmaf-20260912` acceptance run confirmed API and Hosted harness,
-model-loop, tool, approval, remediation, and verification spans. The scoped
+model-loop, tool, approval, remediation, and verification spans. The September 17
+platform-pattern release (Hosted 5/API revision 0000002) verified 475 spans across
+23 selected operations: all 21 previously missing native diagnostic-parent edges
+were present, with zero internal orphans, sampling weight 1 and zero
+prohibited-content/credential findings. These are scoped release results, not
+a guarantee for every future trace. The scoped
 [acceptance](acceptance.kql) and [redaction](redaction.kql) queries are recorded
 with observed counts in the [delivery ledger](../docs/design/issues-changes-fixes.md).

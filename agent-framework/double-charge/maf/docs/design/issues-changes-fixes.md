@@ -1,5 +1,53 @@
 # MAF issues, changes and fixes
 
+## 2026-09-17 - Durable Start cloud release and schema bridge
+
+**Foundry Deploy, Smoke, E2E, Evals and Telemetry passed** for source
+`20fc44cfd7eda24dcd78996d9af562e456cdd8c1`. Environment `maf-dev` now runs
+`model-harness-maf:14`, API `mth-maf-wh2su65huqw5o-api--0000011` and UI
+`mth-maf-wh2su65huqw5o-web--0000011`.
+[Open the MAF UI](https://mth-maf-wh2su65huqw5o-web.livelyhill-0f2b68f2.northcentralus.azurecontainerapps.io).
+This acceptance supersedes the local-only deferral below.
+
+### Release issues and fixes
+
+| Issue | Change and learning |
+| --- | --- |
+| Exact schema validation made additive SQL non-rolling-compatible | Existing v12 required `[001]`; final source required `[001,002]`. Migrate-first would fail old readiness, while deploy-first would fail new readiness. An isolated old-source bridge commit `df843b5960fdf683d1ce383b34a6c07f8e3025b1` adds the exact 002 SQL and narrowly accepts either verified manifest. Unknown versions, gaps and checksum/name mismatches still fail. **36 focused schema/API/native-PostgreSQL tests passed**, and independent rubber-duck review approved it. |
+| Migration needed a working transition, not a bypassed release guard | Prebuilt/locked bridge and final images. Deployed bridge Hosted **13** and old-functionality API/UI, passed API/Hosted smoke on v1, explicitly applied 002, preserved every baseline key and the original 001 ledger record, then passed API/Hosted smoke on v2. Existing-app guards remained enabled; no foundation deployment ran. |
+| New UI request identity is unsafe against an old API | Updated and health-checked the final API before updating the UI, then deployed Hosted **14**. Old API ignores unknown request IDs, so simultaneous UI-first rollout could lose durable retry guarantees. |
+| Compatibility code should not weaken the accepted application | Bridge remains separate from final source, which requires the exact v2 manifest. Old strict-v1 binaries are not valid post-migration restart targets. The bridge is schema-compatible, but is not a complete functional rollback for clients relying on durable Start identity. |
+| A supplemental telemetry query initially failed | Retained the failed operational receipt; completed the read-only check with an unambiguous `spanType` projection and the established query invocation. No application/exporter change or repeated business command was required. |
+
+### Fresh acceptance evidence
+
+| Gate | Result |
+| --- | --- |
+| Immutable artifacts | Final API image SHA256 `b03164d85ae8798b1e582a8375be48b4ee791ec46493f8104a077f6d23b9f9fc`; UI image SHA256 `b6d59b08ff5448cd8aaa0792141b9ac8cd8d4dd9b1a5657172d2a78b7f7ebded`. Downloaded Hosted archive exactly matched canonical source: SHA256 `6af65c77d02b4389eed3367c4caed5a36b86404eb9164ffe0706c8c4bdac99ac`. Final app configuration and healthy active revisions independently read back. |
+| Local source recheck | **482 backend tests passed** before source freeze. Earlier 65 frontend/two isolated browser tests and build/Ruff results remain recorded below. |
+| Smoke, E2E and business audits | Final API/Hosted smoke, **7 API + 7 Hosted scenarios**, **7 deterministic evaluations**, **14 native PostgreSQL audits**, and **one live-cloud Chromium workflow test passed**. |
+| Durable Start acceptance | API exact replay returned the original result without new workflow events; changed operator conflicted with HTTP 409. Hosted replay across fresh sessions/conversations returned the same result without new events. Original commands were persisted before invocation. |
+| Native Foundry evaluation | Group `eval_d172da42828846969af741950a8505d7`, run `evalrun_394498f0dc444ed88dc3f5b3350fadc5`: **4 passed, 0 failed, 0 errored, 0 unscored**. All output items downloaded. Additional exact-response/PostgreSQL checks confirmed all four expected outcomes, retained native checkpoints, explicit approval pause and no refund submission. Existing evaluator versions/thresholds were not changed. |
+| Foundry-linked App Insights | **16/16 workflow roots**, **8/8 Hosted-14 identities**, **34 selected operations**, **536 total / 502 native spans**. All selected native parents present, **zero internal native orphans**, all-span sampling weight **1**, **zero prohibited attributes**. Exact Hosted smoke operation `d56fec49fde0df885aaa41c8ea4b1cce` includes workflow, executor, agent and model hierarchy, edge groups and message spans. |
+| Preservation | All **102 original run keys** and every other original table key retained; original migration 001 record unchanged, only 002/start_requests added. Final counts: **130 runs**, **9865 events**, **1194 native checkpoints**, **125 outcomes**, **67 approvals**, **54 refund records**, **130 selected-memory rows**, **4 Start receipts**, **2 migrations**. Azure resource IDs, app settings/identities and monitoring target/`isSharedToAll=false` unchanged. |
+
+Version-14 evaluation metadata and all output items are retained in the lane's
+ignored `.foundry` overlay/cache, preserving v12 and earlier evaluation history.
+Operational artifacts are session-owned: `release-20260917-patterns/double-charge/`
+contains bridge/final locks, migration and preservation receipts;
+`release-20260916-workspace/maf-pattern-final-20260917/` contains timed command
+receipts, command journals, exact trace queries and results. Failures and earlier
+release evidence were not overwritten.
+Final independent evidence/ledger review approved closeout with no
+high-confidence blockers or overclaims.
+
+Fleet kept checkout release independent; its Hosted **5** release also passed
+7 API/7 Hosted/8 browser tests, 7/7 native evaluations and full selected native
+parentage. No LangGraph or shared-runtime code, foundation provisioning,
+dependency upgrades, role changes, credential rotation, history deletion or
+push occurred. PostgreSQL remains authoritative; telemetry is operational
+evidence, not an exactly-once guarantee.
+
 ## 2026-09-17 - Local platform alignment and durable Start identity
 
 Added optional UUID `request_id` for Start, separately from refund idempotency.
@@ -31,9 +79,9 @@ single-recorded-refund checks, seven offline API/Hosted scenarios and command
 contracts. Native restart tests also replay the original Start before and after
 Resume without adding events or changing the returned original receipt.
 
-Migration `002_start_requests.sql` was applied only in unique local test schemas.
-Current source has **not** been deployed. Later Foundry Deploy, Smoke, cloud E2E,
-native evaluations and Foundry/App Insights ingestion remain deferred. There is
+At local source freeze, migration `002_start_requests.sql` had been applied only
+in unique local test schemas and cloud acceptance was deferred. The completed
+deployment and explicit Azure migration are recorded above. There is
 no automatic abandoned-claim repair: inspect original durable evidence and use
 approval/resume only when its existing preconditions hold. Referenced runs and
 Start claims must be retained together; no new pruning/reset path was added.
