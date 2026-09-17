@@ -21,10 +21,10 @@ Subsequent parent-run local acceptance is recorded separately below.
 ## 2026-09-17 - MAF business-query organization refactor
 
 Implemented on `refactor/maf-backend-cutover`, based on source `04759ba`.
-The implementation-stage evidence below is historical; parent review and local
-acceptance are recorded at the end of this entry. Foundry deployment, deployed
-smoke/E2E/evaluations and live telemetry verification are **pending** at source
-freeze. No commit, deployment, Azure database
+The implementation-stage evidence below is historical; completed parent review,
+local acceptance and hosted **v12** release acceptance follow in this entry.
+Cloud gates were pending at source freeze and are superseded by that dated
+release evidence. No commit, deployment, Azure database
 operation, history reset, evaluation-threshold change or other-lane change was
 performed by this implementation step.
 
@@ -182,6 +182,65 @@ session `78c6c3f4-5e02-4c4f-93a4-068df29dc2aa`,
 `storage-before.json` records the current Azure baseline, including every
 original primary key across **80 runs**, for post-release preservation checks.
 LangGraph, checkout recovery, shared code and database migrations are unchanged.
+
+### Hosted v12 deployment and cloud acceptance
+
+The reviewed source was committed as
+`f585a6da6e3281aaea919464cba1620ae156c281`, then deployed using the existing guarded
+`--app-only --update-existing --environment maf-dev
+--schema maf_double_charge_cutover --source-commit <commit>` release.
+Deployment ran **15:41:31-15:49:45 UTC on 2026-09-17**. No foundation redeployment,
+schema reset, monitoring-sharing change or sibling-lane rollout occurred.
+
+Readback verified the clean source, active hosted **12**, exact hosted archive
+SHA-256 `6be783ef5b4d590403e1a372c4aa4408f8325063f4254dccc0b9114b5e794069`,
+and healthy active API/frontend revisions **0000009**. Both the release tags and
+manifests were read back with write/delete disabled. Backend digest:
+`a1d65acf657a6543282dbe4c66f93115d20336d40665cebc93f617d99bc90f81`;
+frontend digest:
+`e03cd23f69a0edc0015af7759e1ed1e729b5fcfb99848c25dede6f9370cb4d36`.
+
+| Gate | Fresh v12 result |
+| --- | --- |
+| Hosted/API smoke | Both passed, hosted first with explicit version 12 |
+| API E2E | All seven scenarios passed |
+| Hosted E2E | All seven scenarios passed through the SDK harness |
+| Deployed browser | Passed approval/resume, retry safety, native audit/outcome and safe selected-run explanation |
+| Deterministic evaluations | Seven passed |
+| Native audit verification | All 14 API/hosted scenario runs passed |
+| Foundry judge evaluation | Four of four passed; zero failed, errored or unscored |
+| Fresh workflow telemetry | All 16 requested runs had workflow roots; eight hosted runs correlated to v12 |
+
+Foundry MCP discovery was available for this release. Prepared and remotely
+verified the existing reviewed evaluator pins (`builtin.task_completion` 19,
+`builtin.relevance` 12), then submitted the four fresh cases via
+`evaluation_agent_batch_eval_create` without changing thresholds or suite intent.
+Group **`eval_db0cd6b87c2c4065b4da7d48e019c550`**, run
+**`evalrun_71af7d1d250a47e783b20fb7ca363ead`** completed. All four output items
+were downloaded through the SDK, persisted beneath the MAF agent's ignored
+`.foundry/results/maf-dev/` cache, and mirrored in its metadata while retaining
+previous evaluations. Task completion scored **1/1/1/1**; relevance **5/4/5/5**.
+
+Telemetry was queried from the MAF Foundry project's linked App Insights
+`mth-maf-wh2su65huqw5o-appi`; connection target and `isSharedToAll=false` remained
+unchanged. Exact hosted smoke trace
+**`e71831fe1b75e29e58e3acdc32e0de99`** passed the native hierarchy gate:
+one hosted request, 15 native spans, one workflow root, complete
+normalizer/model parent chain, four edge groups, three message events, zero
+orphans and sampling weight one. This is programmatic evidence in Foundry's
+linked telemetry store, not a claim of manually opening both portal screens.
+The private verifier uses the earliest smoke/E2E receipt timestamp, so the
+hosted-first smoke is included rather than incorrectly starting at API smoke.
+
+Final read-only preservation retained **every original primary key** across all
+eight application tables and the unchanged migration ledger. Counts increased
+from **80 to 102 runs**, **6,319 to 7,981 events**, and **762 to 963 native
+checkpoints**; application migration count remained **one**. Existing cases,
+approvals, outcomes, memory and refund receipts were not reset or pruned.
+All deployment/acceptance/readback/trace/preservation receipts remain in the
+private session evidence directory named above. Source and final evidence are
+committed on the feature branch; nothing was pushed. Checkout recovery remains
+deferred until the user verifies this MAF release.
 
 ## 2026-09-16 - Repaired workspace release and complete Foundry acceptance
 
