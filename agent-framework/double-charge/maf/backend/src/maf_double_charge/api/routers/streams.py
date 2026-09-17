@@ -10,8 +10,8 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from ...projections.agui import project_events
-from ...projections.workspace import safe_event, workspace_view
-from ..dependencies import RepositoryDependency, ServiceDependency, require_run
+from ...projections.workspace import safe_event
+from ..dependencies import ServiceDependency, require_run
 
 router = APIRouter()
 
@@ -25,7 +25,6 @@ _HEARTBEAT_SECONDS = 15
 async def audit_stream(
     request: Request,
     run_id: str,
-    repository: RepositoryDependency,
     service: ServiceDependency,
     after: int = Query(default=0, ge=0, le=_MAX_SEQUENCE),
     follow: bool = True,
@@ -46,8 +45,8 @@ async def audit_stream(
         last_sent = monotonic()
         try:
             while not await request.is_disconnected():
-                # Repository calls release their connections before any yield or idle wait.
-                durable = await repository.list_events(
+                # Application queries release connections before any yield or idle wait.
+                durable = await service.list_events(
                     run_id, after=cursor, limit=_EVENT_BATCH_SIZE
                 )
                 for item in durable:
@@ -62,8 +61,7 @@ async def audit_stream(
 
                 if await request.is_disconnected():
                     return
-                state = await service.get_state(run_id)
-                snapshot = (await workspace_view(repository, state)).model_dump_json()
+                snapshot = (await service.get_workspace(run_id)).model_dump_json()
                 if snapshot != previous_snapshot:
                     yield f"event: snapshot\ndata: {snapshot}\n\n"
                     previous_snapshot = snapshot
@@ -98,7 +96,6 @@ async def audit_stream(
 async def ag_ui_stream(
     request: Request,
     run_id: str,
-    repository: RepositoryDependency,
     service: ServiceDependency,
     after: int = Query(default=0, ge=0),
     follow: bool = False,
@@ -111,7 +108,7 @@ async def ag_ui_stream(
         nonlocal cursor, state
         idle_ticks = 0
         while True:
-            durable = await repository.list_events(run_id, after=cursor)
+            durable = await service.list_events(run_id, after=cursor)
             if durable:
                 state = await service.get_state(run_id)
                 for item in durable:

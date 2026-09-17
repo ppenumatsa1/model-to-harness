@@ -17,10 +17,10 @@ maf/
   backend/
     src/maf_double_charge/
       api/                          app factory, HTTP contracts, routers, dependencies
-      application/                  commands, state, ports, service, refunds, audit, history
+      application/                  commands/queries, state, ports, service, refunds, audit, history
       maf/                          agents/prompts, clients, executors, workflow, runner
       infrastructure/               PostgreSQL, checkpoints, migrations, simulation, telemetry
-      projections/                  safe workspace, AG-UI, selected-run facts, graph
+      projections/                  pure loaded-data workspace, AG-UI, selected-run facts, graph
       testing/                      explicitly injected model/repository/checkpoint doubles
       config.py                     lane dotenv selection and Settings
       bootstrap.py                  runtime construction and resource lifecycle
@@ -65,10 +65,18 @@ architecture/user flow; this lane does not require their continued presence.
 
 ## Runtime and packaging ownership
 
-`api/` owns transport, `application/` owns command authority/ports, `maf/` owns
+`api/` owns transport, `application/` owns command/query authority and ports, `maf/` owns
 native execution, and `infrastructure/` implements adapters. Imports do not open
 resources. `bootstrap.py` constructs real or explicitly injected runtimes and owns
 their start/close boundaries.
+
+Business routers use service methods for case pages, case/run workspaces, event
+reads and selected-run explanation. `application/history.py` owns `CasePage` and
+`CaseCursor`; HTTP schemas derive from those contracts rather than reversing the
+dependency. The service loads workspace records before calling the synchronous
+projection and uses the bootstrap-injected model for safe-fact explanation.
+SSE framing, polling, heartbeat, reconnect handling and HTTP errors remain in
+routers; readiness alone can use the repository dependency directly.
 
 `backend/migrations/` is the SQL source; wheel and hosted preparation package
 generated `_migrations/` resources. Generated copies of `maf_double_charge/`

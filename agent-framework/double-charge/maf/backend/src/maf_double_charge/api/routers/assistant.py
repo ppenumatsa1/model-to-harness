@@ -9,13 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from ...infrastructure.telemetry import telemetry_context
-from ...projections.selected_run import selected_run_facts, selected_run_view
-from ..dependencies import (
-    ModelDependency,
-    RepositoryDependency,
-    RunDependency,
-    ServiceDependency,
-)
+from ..dependencies import ServiceDependency
 
 router = APIRouter()
 
@@ -61,17 +55,18 @@ async def copilotkit_discovery() -> dict[str, Any]:
 
 @router.get("/api/copilotkit/runs/{run_id}")
 async def copilotkit_selected_run(
-    run_id: str, state: RunDependency, repository: RepositoryDependency
+    run_id: str, service: ServiceDependency
 ) -> dict[str, Any]:
-    return selected_run_view(state, await repository.list_events(run_id))
+    try:
+        return await service.get_selected_run(run_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="run not found") from exc
 
 
 @router.post("/api/copilotkit/agent/selected-run/run")
 async def copilotkit_run(
     request: Request,
     service: ServiceDependency,
-    repository: RepositoryDependency,
-    model: ModelDependency,
 ) -> StreamingResponse:
     try:
         payload = await request.json()
@@ -88,15 +83,10 @@ async def copilotkit_run(
         or not isinstance(payload["context"], list)
     ):
         raise HTTPException(status_code=422, detail="invalid AG-UI RunAgentInput")
-    selected_run_id = payload["threadId"]
     try:
-        state = await service.get_state(selected_run_id)
+        state = await service.resolve_selected_run(payload["threadId"])
     except KeyError:
-        selected_case = await repository.get_state_by_case(selected_run_id)
-        if selected_case is None:
-            raise HTTPException(status_code=404, detail="selected run or case not found") from None
-        selected_run_id = selected_case.run_id
-        state = await service.get_state(selected_run_id)
+        raise HTTPException(status_code=404, detail="selected run or case not found") from None
     question = next(
         (
             message.get("content")
@@ -109,9 +99,8 @@ async def copilotkit_run(
     )
     if not question:
         raise HTTPException(status_code=422, detail="a user question is required")
-    _, facts = selected_run_facts(state, await repository.list_events(selected_run_id))
-    with telemetry_context(case_id=state.case_id, run_id=selected_run_id):
-        result = await model.explain_run(question, facts)
+    with telemetry_context(case_id=state.case_id, run_id=state.run_id):
+        result = await service.explain_selected_run(state, question)
     message_id = f"message-{uuid4().hex}"
     thread_id = payload["threadId"]
     invocation_run_id = payload["runId"]

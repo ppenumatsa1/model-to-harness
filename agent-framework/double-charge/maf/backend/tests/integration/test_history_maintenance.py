@@ -23,7 +23,7 @@ async def persistent_service(postgres_repository):
             postgres_repository, model,
             checkpoint_storage_factory=PostgresRunCheckpointStorage,
             actions_factory=SimulatedActions.for_fixture, max_tool_attempts=3,
-        ))
+        ), model)
     finally:
         await model.close()
 

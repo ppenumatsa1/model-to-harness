@@ -1488,12 +1488,11 @@ async def test_hosted_commands_correlate_authoritative_state_before_execution(mo
     service = SimpleNamespace(
         get_state=AsyncMock(return_value=state),
         get_outcome=AsyncMock(return_value=None),
+        list_events=AsyncMock(return_value=[]),
         record_approval=AsyncMock(side_effect=execute),
         resume=AsyncMock(side_effect=execute),
     )
-    runtime = SimpleNamespace(
-        service=service, repository=SimpleNamespace(list_events=AsyncMock(return_value=[]))
-    )
+    runtime = SimpleNamespace(service=service)
     monkeypatch.setattr(adapter, "_runtime", AsyncMock(return_value=runtime))
     with telemetry_context(
         conversation_id="platform-conversation", response_id="platform-response"
@@ -1511,6 +1510,7 @@ async def test_hosted_commands_correlate_authoritative_state_before_execution(mo
             "platform-conversation",
         )
     assert service.get_state.call_args_list[0].args == ("requested-run",)
+    service.list_events.assert_awaited_once_with(state.run_id)
     assert observed == {
         "case_id": correlation_id(state.case_id),
         "run_id": correlation_id(state.run_id),

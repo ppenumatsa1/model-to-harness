@@ -12,11 +12,17 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from maf_double_charge.api.app import create_app
 from maf_double_charge.application.models import DurableEvent
+from maf_double_charge.application.ports import ModelResult
 from maf_double_charge.config import Settings
+from maf_double_charge.infrastructure.logging import correlation_id, current_log_context
 from maf_double_charge.infrastructure.telemetry import telemetry_context
 from maf_double_charge.projections.selected_run import selected_run_facts
 from maf_double_charge.projections.workflow_graph import WORKFLOW_GRAPH
 from maf_double_charge.testing.app import create_test_app
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 
 @asynccontextmanager
@@ -232,6 +238,14 @@ def test_http_paths_and_workspace_request_schemas() -> None:
         ("GET", "/api/runs/{run_id}/ag-ui"),
     }
     contracts = schema["components"]["schemas"]
+    assert schema["paths"]["/api/cases"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/CasePage"}
+    assert set(contracts["CasePage"]["properties"]) == {"items", "next_cursor", "has_more"}
+    assert contracts["CasePage"]["required"] == ["items", "has_more"]
+    assert contracts["CasePage"]["properties"]["items"]["items"] == {
+        "$ref": "#/components/schemas/CaseSummary",
+    }
     assert contracts["ScenarioInput"]["required"] == ["operator_id", "complaint", "customer_id"]
     assert set(contracts["ScenarioInput"]["properties"]) == {
         "operator_id",
@@ -400,6 +414,9 @@ async def test_read_queries_and_cursors_preserve_contract() -> None:
         assert (await client.get(f"{base}/events?after=3")).json() == [
             event for event in events if event["sequence"] > 3
         ]
+        assert (await client.get(f"{base}/events?after=3&limit=2")).json() == [
+            event for event in events if event["sequence"] > 3
+        ][:2]
         assert (await client.get(f"{base}/outcome")).json() == run["outcome"]
 
 
@@ -411,6 +428,7 @@ async def test_read_queries_and_cursors_preserve_contract() -> None:
         ("/api/runs/missing/events", 404, "run not found"),
         ("/api/runs/missing/history", 404, "run not found"),
         ("/api/runs/missing/ag-ui", 404, "run not found"),
+        ("/api/runs/missing/events/stream", 404, "run not found"),
         ("/api/copilotkit/runs/missing", 404, "run not found"),
         ("/api/runs/missing/outcome", 409, "run has not reached a terminal outcome"),
     ],
@@ -432,7 +450,10 @@ async def test_command_validation_and_conflicts() -> None:
             {**scenario(), "account_id": "wrong-account"},
         ):
             assert (await client.post("/api/cases", json=invalid)).status_code == 422
-        for suffix in ("events?after=-1", "ag-ui?after=-1", "ag-ui?follow=invalid"):
+        for suffix in (
+            "events?after=-1", "events?limit=0", "events?limit=501",
+            "ag-ui?after=-1", "ag-ui?follow=invalid",
+        ):
             assert (await client.get(f"/api/runs/missing/{suffix}")).status_code == 422
         assert (
             await client.post(
@@ -587,6 +608,65 @@ async def test_assistant_request_validation_preserves_error_details() -> None:
             )
             assert response.status_code == 422
             assert response.json() == {"detail": "a user question is required"}
+        missing = await client.post(path, json=invocation("missing", messages=[]))
+        assert missing.status_code == 404
+        assert missing.json() == {"detail": "selected run or case not found"}
+
+
+@pytest.mark.parametrize("select_by", ["run_id", "case_id"])
+@pytest.mark.parametrize("model_fails", [False, True])
+async def test_assistant_service_preserves_context_and_model_parentage(
+    select_by: str, model_fails: bool, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = create_test_app()
+    provider = TracerProvider(shutdown_on_exit=False)
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = provider.get_tracer("assistant-boundary-test")
+    try:
+        async with api_client(app) as client:
+            started = (await client.post("/api/cases", json=scenario("no-duplicate"))).json()
+            observed = []
+
+            async def explain(question: str, facts: dict[str, object]) -> ModelResult:
+                observed.append(
+                    (trace.get_current_span().get_span_context(), current_log_context())
+                )
+                with tracer.start_as_current_span("chat selected-run"):
+                    if model_fails:
+                        raise RuntimeError("model unavailable")
+                    return ModelResult(text="Safe explanation.", latency_ms=1, model="fake-model")
+
+            monkeypatch.setattr(app.state.runtime.model, "explain_run", explain)
+            before_context = current_log_context()
+            with tracer.start_as_current_span("assistant request") as parent:
+                request = client.post(
+                    "/api/copilotkit/agent/selected-run/run",
+                    json=invocation(started[select_by]),
+                )
+                if model_fails:
+                    with pytest.raises(RuntimeError, match="model unavailable"):
+                        await request
+                else:
+                    response = await request
+                    assert response.status_code == 200
+                    assert f'"threadId": "{started[select_by]}"' in response.text
+                    assert '"runId": "assistant-invocation"' in response.text
+                assert trace.get_current_span() is parent
+                assert current_log_context() == before_context
+            assert observed == [(parent.get_span_context(), {
+                **before_context,
+                "case_id": correlation_id(started["case_id"]),
+                "run_id": correlation_id(started["run_id"]),
+            })]
+            child, exported_parent = exporter.get_finished_spans()
+            assert child.name == "chat selected-run"
+            assert child.parent.span_id == exported_parent.context.span_id
+            assert child.context.trace_id == exported_parent.context.trace_id
+            assert exported_parent.attributes["run_id"] == correlation_id(started["run_id"])
+            assert exported_parent.attributes["case_id"] == correlation_id(started["case_id"])
+    finally:
+        provider.shutdown()
 
 
 async def test_sse_replay_header_precedence_and_keepalive() -> None:

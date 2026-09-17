@@ -5,6 +5,14 @@ import binascii
 
 from pydantic import AwareDatetime, BaseModel, Field, ValidationError
 
+from .models import CaseSummary
+
+
+class CasePage(BaseModel):
+    items: list[CaseSummary]
+    next_cursor: str | None = None
+    has_more: bool
+
 
 class CaseCursor(BaseModel):
     created_at: AwareDatetime

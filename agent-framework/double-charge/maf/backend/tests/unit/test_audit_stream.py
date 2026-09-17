@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from maf_double_charge.api.dependencies import get_repository, get_service
+from maf_double_charge.api.dependencies import get_service
 from maf_double_charge.api.routers import streams
 from maf_double_charge.application.models import (
     ApprovalResponse,
@@ -48,10 +48,9 @@ async def state(repository):
 
 
 @pytest.fixture
-async def client(repository, service):
+async def client(service):
     app = FastAPI()
     app.include_router(streams.router)
-    app.dependency_overrides[get_repository] = lambda: repository
     app.dependency_overrides[get_service] = lambda: service
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as value:
         yield value
@@ -198,7 +197,7 @@ async def test_approval_memory_and_state_changes_emit_snapshots_without_audit(
     monkeypatch.setattr(
         streams, "asyncio", SimpleNamespace(sleep=idle, CancelledError=asyncio.CancelledError)
     )
-    response = await streams.audit_stream(incoming, state.run_id, repository, service, after=0)
+    response = await streams.audit_stream(incoming, state.run_id, service, after=0)
     body = "".join([chunk async for chunk in response.body_iterator])
     snapshots = frames(body)
     assert [frame["event"] for frame in snapshots] == ["snapshot"] * 4
@@ -242,7 +241,7 @@ async def test_follow_does_not_stop_at_terminal_event_and_emits_late_outcome(
     monkeypatch.setattr(
         streams, "asyncio", SimpleNamespace(sleep=idle, CancelledError=asyncio.CancelledError)
     )
-    response = await streams.audit_stream(incoming, state.run_id, repository, service, after=0)
+    response = await streams.audit_stream(incoming, state.run_id, service, after=0)
     result = frames("".join([chunk async for chunk in response.body_iterator]))
     assert [frame["event"] for frame in result] == ["audit", "snapshot", "snapshot", "audit"]
     assert result[1]["data"]["outcome"] is None
@@ -264,7 +263,7 @@ async def test_idle_heartbeat_deduplicates_snapshots(repository, service, state,
     monkeypatch.setattr(
         streams, "asyncio", SimpleNamespace(sleep=idle, CancelledError=asyncio.CancelledError)
     )
-    response = await streams.audit_stream(incoming, state.run_id, repository, service, after=0)
+    response = await streams.audit_stream(incoming, state.run_id, service, after=0)
     chunks = [chunk async for chunk in response.body_iterator]
     assert len(chunks) == 2
     assert chunks[0].startswith("event: snapshot\n")
@@ -276,7 +275,7 @@ async def test_disconnect_stops_before_reads(repository, service, state, monkeyp
     incoming.is_disconnected.return_value = True
     reads = AsyncMock(wraps=repository.list_events)
     monkeypatch.setattr(repository, "list_events", reads)
-    response = await streams.audit_stream(incoming, state.run_id, repository, service, after=0)
+    response = await streams.audit_stream(incoming, state.run_id, service, after=0)
     assert [chunk async for chunk in response.body_iterator] == []
     reads.assert_not_awaited()
 
@@ -285,7 +284,7 @@ async def test_disconnect_during_replay_stops_remaining_batch(repository, servic
     await repository.append_event(event(state))
     await repository.append_event(event(state))
     incoming = request()
-    response = await streams.audit_stream(incoming, state.run_id, repository, service, after=0)
+    response = await streams.audit_stream(incoming, state.run_id, service, after=0)
     assert (await anext(response.body_iterator)).startswith("event: audit\n")
     incoming.is_disconnected.return_value = True
     with pytest.raises(StopAsyncIteration):
@@ -304,7 +303,7 @@ async def test_cancel_during_idle_propagates_without_error_frame(
     monkeypatch.setattr(
         streams, "asyncio", SimpleNamespace(sleep=idle, CancelledError=asyncio.CancelledError)
     )
-    response = await streams.audit_stream(request(), state.run_id, repository, service, after=0)
+    response = await streams.audit_stream(request(), state.run_id, service, after=0)
     assert (await anext(response.body_iterator)).startswith("event: snapshot\n")
     pending = asyncio.create_task(anext(response.body_iterator))
     await asyncio.wait_for(sleeping.wait(), timeout=1)

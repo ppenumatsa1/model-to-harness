@@ -1,19 +1,26 @@
 from __future__ import annotations
 
+from typing import Any
 from uuid import uuid4
 
 from model_to_harness_shared import WorkflowOutcome, get_fixture
 
+from ..projections.selected_run import selected_run_facts, selected_run_view
+from ..projections.workspace import WorkspaceView, workspace_view
 from .audit import Audit
 from .commands import ApprovalCommand, ResumeCommand, ScenarioInput
-from .models import ApprovalResponse, RunStatus, StartResult, WorkflowState
-from .ports import Repository, WorkflowRunner
+from .history import CaseCursor, CasePage
+from .models import ApprovalResponse, DurableEvent, RunStatus, StartResult, WorkflowState
+from .ports import ModelClient, ModelResult, Repository, WorkflowRunner
 
 
 class DoubleChargeService:
-    def __init__(self, repository: Repository, runner: WorkflowRunner) -> None:
+    def __init__(
+        self, repository: Repository, runner: WorkflowRunner, model: ModelClient
+    ) -> None:
         self.repository = repository
         self.runner = runner
+        self.model = model
         self.audit = Audit(repository)
 
     async def start(self, command: ScenarioInput) -> StartResult:
@@ -113,3 +120,58 @@ class DoubleChargeService:
 
     async def get_outcome(self, run_id: str) -> WorkflowOutcome | None:
         return await self.repository.get_outcome(run_id)
+
+    async def list_cases(self, limit: int = 10, cursor: str | None = None) -> CasePage:
+        before = CaseCursor.decode(cursor) if cursor is not None else None
+        records = await self.repository.list_cases(
+            limit + 1, (before.created_at, before.run_id) if before else None
+        )
+        items = records[:limit]
+        has_more = len(records) > limit
+        next_cursor = (
+            CaseCursor(created_at=items[-1].created_at, run_id=items[-1].run_id).encode()
+            if has_more else None
+        )
+        return CasePage(items=items, next_cursor=next_cursor, has_more=has_more)
+
+    async def get_case_state(self, case_id: str) -> WorkflowState:
+        state = await self.repository.get_state_by_case(case_id)
+        if state is None:
+            raise KeyError(f"unknown case: {case_id}")
+        return state
+
+    async def get_case_workspace(self, case_id: str) -> WorkspaceView:
+        return await self._workspace(await self.get_case_state(case_id))
+
+    async def get_workspace(self, run_id: str) -> WorkspaceView:
+        return await self._workspace(await self.get_state(run_id))
+
+    async def _workspace(self, state: WorkflowState) -> WorkspaceView:
+        approval = await self.repository.get_approval(state.run_id)
+        memory = await self.repository.get_memory(state.case_id)
+        outcome = await self.repository.get_outcome(state.run_id)
+        created_at = await self.repository.get_run_created_at(state.run_id)
+        return workspace_view(
+            state, approval=approval, memory=memory, outcome=outcome, created_at=created_at
+        )
+
+    async def list_events(
+        self, run_id: str, after: int = 0, limit: int | None = None
+    ) -> list[DurableEvent]:
+        await self.get_state(run_id)
+        return await self.repository.list_events(run_id, after=after, limit=limit)
+
+    async def get_selected_run(self, run_id: str) -> dict[str, Any]:
+        state = await self.get_state(run_id)
+        return selected_run_view(state, await self.repository.list_events(run_id))
+
+    async def resolve_selected_run(self, selection_id: str) -> WorkflowState:
+        try:
+            return await self.get_state(selection_id)
+        except KeyError:
+            selected_case = await self.get_case_state(selection_id)
+            return await self.get_state(selected_case.run_id)
+
+    async def explain_selected_run(self, state: WorkflowState, question: str) -> ModelResult:
+        _, facts = selected_run_facts(state, await self.repository.list_events(state.run_id))
+        return await self.model.explain_run(question, facts)

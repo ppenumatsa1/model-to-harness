@@ -156,15 +156,17 @@ async def test_reconstructed_native_runner_restores_memory_checkpoints() -> None
     await repository.initialize()
 
     def reconstruct_service() -> DoubleChargeService:
+        model = FakeModelClient()
         return DoubleChargeService(
             repository,
             MafWorkflowRunner(
                 repository,
-                FakeModelClient(),
+                model,
                 checkpoint_storage_factory=InMemoryRunCheckpointStorage,
                 actions_factory=SimulatedActions.for_fixture,
                 max_tool_attempts=3,
             ),
+            model,
         )
 
     service = reconstruct_service()

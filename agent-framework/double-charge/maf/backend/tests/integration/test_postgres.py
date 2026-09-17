@@ -27,7 +27,7 @@ async def test_uncertain_refund_recovers_from_fresh_native_checkpoint_and_reposi
         actions_factory=lambda scenario_id: actions,
         max_tool_attempts=3,
     )
-    service = DoubleChargeService(postgres_repository, runner)
+    service = DoubleChargeService(postgres_repository, runner, first_model)
     started = await service.start(
         ScenarioInput(
             operator_id="test-operator",
@@ -70,6 +70,7 @@ async def test_uncertain_refund_recovers_from_fresh_native_checkpoint_and_reposi
                 actions_factory=SimulatedActions.for_fixture,
                 max_tool_attempts=3,
             ),
+            second_model,
         )
         terminal = await reconstructed.resume(
             started.run_id, started.checkpoint_id, operator_id="test-resumer"

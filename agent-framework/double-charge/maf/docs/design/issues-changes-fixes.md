@@ -18,6 +18,171 @@ model invocation, application-database write, commit or push. Authorized integra
 tests wrote only their random schemas in the dedicated disposable local database.
 Subsequent parent-run local acceptance is recorded separately below.
 
+## 2026-09-17 - MAF business-query organization refactor
+
+Implemented on `refactor/maf-backend-cutover`, based on source `04759ba`.
+The implementation-stage evidence below is historical; parent review and local
+acceptance are recorded at the end of this entry. Foundry deployment, deployed
+smoke/E2E/evaluations and live telemetry verification are **pending** at source
+freeze. No commit, deployment, Azure database
+operation, history reset, evaluation-threshold change or other-lane change was
+performed by this implementation step.
+
+Source changes:
+
+- `backend/src/maf_double_charge/application/service.py` owns case/run workspace
+  loading, case pagination, checked event queries, run-first/case-fallback
+  selection, safe selected-run facts and model explanation. Commands are unchanged.
+- `application/history.py` owns `CasePage`; `api/schemas.py` derives its HTTP
+  response from that contract, matching the existing schema direction without
+  introducing an application-to-API import.
+- `projections/workspace.py` now synchronously transforms loaded state, approval,
+  memory, outcome and creation time. `safe_state()` and `safe_event()` privacy
+  logic is unchanged; the AG-UI import remains local to the latter.
+- `api/routers/{cases,runs,streams,assistant}.py` use service methods for business
+  reads. SSE framing, paging/reconnect sequence cursors, Last-Event-ID handling,
+  filtering, polling, heartbeats and transport errors remain in the API.
+  Assistant telemetry context remains around the service call at the HTTP
+  invocation boundary; model parentage and case/run context are preserved.
+- `bootstrap.py` supplies the same injected model to runner and service.
+  `api/dependencies.py` removes the unused direct model dependency; the repository
+  dependency remains for readiness only.
+- Updated direct service constructors and stream calls in unit/integration
+  tests. Evaluation and test-runtime construction already use bootstrap.
+  The follow-up inspection of `infra/foundry-hosted/agent/main.py` moved its final
+  event read through `service.list_events()`, preserving its response dictionary,
+  full-history retry count, last-20-event tail and unchanged safe-state projection.
+- Updated `architecture.md` and `projectstructure.md` for the query/projection
+  boundary. No infrastructure deployment behavior was changed.
+
+New `backend/tests/unit/test_service_queries.py` covers loaded-data purity and
+non-mutation, workspace retrieval, keyset lookahead/ties, event sequence gaps,
+existence checks, ambiguous case/run selection and exact model-safe facts.
+Architecture tests prohibit business-router repository/model access and
+projection I/O dependencies. API tests add event limits, missing-selection error
+precedence and run/case explanation context/parentage, including model failure.
+Existing workspace/stream tests now exercise service queries; bootstrap and
+checkpoint tests verify the required model injection.
+
+Executed from `agent-framework/double-charge/maf`:
+
+```bash
+.venv/bin/ruff check backend evals scripts
+.venv/bin/python -m pytest --basetemp=.pytest-organization-refactor \
+  backend/tests/unit/test_service_queries.py \
+  backend/tests/unit/test_audit_stream.py \
+  backend/tests/unit/test_bootstrap.py \
+  backend/tests/unit/test_checkpoint_codec.py \
+  backend/tests/unit/test_workflow.py \
+  backend/tests/unit/test_telemetry.py \
+  backend/tests/contracts/test_api.py \
+  backend/tests/contracts/test_workspace.py \
+  backend/tests/contracts/test_architecture.py \
+  backend/tests/contracts/test_workspace_import.py \
+  backend/tests/contracts/test_agui.py \
+  backend/tests/contracts/test_business_audit.py \
+  backend/tests/contracts/test_eval_results.py \
+  backend/tests/contracts/test_release_scripts.py::test_hosted_adapter_executes_explicit_workflow_commands \
+  backend/tests/contracts/test_release_scripts.py::test_hosted_handler_correlates_existing_platform_span \
+  backend/tests/contracts/test_release_scripts.py::test_hosted_handler_omits_absent_platform_correlation_ids \
+  backend/tests/contracts/test_release_scripts.py::test_hosted_commands_correlate_authoritative_state_before_execution
+.venv/bin/python -m pytest --collect-only -q \
+  backend/tests/integration/test_postgres.py \
+  backend/tests/integration/test_history_maintenance.py \
+  backend/tests/integration/test_postgres_event_order.py
+```
+
+Results: **Ruff passed; 201 tests passed in 27.36 seconds**. One existing
+Starlette/httpx deprecation warning was emitted. The hosted adapter scenarios and
+telemetry checks above are offline/injected tests, not cloud acceptance.
+The changed PostgreSQL tests **collected six tests only**; none were executed
+against a database in this step. An earlier validation attempt exposed a missing
+parent directory for the chosen local pytest scratch path; using the lane-root
+scratch path above resolved it and the complete focused run passed. Scratch
+artifacts were removed afterward.
+
+Follow-up compatibility checks:
+
+- Compared the **complete generated OpenAPI document** to `04759ba` using two
+  isolated Python interpreters and baseline package sources loaded entirely in
+  memory from `git archive`. Exact structural equality passed: **18 paths and
+  27 public schemas**. `/api/cases` still references
+  `#/components/schemas/CasePage`, whose item reference remains `CaseSummary`.
+  Canonical JSON SHA-256:
+  `d2cc3396d4c7b8265c8c13aed2851ff08e0d3b6b710c1fb4b5f7fc99a6d287e7`.
+- Added explicit CasePage schema assertions and a hosted business-read
+  architecture guard. The hosted command test now works with a service-only
+  runtime double and checks the authoritative run ID passed to `list_events()`.
+- The assistant tests capture unchanged case/run correlation and direct
+  request-to-model span parentage for both run-ID and case-ID selection, on
+  both success and model failure; context is restored afterward.
+
+```bash
+.venv/bin/ruff check backend evals scripts infra/foundry-hosted/agent/main.py
+.venv/bin/python -m pytest --basetemp=.pytest-organization-followup \
+  backend/tests/contracts/test_api.py \
+  backend/tests/contracts/test_architecture.py \
+  backend/tests/contracts/test_workspace_import.py \
+  backend/tests/contracts/test_release_scripts.py::test_hosted_adapter_executes_explicit_workflow_commands \
+  backend/tests/contracts/test_release_scripts.py::test_hosted_handler_correlates_existing_platform_span \
+  backend/tests/contracts/test_release_scripts.py::test_hosted_handler_omits_absent_platform_correlation_ids \
+  backend/tests/contracts/test_release_scripts.py::test_hosted_commands_correlate_authoritative_state_before_execution
+```
+
+Follow-up result: **Ruff passed; 45 tests passed in 11.85 seconds**. No full suite,
+database, cloud or independent-review operations were run by this implementation
+step. Parent-run validation and all acceptance gates remain pending.
+
+The subsequent parent-run local PostgreSQL suite reported **463 passed and one
+failed**: the live-stream pool-release test still used a state-only service
+double. The stream's new event/workspace queries therefore emitted an error
+frame instead of audit/snapshot frames. Replaced that stale double in
+`backend/tests/integration/test_postgres_event_order.py` with the real
+`DoubleChargeService`, its PostgreSQL repository, an injected fake model and a
+protocol-specced runner mock. Existing connection-release, pool-availability,
+frame and idle assertions are unchanged; added assertions that neither workflow
+command is invoked by observation.
+
+Explicitly authorized targeted validation against the dedicated **loopback
+Compose PostgreSQL**, with the integration fixture's disposable random schema:
+
+```bash
+.venv/bin/ruff check backend/tests/integration/test_postgres_event_order.py
+.venv/bin/python scripts/with_local_db.py .venv/bin/python -m pytest \
+  --basetemp=.pytest-organization-pg \
+  backend/tests/integration/test_postgres_event_order.py::test_live_stream_releases_postgres_connections_before_frames_and_idle
+```
+
+**Ruff passed; one test passed in 0.92 seconds.** No application/Azure database
+was used. The parent owns the full-suite rerun and independent review; this
+targeted repair does not establish full or cloud acceptance.
+
+### Parent local acceptance and independent rubber-duck review
+
+The independent reviewer found the same stale PostgreSQL stream test double
+described above and no additional significant issues. This was a test regression,
+not a demonstrated production failure; the corrected test exercises the real
+service/repository and preserves the connection-release assertions.
+
+After that correction, the complete backend suite passed **464 tests, zero
+failures/errors/skips**, through `scripts/with_local_db.py`; Ruff passed for
+`backend evals scripts infra/foundry-hosted/agent/main.py`. Frontend acceptance
+passed **57 tests** and the production build.
+
+A separate fake-model API/UI on ports **18010/15174**, backed by real loopback
+PostgreSQL and a fresh `maf_service_sep17` schema, passed API smoke, all **seven
+API E2E scenarios**, the actual browser workflow (approval/reason/resume, retry
+safety, audit/outcome and selected-run explanation), and **seven deterministic
+evaluations**. Only these temporary preview processes were stopped afterward;
+normal previews and all existing application history were retained.
+
+Private receipts, initial failure and corrected full-suite XML are retained under
+session `78c6c3f4-5e02-4c4f-93a4-068df29dc2aa`,
+`files/release-20260916-workspace/maf-service-20260917/`. Its immutable
+`storage-before.json` records the current Azure baseline, including every
+original primary key across **80 runs**, for post-release preservation checks.
+LangGraph, checkout recovery, shared code and database migrations are unchanged.
+
 ## 2026-09-16 - Repaired workspace release and complete Foundry acceptance
 
 The guarded app-only rollout from committed source

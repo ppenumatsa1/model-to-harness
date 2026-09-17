@@ -5,9 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from model_to_harness_shared import SCENARIO_FIXTURES
 
-from ...application.history import CaseCursor
-from ...projections.workspace import workspace_view
-from ..dependencies import RepositoryDependency, ServiceDependency
+from ..dependencies import ServiceDependency
 from ..schemas import CasePage, CaseView, ScenarioInput, StartResponse
 
 router = APIRouter()
@@ -15,24 +13,15 @@ router = APIRouter()
 
 @router.get("/api/cases", response_model=CasePage)
 async def list_cases(
-    repository: RepositoryDependency,
+    service: ServiceDependency,
     limit: int = Query(default=10, ge=1, le=100),
     cursor: str | None = Query(default=None, max_length=512),
 ) -> CasePage:
     try:
-        before = CaseCursor.decode(cursor) if cursor is not None else None
+        page = await service.list_cases(limit, cursor)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    records = await repository.list_cases(
-        limit + 1, (before.created_at, before.run_id) if before else None
-    )
-    items = records[:limit]
-    has_more = len(records) > limit
-    next_cursor = (
-        CaseCursor(created_at=items[-1].created_at, run_id=items[-1].run_id).encode()
-        if has_more else None
-    )
-    return CasePage(items=items, next_cursor=next_cursor, has_more=has_more)
+    return CasePage.model_validate(page, from_attributes=True)
 
 
 @router.get("/api/scenarios")
@@ -59,8 +48,9 @@ async def start_case(command: ScenarioInput, service: ServiceDependency) -> Star
 
 
 @router.get("/api/cases/{case_id}", response_model=CaseView)
-async def get_case(case_id: str, repository: RepositoryDependency) -> CaseView:
-    state = await repository.get_state_by_case(case_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="case not found")
-    return CaseView.model_validate(await workspace_view(repository, state), from_attributes=True)
+async def get_case(case_id: str, service: ServiceDependency) -> CaseView:
+    try:
+        workspace = await service.get_case_workspace(case_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="case not found") from exc
+    return CaseView.model_validate(workspace, from_attributes=True)

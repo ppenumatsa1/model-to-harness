@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request
 
 from ..application.models import WorkflowState
-from ..application.ports import ModelClient, Repository
+from ..application.ports import Repository
 from ..application.service import DoubleChargeService
 from ..bootstrap import Runtime
 
@@ -22,13 +22,8 @@ def get_repository(runtime: Annotated[Runtime, Depends(get_runtime)]) -> Reposit
     return runtime.repository
 
 
-def get_model(runtime: Annotated[Runtime, Depends(get_runtime)]) -> ModelClient:
-    return runtime.model
-
-
 ServiceDependency = Annotated[DoubleChargeService, Depends(get_service)]
 RepositoryDependency = Annotated[Repository, Depends(get_repository)]
-ModelDependency = Annotated[ModelClient, Depends(get_model)]
 
 
 async def require_run(run_id: str, service: ServiceDependency) -> WorkflowState:

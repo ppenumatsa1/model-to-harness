@@ -11,9 +11,8 @@ from maf_double_charge.application.models import (
     RunStatus,
     WorkflowState,
 )
-from maf_double_charge.projections.workspace import safe_event, workspace_view
+from maf_double_charge.projections.workspace import safe_event
 from maf_double_charge.testing.app import create_test_app
-from maf_double_charge.testing.repository import InMemoryRepository
 from pydantic import ValidationError
 
 
@@ -67,19 +66,19 @@ async def test_invalid_history_request_is_rejected(params) -> None:
         assert (await client.get("/api/cases", params=params)).status_code == 422
 
 
-async def test_safe_workspace_and_legacy_approval_survive_reload() -> None:
-    repo = InMemoryRepository()
+async def test_safe_workspace_and_legacy_approval_survive_reload(repository, service) -> None:
+    repo = repository
     item = state(1).model_copy(update={
         "status": RunStatus.PAUSED, "approval_required": True, "checkpoint_id": "checkpoint-1",
         "account_summary": {"credentials": "PRIVATE"}, "duplicate_evidence": {"prompt": "PRIVATE"},
     })
     await repo.create_run(item)
     await repo.save_memory(item.case_id, {"fixture_id": "duplicate-confirmed", "prompt": "PRIVATE"})
-    pending = await workspace_view(repo, item)
+    pending = await service.get_workspace(item.run_id)
     assert pending.can_record_approval and not pending.can_resume
     legacy = ApprovalResponse(decision="approve", reviewer_id="historical-reviewer")
     await repo.save_approval(item.run_id, item.checkpoint_id, legacy)
-    reloaded = await workspace_view(repo, await repo.get_state(item.run_id))
+    reloaded = await service.get_case_workspace(item.case_id)
     assert reloaded.can_resume and not reloaded.can_record_approval
     assert reloaded.approval.reason is None
     assert reloaded.approval.reviewer_id == "historical-reviewer"

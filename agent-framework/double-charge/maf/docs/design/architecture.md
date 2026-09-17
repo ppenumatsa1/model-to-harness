@@ -17,14 +17,15 @@ Related: [requirements](prd.md), [business rules](business-rules.md),
 flowchart LR
     Human[Support user and reviewer] --> UI[MAF React workspace]
     UI -->|explicit commands and safe reads| API[MAF FastAPI]
-    Hosted[MAF Responses adapter] --> Service[MAF command service]
+    Hosted[MAF Responses adapter] --> Service[MAF command and query service]
     API --> Service
     Service --> Workflow[Native MAF workflow]
     Workflow --> Model[MAF model adapter]
     Workflow --> Domain[Allowed shared domain and deterministic simulators]
     Workflow --> Store[(MAF PostgreSQL authority)]
     Service --> Store
-    Store --> Projection[MAF allowlisted workspace and event projections]
+    Service -->|loaded records| Projection[MAF allowlisted workspace and event projections]
+    Service -->|read-only explanation| Model
     Projection -->|native SSE and selected-run AG-UI| UI
 ```
 
@@ -38,8 +39,9 @@ flowchart LR
 | Human approval | Native typed information request with PostgreSQL decision command and separate checkpoint resume. |
 | Refund | MAF durable request fingerprint/receipt ledger wrapping deterministic shared billing behavior. Equivalent retries recover; conflicts fail. |
 | Verification/outcome | Independent count/existence check, no notification until verified, normalized results for fixtures. |
-| Presentation | Safe history/workspace snapshots, native audit SSE, technical timeline and deterministic business audit v2. |
-| Explanation | Read-only selected-run facts through CopilotKit/AG-UI; no business command tools or unrestricted tool payloads. |
+| Queries | `application/service.py` loads case/run state, approval, memory, outcome, creation time and events through repository ports; `application/history.py` owns the case page and keyset cursor. |
+| Presentation | Synchronous, I/O-free projections of loaded records; API routers own native audit/AG-UI SSE framing, reconnect cursors, heartbeats and transport errors. |
+| Explanation | The application resolves a run or case, selects allowlisted durable facts and invokes the bootstrap-injected model; CopilotKit/AG-UI exposes no business command tools or unrestricted tool payloads. |
 
 The native graph includes `normalize_complaint`, `load_account`,
 `detect_duplicate`, `prepare_validation`, `billing_validation`,
@@ -117,6 +119,22 @@ continuation, stored refund from verified refund, and current status from
 historical resolution. SSE reconnection replays evidence, not workflow work.
 AG-UI is a separate additive selected-run projection.
 
+Business-data reads in case, run, stream and assistant routes go through
+`DoubleChargeService`; routers never reach into a repository or model client.
+`workspace_view()` accepts already-loaded state, approval, memory, outcome and
+creation time, and only transforms them. Polling and yielding remain in the API;
+each query finishes and releases its connections before a frame or idle wait.
+Snapshots are still separate reads, not a new transaction or cache.
+
+Selected-run explanation resolves a run ID first, then a case ID, while the
+selected-run GET remains run-ID-only. The application supplies safe authoritative
+facts, not client state, tools or context. The API retains its existing telemetry
+context around the application explanation call, preserving the current request
+parent and case/run correlations without importing telemetry adapters into the
+application. Static discovery, graph/scenario data and readiness retain their
+transport/runtime ownership. Existing status/error contracts are unchanged,
+including the outcome endpoint's 409 when no outcome exists.
+
 Application state, approvals, checkpoint storage, ledger, audit and outcomes are
 **not one atomic transaction**. A persisted approval or resume-request event is
 not proof of subsequent continuation. There is no general automatic process-crash
@@ -130,7 +148,7 @@ do not impose a global lifetime attempt count.
 flowchart TD
     API[api: HTTP schemas, routers, factory] --> Bootstrap[bootstrap: lifecycle]
     Hosted[infra hosted entrypoint] --> Bootstrap
-    Bootstrap --> Application[application: commands, service, ports, audit, refunds]
+    Bootstrap --> Application[application: commands, queries, service, ports, audit, refunds]
     Bootstrap --> Native[maf: graph, executors, clients, checkpoints]
     Bootstrap --> Adapters[infrastructure: PostgreSQL, simulation, telemetry]
     Native --> Application
@@ -138,7 +156,8 @@ flowchart TD
     Adapters --> Shared[shared domain, fixtures, simulators, evaluation contracts]
     Native --> Shared
     API --> Views[projections: workspace, AG-UI, selected-run facts]
-    Views --> Application
+    Application --> Views
+    Views --> Contracts[application: state and history contracts]
     Frontend[frontend: workspace and business audit] -->|HTTP only| API
     Tests[explicit testing adapters and lane tests] --> Bootstrap
 ```
@@ -147,6 +166,13 @@ The installable Python package is `backend/src/maf_double_charge/`.
 `main.py` is the canonical API entrypoint; `api/app.py` constructs a FastAPI app
 without opening resources at import. `bootstrap.py` owns explicit start/close,
 test-double injection, real configuration checks and telemetry lifecycle.
+The same injected model instance is supplied to the workflow runner and service.
+API response schemas derive from application/page or projection contracts; the
+application does not import API schemas. `safe_state()` remains usable by the
+hosted adapter without loading optional AG-UI dependencies; the event-specific
+allowlist import remains local to `safe_event()`.
+The hosted adapter also retrieves its final event history through the service;
+its full-history retry count and last-20-event response tail are unchanged.
 
 SQL source lives in `backend/migrations/`; wheel/hosted packaging generates copies
 under `_migrations/`. Startup checks readiness and checksums rather than applying

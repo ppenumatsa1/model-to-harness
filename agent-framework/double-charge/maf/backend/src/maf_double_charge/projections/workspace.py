@@ -7,13 +7,13 @@ from pydantic import BaseModel, Field
 
 from ..application.models import (
     ApprovalDecision,
+    ApprovalResponse,
     BranchResult,
     DurableEvent,
     NodeStatus,
     RunStatus,
     WorkflowState,
 )
-from ..application.ports import Repository
 from .workflow_graph import WORKFLOW_GRAPH
 
 Detail = str | bool | int | float | list[str] | None
@@ -138,9 +138,14 @@ def safe_event(event: DurableEvent) -> SafeEvent:
     return SafeEvent.model_validate(values)
 
 
-async def workspace_view(repository: Repository, state: WorkflowState) -> WorkspaceView:
-    approval = await repository.get_approval(state.run_id)
-    memory = await repository.get_memory(state.case_id)
+def workspace_view(
+    state: WorkflowState,
+    *,
+    approval: ApprovalResponse | None,
+    memory: dict[str, object],
+    outcome: WorkflowOutcome | None,
+    created_at: datetime,
+) -> WorkspaceView:
     awaiting = (
         state.status == RunStatus.PAUSED and state.approval_required and bool(state.checkpoint_id)
     )
@@ -151,11 +156,11 @@ async def workspace_view(repository: Repository, state: WorkflowState) -> Worksp
             if key in {"customer_id", "fixture_id", "last_normalized_issue"}
             and isinstance(value, str)
         },
-        outcome=await repository.get_outcome(state.run_id),
+        outcome=outcome,
         approval=ApprovalView(
             **approval.model_dump(), checkpoint_id=state.checkpoint_id
         ) if approval else None,
         can_resume=awaiting and approval is not None,
         can_record_approval=awaiting and approval is None,
-        created_at=await repository.get_run_created_at(state.run_id),
+        created_at=created_at,
     )

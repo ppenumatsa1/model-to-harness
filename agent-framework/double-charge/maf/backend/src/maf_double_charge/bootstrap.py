@@ -90,7 +90,7 @@ def create_runtime(
         max_tool_attempts=settings.max_tool_attempts,
     )
     return Runtime(
-        service=DoubleChargeService(repository, runner),
+        service=DoubleChargeService(repository, runner, model),
         repository=repository,
         model=model,
         settings=settings,

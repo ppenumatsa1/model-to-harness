@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock
 import pytest
 from maf_double_charge.api.routers import streams
 from maf_double_charge.application.models import DurableEvent, WorkflowState
+from maf_double_charge.application.ports import WorkflowRunner
+from maf_double_charge.application.service import DoubleChargeService
 from maf_double_charge.infrastructure.persistence.postgres import PostgresRepository
 
 
@@ -126,14 +128,15 @@ async def test_parallel_appends_cannot_expose_higher_sequence_before_lower_commi
 
 
 async def test_live_stream_releases_postgres_connections_before_frames_and_idle(
-    postgres_repository: PostgresRepository, monkeypatch
+    postgres_repository: PostgresRepository, model, monkeypatch
 ):
     repository = postgres_repository
     value = state("idle")
     await repository.create_run(value)
     await repository.append_event(event(value, "Committed event"))
     incoming = SimpleNamespace(headers={}, is_disconnected=AsyncMock(return_value=False))
-    service = SimpleNamespace(get_state=repository.get_state)
+    runner = AsyncMock(spec=WorkflowRunner)
+    service = DoubleChargeService(repository, runner, model)
     active_connections = 0
     idle_calls = 0
     original_connection = repository.pool.connection
@@ -162,7 +165,7 @@ async def test_live_stream_releases_postgres_connections_before_frames_and_idle(
         streams, "asyncio", SimpleNamespace(sleep=idle, CancelledError=asyncio.CancelledError)
     )
     response = await streams.audit_stream(
-        incoming, value.run_id, repository, service, after=0, follow=True
+        incoming, value.run_id, service, after=0, follow=True
     )
     chunks = []
     async for chunk in response.body_iterator:
@@ -171,3 +174,5 @@ async def test_live_stream_releases_postgres_connections_before_frames_and_idle(
     assert chunks[0].startswith("event: audit\n")
     assert chunks[1].startswith("event: snapshot\n")
     assert idle_calls == 1
+    runner.start.assert_not_awaited()
+    runner.resume.assert_not_awaited()

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from ..application import commands
-from ..application.models import CaseSummary, RunStatus
+from ..application import commands, history
+from ..application.models import RunStatus
 from ..projections.workspace import WorkspaceView
 
 
@@ -35,7 +35,5 @@ class CaseView(WorkspaceView):
     pass
 
 
-class CasePage(BaseModel):
-    items: list[CaseSummary]
-    next_cursor: str | None = None
-    has_more: bool
+class CasePage(history.CasePage):
+    pass

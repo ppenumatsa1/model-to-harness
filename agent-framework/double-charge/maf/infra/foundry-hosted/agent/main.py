@@ -97,7 +97,7 @@ def _command(text: str) -> dict[str, Any]:
 
 async def _execute(command: dict[str, Any], conversation_id: str) -> dict[str, Any]:
     runtime = await _runtime()
-    service, repository = runtime.service, runtime.repository
+    service = runtime.service
     action = str(command.get("action", "start")).strip().lower()
     if action == "start":
         started = await service.start(
@@ -139,7 +139,7 @@ async def _execute(command: dict[str, Any], conversation_id: str) -> dict[str, A
 
     state = await service.get_state(run_id)
     outcome = await service.get_outcome(run_id)
-    events = await repository.list_events(run_id)
+    events = await service.list_events(run_id)
     return {
         "case_id": state.case_id,
         "run_id": state.run_id,
