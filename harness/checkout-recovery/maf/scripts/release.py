@@ -57,6 +57,10 @@ def stable_app(app: dict) -> dict:
     template = deepcopy(app["properties"]["template"])
     for container in template["containers"]:
         container.pop("image", None)
+        for variable in container.get("env", []):
+            # CLI updates serialize an unused secret-reference value as "" instead of null.
+            if variable.get("secretRef") and variable.get("value") in (None, ""):
+                variable.pop("value", None)
     identity = deepcopy(app.get("identity"))
     if identity:
         # Principal metadata is read-only and can differ between CLI response shapes.

@@ -153,6 +153,22 @@ the deployed source or requiring another Hosted version. All **151 backend
 tests** and Ruff pass. Runtime/environment and actual archive readback pass;
 the broader API/UI rollout and cloud matrix remain subsequent gates.
 
+Hosted v4's E2E verified five fixtures before the local azd credential subprocess
+was killed while obtaining the sixth request's token. PostgreSQL reconciliation
+confirmed that request UUID had **not** created a case. Credentials were
+rechecked without printing tokens; the exact pending UUID was reused, followed
+by only the seventh fixture. The combined evidence now covers all seven;
+the interrupted report and command journal remain separate and retained.
+
+The image-only guard then correctly stopped after the API update because Azure
+CLI serialized three secret-backed environment entries with `value: ""` instead
+of `value: null`. The secret references and effective settings were unchanged;
+the API revision was healthy, and the frontend had not been updated. The
+comparator now normalizes only absent/null/empty unused values when `secretRef`
+is present. Changed references and nonempty literal values remain drift errors,
+covered by regressions. The saved partial rollout is reconciled explicitly,
+not replayed or silently marked successful.
+
 Private evidence is retained in session
 `78c6c3f4-5e02-4c4f-93a4-068df29dc2aa`,
 `files/release-20260916-workspace/checkout-service-20260917/`.

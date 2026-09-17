@@ -38,6 +38,26 @@ def test_source_must_be_exact_and_clean(monkeypatch, head, dirty):
         release.require_source(COMMIT)
 
 
+@pytest.mark.parametrize("value", [None, ""])
+def test_secret_reference_empty_value_serialization_is_equivalent(value):
+    before = {
+        "properties": {
+            "managedEnvironmentId": "environment",
+            "configuration": {},
+            "template": {"containers": [{"env": [{"name": "TOKEN", "secretRef": "token"}]}]},
+        }
+    }
+    after = deepcopy(before)
+    variable = after["properties"]["template"]["containers"][0]["env"][0]
+    variable["value"] = value
+    assert release.stable_app(before) == release.stable_app(after)
+    variable["secretRef"] = "different-token"
+    assert release.stable_app(before) != release.stable_app(after)
+    variable["secretRef"] = "token"
+    variable["value"] = "unexpected-literal"
+    assert release.stable_app(before) != release.stable_app(after)
+
+
 @pytest.fixture
 def guarded_update(tmp_path, monkeypatch):
     env = {"AZURE_SUBSCRIPTION_ID": "sub", "AZURE_RESOURCE_GROUP": "checkout-group"}
