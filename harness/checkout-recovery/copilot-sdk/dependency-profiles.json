@@ -1,0 +1,69 @@
+{
+  "differences": {
+    "httpcore2": {
+      "cloud": "2.13.0",
+      "local": "2.12.0"
+    },
+    "httpx2": {
+      "cloud": "2.13.0",
+      "local": "2.12.0"
+    },
+    "idna": {
+      "cloud": "3.20",
+      "local": "3.19"
+    },
+    "multidict": {
+      "cloud": "6.9.0",
+      "local": "6.8.0"
+    },
+    "openai": {
+      "cloud": "3.16.2",
+      "local": "3.16.1"
+    },
+    "propcache": {
+      "cloud": "0.5.4",
+      "local": "0.5.2"
+    },
+    "protobuf": {
+      "cloud": "7.36.2",
+      "local": "7.36.1"
+    },
+    "psycopg": {
+      "cloud": "3.3.6",
+      "local": "3.3.5"
+    },
+    "psycopg-binary": {
+      "cloud": "3.3.6",
+      "local": "3.3.5"
+    },
+    "psycopg-pool": {
+      "cloud": "3.3.2",
+      "local": "3.3.1"
+    },
+    "urllib3": {
+      "cloud": "2.8.0",
+      "local": "2.7.0"
+    },
+    "uvicorn": {
+      "cloud": "0.53.0",
+      "local": "0.52.4"
+    }
+  },
+  "index": "https://pypi.org/simple",
+  "inputs": {
+    "../../../shared/pyproject.toml": "d3a7f45338aec61f5ff19404d42dc14d4c872b8fe839e56eb272976e821ac1db",
+    "pyproject.toml": "dccb90f560c43fffa16aa22fe1c180d58ceaa0ca6d5eee1c41946637f7159b06",
+    "scripts/cloud_dependencies.py": "a464b258fb8a4d6803f44ac1689aff27ba6b11a5b1956ef160609857ef201bc5"
+  },
+  "local_lock_sha256": "0f713c4c1791c65d5030539d25dbd5629e784a70aa7ae2f6e51ac60164c31272",
+  "locks": {
+    "requirements-cloud-dev.lock": "1e6a3a74249479b1a168b24c65d8c998f15e6a013ae5719f3c6f371cfd2007e3",
+    "requirements-cloud.lock": "93f35c43b08e8a72a377e1142f31db46b944d00c4c235741744818c3a283e493"
+  },
+  "platform": "linux-x86_64",
+  "protocol_version": 3,
+  "python": "3.13",
+  "runtime_version": "1.0.85",
+  "schema": 1,
+  "sdk_version": "1.0.13"
+}

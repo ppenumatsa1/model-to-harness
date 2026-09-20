@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.foundry/
+.venv/
+.env
+.env.*
+.azure/
+.pytest_cache/
+.ruff_cache/
+session-state/
+sessions/
+receipts/
+*.log

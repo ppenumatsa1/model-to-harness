@@ -100,8 +100,19 @@ The frontend origin setting is not a backend CORS policy or authentication grant
 
 Vite does not read or inject the API token. It is intended for loopback-only
 development without API authentication; if the selected backend requires a token,
-requests remain unauthorized. Use the existing authenticated nginx runtime for
-authenticated environments, not browser credentials or a public Vite server.
+requests remain unauthorized. Use the nginx runtime for deployed environments,
+not browser API tokens or a public Vite server.
+
+Browser Basic login is temporarily disabled by default for the public demo.
+Set the frontend's `CHECKOUT_UI_AUTH_ENABLED=true` to restore it, supplying the
+existing `CHECKOUT_UI_HTPASSWD` secret. Anyone with the UI URL can read cases and
+issue Start, Approval, and Resume commands; reviewer labels are not verified
+identities. Private API tokens, managed identities, upstream TLS, and durable
+business approval checks remain enabled. Restore login before non-demo use.
+
+Successful GET/HEAD/OPTIONS API spans are omitted to remove health-check and
+selected-case polling noise. Commands, model/tool spans, and failed requests
+remain. Historical telemetry is not deleted.
 Do not override Vite's bind host to expose it publicly.
 
 ## Focused validation

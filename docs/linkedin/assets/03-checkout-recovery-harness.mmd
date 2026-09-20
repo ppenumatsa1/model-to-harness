@@ -1,0 +1,27 @@
+%%{init: {"theme": "base", "flowchart": {"nodeSpacing": 12, "rankSpacing": 14, "padding": 6}, "themeVariables": {"fontFamily": "Arial, Helvetica, sans-serif", "background": "#111827", "primaryColor": "#172033", "primaryTextColor": "#f8fafc", "primaryBorderColor": "#64748b", "lineColor": "#94a3b8", "secondaryColor": "#1f2937", "tertiaryColor": "#111827"}}}%%
+block-beta
+    columns 2
+    input["1. INPUT<br/><b>Checkout investigation goal</b>"]:2
+    intake["2. TASK INTAKE<br/><b>Identity + Scope + Permissions + Limits</b>"]:2
+    context["3. PREPARE CONTEXT<br/><b>Instructions + Tools + Knowledge + State</b>"]:2
+    loop["4. AGENT LOOP<br/><b>Reason → Act → Observe → Repeat</b>"]:2
+    control["5. CONTROL + VERIFY<br/><b>Policy → Approval → Repair → Evidence</b>"]:2
+    output["6. OUTCOME<br/><b>Recovered | Denied | Manual review | Failed</b>"]:2
+    cross["CROSS-CUTTING<br/><b>Identity | Security | Runtime | Observability | Evaluations</b>"]:2
+
+    input --> intake
+    intake --> context
+    context --> loop
+    loop --> control
+    control --> output
+
+    classDef inputStyle fill:#10243f,stroke:#3b82f6,stroke-width:2px,color:#f8fafc
+    classDef harnessStyle fill:#312e81,stroke:#a78bfa,stroke-width:3px,color:#ffffff
+    classDef appStyle fill:#422006,stroke:#f59e0b,stroke-width:3px,color:#ffffff
+    classDef outputStyle fill:#052e2b,stroke:#34d399,stroke-width:3px,color:#f8fafc
+    classDef crossStyle fill:#1f2937,stroke:#64748b,stroke-width:2px,color:#f8fafc
+    class input inputStyle
+    class intake,context,loop harnessStyle
+    class control appStyle
+    class output outputStyle
+    class cross crossStyle

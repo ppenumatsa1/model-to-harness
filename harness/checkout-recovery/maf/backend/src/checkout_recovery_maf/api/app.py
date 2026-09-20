@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from checkout_recovery_maf.application import CheckoutRecoveryService
 from checkout_recovery_maf.bootstrap import create_runtime
 from checkout_recovery_maf.config import Settings
-from checkout_recovery_maf.infrastructure.telemetry import operation
+from checkout_recovery_maf.infrastructure.telemetry import operation, record_api_response
 
 from .routers import cases, health
 
@@ -42,13 +42,19 @@ def create_app(
 
     @app.middleware("http")
     async def authorize(request: Request, call_next):
-        if app_settings.api_token and not request.url.path.startswith("/api/health/"):
-            if not compare_digest(
-                request.headers.get("x-checkout-token", ""), app_settings.api_token
-            ):
-                return JSONResponse({"detail": "unauthorized"}, status_code=401)
         with operation("api"):
-            return await call_next(request)
+            if (
+                app_settings.api_token
+                and not request.url.path.startswith("/api/health/")
+                and not compare_digest(
+                    request.headers.get("x-checkout-token", ""), app_settings.api_token
+                )
+            ):
+                response = JSONResponse({"detail": "unauthorized"}, status_code=401)
+            else:
+                response = await call_next(request)
+            record_api_response(request.method, response.status_code)
+            return response
 
     app.include_router(health.router, prefix="/api")
     app.include_router(cases.router, prefix="/api")

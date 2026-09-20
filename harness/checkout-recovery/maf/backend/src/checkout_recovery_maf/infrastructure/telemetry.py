@@ -8,7 +8,7 @@ from hashlib import sha256
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 from opentelemetry.trace import SpanContext, SpanKind, Status, StatusCode
 
 _APPLICATION_NAMES = frozenset(
@@ -54,9 +54,23 @@ def _safe_context(context: SpanContext | None) -> SpanContext | None:
     )
 
 
-def _safe_attributes(span: ReadableSpan) -> dict[str, str]:
+def _safe_attributes(span: ReadableSpan) -> dict[str, str | int]:
     source = span.attributes or {}
     safe = {}
+    method = source.get("http.request.method")
+    if isinstance(method, str) and method in {
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+    }:
+        safe["http.request.method"] = method
+    status = source.get("http.response.status_code")
+    if type(status) is int and 100 <= status <= 599:
+        safe["http.response.status_code"] = status
     if source.get("checkout.component") == "maf":
         safe["checkout.component"] = "maf"
     correlation = source.get("checkout.correlation")
@@ -97,8 +111,13 @@ class SafeExporter(SpanExporter):
                 end_time=span.end_time,
             )
             for span in spans
+            if not (
+                span.name == "checkout.api"
+                and (span.attributes or {}).get("checkout.suppress_successful_read") is True
+                and span.status.status_code is not StatusCode.ERROR
+            )
         ]
-        return self.delegate.export(safe)
+        return self.delegate.export(safe) if safe else SpanExportResult.SUCCESS
 
     def shutdown(self) -> None:
         self.delegate.shutdown()
@@ -132,6 +151,16 @@ def configure_api_telemetry(
     )
     trace.set_tracer_provider(provider)
     return provider
+
+
+def record_api_response(method: str, status_code: int) -> None:
+    span = trace.get_current_span()
+    span.set_attribute("http.request.method", method)
+    span.set_attribute("http.response.status_code", status_code)
+    if status_code >= 400:
+        span.set_status(Status(StatusCode.ERROR))
+    elif method in {"GET", "HEAD", "OPTIONS"} and 200 <= status_code < 400:
+        span.set_attribute("checkout.suppress_successful_read", True)
 
 
 @contextmanager

@@ -185,7 +185,7 @@ the evidence step never assumes Hosted version 2. Hosted validation supports
 
 Private generated values live in `.azure/<environment>/release-secrets.json`
 and `release.parameters.json`, with mode 0600. The former contains the UI login
-and API/database secrets; never commit or print it. Nginx authenticates the UI,
+and API/database secrets; never commit or print it. Nginx optionally authenticates the UI,
 injects the private API token server-side, and verifies TLS to the private API.
 It listens on **8080**, including the unauthenticated `/healthz` probe.
 
@@ -248,8 +248,10 @@ is supplemental: `scripts/collect_evaluation.py` requires both its native grader
 and an independent exact JSON-contract comparison for every item.
 
 This remains a synthetic educational application, not a production payment
-integration. Reviewer identity is supplied through an authenticated demo
-boundary, not independently verified Entra reviewer claims. The database uses
+integration. Browser login is temporarily disabled for the public demo; set
+`CHECKOUT_UI_AUTH_ENABLED=true` on the frontend to restore it. Anyone with the
+URL can issue demo commands. Reviewer labels are not verified identities.
+The private API token and durable approval checks remain enabled. The database uses
 password authentication and an Azure-services firewall exception. Real downstream
 systems need their own authorization, idempotency, reconciliation, and tighter
 network/identity controls before use with customer data.

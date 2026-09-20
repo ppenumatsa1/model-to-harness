@@ -192,7 +192,7 @@ model deployment. A failed live model call never switches to scripted mode.
 ```mermaid
 flowchart LR
     Browser[Browser] --> Web[Public nginx and React Container App]
-    Web -->|authenticated same-origin proxy and upstream TLS| API[Private FastAPI Container App]
+    Web -->|server-side API token and upstream TLS| API[Private FastAPI Container App]
     API --> DB[(Checkout PostgreSQL)]
     Hosted[Checkout Foundry Hosted Agent] --> DB
     API --> Model[Checkout Foundry model deployment]

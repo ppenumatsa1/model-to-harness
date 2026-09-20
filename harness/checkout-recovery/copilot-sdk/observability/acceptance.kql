@@ -1,0 +1,14 @@
+union requests, dependencies
+| where timestamp > ago(2h)
+| extend agent = coalesce(tostring(customDimensions["gen_ai.agent.name"]), tostring(customDimensions["azure.ai.agentserver.agent_name"]))
+| where agent == "checkout-recovery-copilot"
+    or cloud_RoleName in ("checkout-recovery-copilot", "checkout-recovery-copilot-api")
+| extend role = tostring(customDimensions["checkout.span_role"]),
+    responseId = tostring(customDimensions["gen_ai.response.id"]),
+    toolCallId = tostring(customDimensions["gen_ai.tool.call.id"]),
+    configuredDeployment = tostring(customDimensions["checkout.model.configured_deployment"])
+| summarize spans=count(), failures=countif(success == false),
+    modelResponses=dcountif(responseId, isnotempty(responseId)),
+    logicalToolCalls=dcountif(toolCallId, isnotempty(toolCallId))
+    by itemType, name, role, agent, configuredDeployment, cloud_RoleName
+| order by itemType asc, name asc

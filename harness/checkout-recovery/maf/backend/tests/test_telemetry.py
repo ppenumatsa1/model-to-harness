@@ -250,7 +250,9 @@ def test_exporter_preserves_delegate_lifecycle_and_failure_result():
     delegate.export.return_value = SpanExportResult.FAILURE
     delegate.force_flush.return_value = False
     exporter = SafeExporter(delegate)
-    assert exporter.export([]) is SpanExportResult.FAILURE
+    assert exporter.export([]) is SpanExportResult.SUCCESS
+    delegate.export.assert_not_called()
+    assert exporter.export([ReadableSpan(name="checkout.api")]) is SpanExportResult.FAILURE
     assert exporter.force_flush(123) is False
     delegate.force_flush.assert_called_once_with(123)
     exporter.shutdown()

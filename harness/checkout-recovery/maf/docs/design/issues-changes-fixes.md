@@ -1,5 +1,35 @@
 # Checkout-recovery MAF implementation ledger
 
+## 2026-09-20 - Public demo access and polling trace cleanup
+
+**API/UI deployed; anonymous smoke, seven API scenarios and eight browser tests
+passed.** Browser Basic login is temporarily off by default. Set the frontend
+`CHECKOUT_UI_AUTH_ENABLED=true` to restore it with the existing htpasswd secret.
+Anyone with the UI URL can issue demo commands; reviewer labels are not verified
+identities. Private API ingress/token checks, Azure identities, explicit business
+approval and upstream TLS remain intact.
+
+Successful GET/HEAD/OPTIONS API spans are suppressed at export. Command roots,
+model/tool spans and failed requests remain; handled HTTP errors now carry error
+status. Existing traces are not deleted. Focused backend checks passed **44 tests**;
+real nginx containers verified anonymous access, opt-in login and token privacy.
+
+| Release evidence | Result |
+| --- | --- |
+| API | `crmaf-q35uqmuqoh7co-api--0000003`; digest `sha256:adf678c28a62af4ad98ee22fc046c46649fdb98b29664bdb5a07050717612470` |
+| UI | `crmaf-q35uqmuqoh7co-web--0000004`; digest `sha256:45fae44aea1d4be7da8100e33c16208e47c443e574fa68c27743198dd17892fd` |
+| Image provenance | Immutable prior image plus two hashed source-file replacements per image; tags `access-noise-751c4fa3d6e345cb` / `access-noise-387e5eec85d523c0`, with tags and manifests locked. No dependency changes. |
+| Fresh App Insights check | After 20 successful polling probes: **zero successful non-command API roots**, 25 workflow command roots, the intentional 404 probe retained, 87 model spans and 131 tool spans. Counts are spans, not logical invocations. |
+| Preservation | Exact image-only configuration/identity comparison passed. No infrastructure provisioning, migrations, data deletion or new evaluations. Hosted **v5** remains active and unchanged; this patch affects API/UI behavior only. |
+
+The laptop lost DNS while waiting for ACR build `cp6`; the queued build itself
+succeeded and its original digest was reconciled without rebuilding.
+For telemetry verification, Azure consumes standard HTTP method metadata and
+returns `success` as text: classify API roots through command trace IDs and
+normalize success, rather than assuming a missing custom method means polling.
+Private source/build/deployment and acceptance receipts are retained under the
+session's `files/access-noise/maf/`; the UI URL is unchanged.
+
 ## 2026-09-17 - Platform-pattern cloud release accepted
 
 **Foundry Deploy, Smoke, E2E, Evals and Telemetry passed.** This entry supersedes

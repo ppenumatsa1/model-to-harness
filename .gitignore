@@ -35,3 +35,6 @@ Thumbs.db
 postgres-data/
 .azure/
 report.*.json
+
+# Uncommitted harness experiments
+/harness/.poc/

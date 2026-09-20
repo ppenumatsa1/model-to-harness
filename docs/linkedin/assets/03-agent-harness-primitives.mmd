@@ -1,0 +1,29 @@
+%%{init: {"theme": "base", "flowchart": {"nodeSpacing": 16, "rankSpacing": 18, "padding": 8}, "themeVariables": {"fontFamily": "Arial, Helvetica, sans-serif", "background": "#111827", "primaryColor": "#172033", "primaryTextColor": "#f8fafc", "primaryBorderColor": "#64748b", "lineColor": "#94a3b8", "secondaryColor": "#1f2937", "tertiaryColor": "#111827"}}}%%
+block-beta
+    columns 2
+    input["INPUT<br/><b>Task + Identity + Limits</b><br/><small>Investigate the checkout failure and show the evidence.</small>"]:2
+    harness["HARNESS<br/><b>Task execution and control</b>"]:2
+    loop["AGENT LOOP<br/><b>Reason → Act → Observe → Repeat</b>"]:2
+    context["CONTEXT + MEMORY"]
+    tools["TOOLS + SKILLS"]
+    policy["POLICY + PERMISSIONS"]
+    state["STATE + CHECKPOINTS"]
+    environment["ENVIRONMENT"]
+    verify["VERIFICATION"]
+    cross["IDENTITY | SECURITY | OBSERVABILITY | EVALUATIONS | GOVERNANCE<br/><small>Controls and evidence across the whole task</small>"]:2
+    output["OUTPUT<br/><b>Result + Evidence + Limits</b>"]:2
+
+    input --> harness
+    harness --> loop
+    cross --> output
+
+    classDef inputOutput fill:#10243f,stroke:#3b82f6,stroke-width:2px,color:#f8fafc
+    classDef header fill:#171717,stroke:#52525b,stroke-width:2px,color:#f8fafc
+    classDef core fill:#312e81,stroke:#a78bfa,stroke-width:3px,color:#ffffff
+    classDef primitive fill:#1f2937,stroke:#64748b,stroke-width:2px,color:#f8fafc
+    classDef crosscut fill:#171717,stroke:#52525b,stroke-width:2px,color:#f8fafc
+    class input,output inputOutput
+    class harness header
+    class loop core
+    class context,tools,policy,state,environment,verify primitive
+    class cross crosscut

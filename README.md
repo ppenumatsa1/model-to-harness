@@ -1,111 +1,61 @@
 # Model to Harness
 
-An educational repository that follows one customer-support problem—a duplicate
-card charge—from model reasoning to durable, verified work.
+**From models that answer to agent systems that finish the job.**
 
-[Part 1: From Models to Harnesses](docs/articles/model-to-harness.md) is complete.
-The Part 2 implementation now demonstrates the same deterministic workflow twice,
-once with Microsoft Agent Framework (MAF) and once with LangGraph.
+Model to Harness is a seven-part learning series with practical reference
+implementations. Its goal is to explain what it takes to turn model reasoning
+into reliable work: coordinating actions, preserving progress, respecting human
+authority, recovering from failures, and verifying outcomes.
 
-## Learning path
+The articles introduce the concepts; the code makes the design choices concrete.
+Two business scenarios ground the series: **resolving a duplicate card charge**
+and **recovering a failed checkout**. Independent implementations let you compare
+framework and harness approaches against the same business requirements.
 
-1. Choose the independent [MAF](agent-framework/double-charge/maf/) or
-   [LangGraph](agent-framework/double-charge/langgraph/) implementation.
-2. Follow that lane's requirements, business rules, approval conditions, and user
-   flow in its own design documents:
-   [MAF design](agent-framework/double-charge/maf/docs/design/) or
-   [LangGraph design](agent-framework/double-charge/langgraph/docs/design/).
-3. Read its 4+1 architecture, technology choices, project structure, and
-   implementation ledger. The [documentation index](docs/README.md) links each topic.
-4. Explore the framework-neutral domain contracts and simulators in [`shared/`](shared/).
-5. Read [Part 3: Agent Harnesses](docs/articles/03-agent-harnesses.md), then
-   explore the [checkout-recovery MAF harness](harness/checkout-recovery/maf/).
+## The seven-part series
 
-## Repository boundaries
+Start with the [series overview](docs/articles/model-to-harness.md). The parts
+explore complementary capabilities and cross-cutting concerns, not a mandatory
+maturity ladder.
 
-```text
-shared/                         deterministic domain contracts and simulators
-agent-framework/.../maf/        independent MAF application
-agent-framework/.../langgraph/  independent LangGraph application
-harness/checkout-recovery/maf/   independent MAF harness application
-each application/compose.yaml   independent database-only local dependency
-```
+| Part | Topic | What it covers | LinkedIn article | Code references |
+| --- | --- | --- | --- | --- |
+| 1 | **From models to harnesses** | The mental model: what models, agents, frameworks, harnesses, and runtimes each contribute. | [Part 1](docs/linkedin/01-model-to-harness.md) | N/A - conceptual overview |
+| 2 | **Agent frameworks and orchestration** | Explicit workflows, state, human approval, retries, and verified completion of a double-charge case. | [Part 2](docs/linkedin/02-agent-frameworks.md) | [Microsoft Agent Framework](agent-framework/double-charge/maf/) · [LangGraph](agent-framework/double-charge/langgraph/) |
+| 3 | **Agent harnesses** | Context, skills, tools, permissions, workspaces, and bounded investigation for checkout recovery. | [Part 3](docs/linkedin/03-agent-harnesses.md) | [MAF harness](harness/checkout-recovery/maf/) · [Copilot SDK harness](harness/checkout-recovery/copilot-sdk/) |
+| 4 | **Runtimes and hosted agents** | Where work runs: sessions, persistence, isolation, recovery, scaling, and hosting choices. | Planned | [MAF infrastructure](harness/checkout-recovery/maf/infra/) · [Copilot SDK infrastructure](harness/checkout-recovery/copilot-sdk/infra/) |
+| 5 | **Memory and knowledge** | Separating state, memory, and context; retrieval, provenance, retention, and safe updates. | Planned | Planned |
+| 6 | **Observability and evaluations** | Tracing execution, evaluating outcomes, defining release gates, and monitoring deployed systems. | Planned | [MAF evals](harness/checkout-recovery/maf/evals/) · [MAF telemetry](harness/checkout-recovery/maf/observability/) · [Copilot SDK evals](harness/checkout-recovery/copilot-sdk/evals/) · [Copilot SDK telemetry](harness/checkout-recovery/copilot-sdk/observability/) |
+| 7 | **Identity, security, and governance** | Authority, scoped access, approvals, auditability, and control of consequential actions. | Planned | Planned |
 
-`shared/` contains no web API, database, cloud, telemetry, model, framework, or
-runtime code. Each application owns its API, UI, persistence, migrations, model
-client, event projection, deployment assets, and tests. PostgreSQL is the durable
-application source of truth. Each project owns its own database-only Compose file,
-network, and volume; there is no shared database or deployment abstraction.
+Article links point to the Markdown versions in [`docs/linkedin/`](docs/linkedin/).
+Planned entries will be linked as they are added. Code references point to
+existing examples; they do not imply that the corresponding article is complete.
 
-## Prerequisites
+## Explore the implementations
 
-- Python 3.12 for the framework lanes; Python 3.13 for the checkout harness
-- Docker with Compose (for each application's optional local PostgreSQL)
-- Node.js tooling required by each framework-owned frontend
-- A Microsoft Foundry model configuration for model-backed local runs
+Follow each linked implementation's README for setup, configuration, and running
+the example. Its design documents explain the architecture and business rules;
+its release ledger records dated deployment and verification results.
 
-The shared tests require no cloud service or database:
+The applications are deliberately independent, with their own APIs, UIs,
+persistence, tests, and deployment assets. Only framework-neutral domain models,
+fixtures, and deterministic simulators belong in [`shared/`](shared/).
+See the [documentation index](docs/README.md) for further reading.
 
-```bash
-python3.12 -m venv .venv
-. .venv/bin/activate
-python -m pip install -e "shared[test]"
-python -m pytest shared/tests
-```
+## License
 
-## Local PostgreSQL
+Licensed under the [MIT License](LICENSE). Third-party dependencies and vendored
+materials remain subject to their respective licenses.
 
-Choose a project and follow its **Local PostgreSQL** instructions:
+## Disclaimer
 
-| Project | Compose project | Loopback PostgreSQL port |
-| --- | --- | --- |
-| [Double-charge MAF](agent-framework/double-charge/maf/README.md#local-postgresql) | `double-charge-maf` | `15432` |
-| [Double-charge LangGraph](agent-framework/double-charge/langgraph/README.md#local-postgresql) | `double-charge-lg` | `25432` |
-| [Checkout-recovery MAF](harness/checkout-recovery/maf/README.md#local-postgresql) | `checkout-recovery-maf` | `35432` |
+This is an independent educational project, not a production payment or
+customer-support system. Payments, notifications, and downstream business
+operations are simulated. Examples are provided **as is**, without warranty;
+demo defaults and deployments must not be used with real customer data or
+payment credentials.
 
-All three databases can run concurrently. Compose starts **only PostgreSQL**, not
-APIs, UIs, models, telemetry, or cloud resources. Each project uses a private,
-ignored `.env.compose`; existing application `.env` files (including Azure
-connections) are never replaced. A lane-owned command wrapper explicitly selects
-the local database through process environment, without printing credentials or
-shell-sourcing dotenv. Stop one project's database without affecting the others.
-The root Docker build context excludes every project's private dotenv files,
-Foundry caches, and local test logs; framework-neutral `shared/` remains available
-to independently owned application builds.
-
-The former root `compose.yaml` and `.env.example` are retired. Existing
-`model-to-harness` containers, volumes, and data are **not** migrated or deleted.
-Keep them until their owner explicitly retires them; do not use `down -v` or
-volume pruning. The new independent volumes start empty and require each
-application's explicit migrations. Root `shared/` remains unchanged.
-
-## Documentation
-
-- [MAF design documents](agent-framework/double-charge/maf/docs/design/)
-- [LangGraph design documents](agent-framework/double-charge/langgraph/docs/design/)
-- [Design-topic navigation](docs/README.md#implementation-design)
-- [Part 2: Agent Frameworks](docs/articles/02-agent-frameworks.md)
-- [Part 3: Agent Harnesses](docs/articles/03-agent-harnesses.md)
-
-## Contributor skills
-
-`.github/skills/` contains a small, pinned set of third-party Microsoft and LangChain
-skills for current SDK and platform guidance. No repository-owned custom skills are
-included yet. These contributor skills are not application runtime dependencies;
-the checkout harness has a separately owned runtime triage procedure. See
-[the skills provenance file](.github/skills/README.md).
-
-## Status
-
-The checkout-recovery MAF harness is independently deployed in `northcentralus`
-under `rg-crmaf-20260912`, with Hosted Agent version 2, a private API, and an
-authenticated UI. Its [lane-local delivery ledger](harness/checkout-recovery/maf/docs/design/issues-changes-fixes.md)
-records the actual API, browser, hosted, evaluation, and telemetry results.
-
-The framework lanes record their own implementation and release evidence:
-[MAF ledger](agent-framework/double-charge/maf/docs/design/issues-changes-fixes.md)
-and [LangGraph ledger](agent-framework/double-charge/langgraph/docs/design/issues-changes-fixes.md).
-Those records distinguish dated Azure acceptance from newer local changes.
-Local source, configuration, and simulations do not establish deployed version,
-endpoint health, or telemetry completeness. Payments and notifications remain
-simulated; neither lane is presented as a production payment system.
+Review security, privacy, reliability, and operating costs before adapting these
+examples for real workloads. Azure deployments and model usage can incur charges.
+References to products and platforms do not imply vendor endorsement.

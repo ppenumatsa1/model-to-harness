@@ -39,7 +39,7 @@ maf/
   frontend/
     src/                            selected-case UI, API client, state and persistence
     e2e/                            seven fixtures and ambiguous-start browser test
-    nginx/                          authenticated proxy configuration
+    nginx/                          private-token proxy, optional browser login
     Dockerfile                      repository-root build context
     package.json, package-lock.json  frontend manifest and lock
   scripts/                          local database, packaging, release and acceptance

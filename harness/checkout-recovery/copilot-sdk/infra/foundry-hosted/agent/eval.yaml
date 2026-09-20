@@ -1,0 +1,8 @@
+name: checkout-recovery-copilot-start-contract
+agent:
+  name: checkout-recovery-copilot
+dataset:
+  local_uri: .foundry/datasets/checkout-start-contract.jsonl
+evaluators:
+  - checkout_exact_contract
+max_samples: 7

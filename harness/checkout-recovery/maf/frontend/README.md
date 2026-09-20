@@ -61,17 +61,18 @@ environment variables, never image build arguments:
 | --- | --- |
 | `BACKEND_HOST` | Private backend hostname only, without `https://`, port, or path |
 | `CHECKOUT_API_TOKEN` | Backend API secret; token-safe ASCII characters |
-| `CHECKOUT_UI_HTPASSWD` | One or more `username:password-hash` lines |
+| `CHECKOUT_UI_AUTH_ENABLED` | `false` by default for the public demo; set `true` to restore Basic login |
+| `CHECKOUT_UI_HTPASSWD` | Required only with login enabled: `username:password-hash` lines |
 
 Generate the UI hash with a password prompt (for example,
 `htpasswd -nB checkout-reviewer`) and store its output directly in the deployment's
 secret store. Do not commit the hash or plaintext password. Bcrypt, Apache MD5,
 and SHA-crypt htpasswd entries are accepted; plaintext entries are rejected.
-Missing secrets or invalid configuration fail startup closed.
+Missing required secrets or invalid configuration fail startup closed.
 
-The entrypoint writes a restricted htpasswd file and renders nginx configuration
+The entrypoint writes a restricted htpasswd file when login is enabled and renders nginx configuration
 at startup, then removes secret variables from the nginx process environment.
-Nginx authenticates both HTML and API routes with basic auth, injects
+Nginx optionally authenticates both HTML and API routes with Basic auth, injects
 `X-Checkout-Token` only on the server-side proxy, and strips the browser's Basic
 authorization header before forwarding. The backend uses HTTPS with its own
 hostname as both `Host` and TLS SNI, and its certificate is verified. API commands
@@ -81,6 +82,11 @@ frontend-only health probe and contains no workflow data.
 Use HTTPS at the public ingress: basic auth is not safe over public plaintext
 HTTP. Keep backend ingress private. The container's unauthenticated health probe
 does not replace backend readiness or PostgreSQL health checks.
+
+**Temporary public demo:** anyone with the UI URL can read cases and submit
+Start, Approval, and Resume commands. Reviewer labels are not verified identities.
+Internal API tokens, managed identities, and durable business approval checks
+remain enabled. Restore browser authentication before non-demo use.
 
 ## Validation
 
