@@ -57,7 +57,7 @@ permissions before a tool acts. The result becomes a new observation, state and
 context are updated, and the loop repeats. Verification then decides whether
 the requested outcome is actually supported.
 
-![An agent harness receives a task, identity, and limits. Inside the harness, the agent repeats a reason, act, observe loop while context, tools, skills, policy, state, workspace, verification, and cross-cutting controls support the work.](../linkedin/assets/03-agent-harness-primitives.png)
+![A harness builds context, calls the model, validates actions, and executes allowed tools, using a working environment and authorized access to external systems.](../linkedin/assets/03-agent-harness-loop-screenshot.png)
 
 _Figure 1. The agent loop drives the work. The rest of the harness prepares,
 controls, records, and verifies that work._
@@ -128,7 +128,7 @@ business systems, not a live payment integration.
 The agent may inspect the systems in a different order for each case. It may not
 decide business policy or change business data.
 
-![The checkout task moves through task intake, context assembly, a read-only reason-act-observe-repeat agent loop, application-controlled repair, verification, and an evidence-backed outcome. Identity, security, context, runtime, observability, and evaluations apply throughout.](../linkedin/assets/03-checkout-recovery-harness.png)
+![Checkout recovery moves from adaptive investigation and workspace findings to application-controlled business rules, approvals, repair, and outcome verification.](../linkedin/assets/03-checkout-recovery-flow-screenshot.png)
 
 _Figure 2. The harness guides the investigation from task intake to evidence.
 The application still controls approval, repair, and the final business result._
