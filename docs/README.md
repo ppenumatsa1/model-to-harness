@@ -32,7 +32,7 @@ documents. Historical release evidence belongs in the corresponding lane ledger.
 - [Part 3: Agent Harnesses](articles/03-agent-harnesses.md)
 - [Part 4: Runtime Infrastructure](articles/04-runtime-infra.md)
 - [LinkedIn articles and assets](linkedin/)
-  - [LinkedIn-ready Part 3: Agent Harnesses](linkedin/03-agent-harnesses.md)
+  - LinkedIn Part 3: Agent Harnesses (planned)
 
 The separate [checkout-recovery harness documentation](../harness/checkout-recovery/README.md)
 remains with that project.
