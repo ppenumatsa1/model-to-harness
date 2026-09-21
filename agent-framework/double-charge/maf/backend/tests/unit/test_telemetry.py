@@ -621,8 +621,9 @@ def test_otlp_base_and_original_trace_endpoint_supported(endpoint):
 
 @pytest.mark.parametrize("destination", ["azure_monitor", "otlp"])
 @pytest.mark.parametrize("setup_timing", ["early", "lifespan"])
+@pytest.mark.parametrize("request_count", [1, 32])
 def test_real_export_configuration_scoped_request_logs_and_metrics(
-    monkeypatch, settings, destination, setup_timing
+    monkeypatch, settings, destination, setup_timing, request_count
 ):
     import socket
     from contextlib import asynccontextmanager
@@ -651,7 +652,8 @@ def test_real_export_configuration_scoped_request_logs_and_metrics(
     monkeypatch.setattr(telemetry, "_configured", None)
     monkeypatch.setattr(distro, "get_configuration_manager", lambda: None)
     monkeypatch.setenv("OTEL_EXPERIMENTAL_RESOURCE_DETECTORS", "")
-    monkeypatch.setenv("OTEL_TRACES_SAMPLER", "parentbased_always_on")
+    monkeypatch.delenv("OTEL_TRACES_SAMPLER", raising=False)
+    monkeypatch.delenv("OTEL_TRACES_SAMPLER_ARG", raising=False)
     monkeypatch.setenv("OTEL_METRICS_EXPORTER", "azure_monitor")
     monkeypatch.setenv("OTEL_LOGS_EXPORTER", "azure_monitor")
     monkeypatch.setenv("OTEL_TRACES_EXPORTER", "azure_monitor")
@@ -728,6 +730,8 @@ def test_real_export_configuration_scoped_request_logs_and_metrics(
                     SECRET,
                     extra={"event_type": "run.started", "idempotency_key": SECRET},
                 )
+                with trace.get_tracer("test").start_as_current_span("message.send") as child:
+                    child.set_attribute("gen_ai.input.messages", SECRET)
         return {"ok": True}
 
     if handle is None:
@@ -739,14 +743,17 @@ def test_real_export_configuration_scoped_request_logs_and_metrics(
         handle.instrument_app(app)
     try:
         with TestClient(app) as client:
-            response = client.post(
-                f"/commands/start?complaint={SECRET}",
-                json={"prompt": SECRET},
-                headers={"x-credential": SECRET},
-            )
-            assert response.status_code == 200
+            for _ in range(request_count):
+                response = client.post(
+                    f"/commands/start?complaint={SECRET}",
+                    json={"prompt": SECRET},
+                    headers={"x-credential": SECRET},
+                )
+                assert response.status_code == 200
         assert telemetry.configure_telemetry(settings) is handle
         assert handle.mode == destination
+        if destination == "azure_monitor":
+            assert isinstance(trace.get_tracer_provider().sampler, ApplicationInsightsSampler)
         assert set(observed) == {"traces", "logs", "metrics"}
         meter = metrics.get_meter("agent_framework")
         meter.create_histogram("gen_ai.client.token.usage").record(
@@ -756,20 +763,31 @@ def test_real_export_configuration_scoped_request_logs_and_metrics(
         assert handle.force_flush()
         exported = spans.get_finished_spans()
         request_spans = [span for span in exported if span.kind is trace.SpanKind.SERVER]
-        assert len(request_spans) == 1
-        (request,) = request_spans
+        assert len(request_spans) == request_count
+        assert len({span.context.trace_id for span in request_spans}) == request_count
+        request = request_spans[0]
         assert request.name == "POST /commands/{command}"
         assert request.attributes["run_id"] == safe_logging.correlation_id("run-export")
-        child = next(span for span in exported if span.name == "workflow.run")
-        assert child.parent.span_id == request.context.span_id
-        assert child.resource.attributes["service.name"] == "cutover-api"
-        assert child.resource.attributes["service.version"] == "release-test"
+        workflows = [span for span in exported if span.name == "workflow.run"]
+        messages = [span for span in exported if span.name == "message.send"]
+        assert len(workflows) == len(messages) == request_count
+        assert len(exported) == 3 * request_count
+        requests_by_trace = {span.context.trace_id: span for span in request_spans}
+        workflows_by_trace = {span.context.trace_id: span for span in workflows}
+        for child in workflows:
+            assert child.parent.span_id == requests_by_trace[child.context.trace_id].context.span_id
+            assert child.resource.attributes["service.name"] == "cutover-api"
+            assert child.resource.attributes["service.version"] == "release-test"
+        for message in messages:
+            workflow = workflows_by_trace[message.context.trace_id]
+            assert message.parent.span_id == workflow.context.span_id
         assert all(SECRET not in span.to_json() for span in exported)
-        assert len(logs.get_finished_logs()) == 1
-        log = logs.get_finished_logs()[0].log_record
-        assert log.body == "run.started"
-        assert log.trace_id == request.context.trace_id
-        assert SECRET not in str(log.attributes)
+        assert len(logs.get_finished_logs()) == request_count
+        for exported_log in logs.get_finished_logs():
+            log = exported_log.log_record
+            assert log.body == "run.started"
+            assert log.trace_id in requests_by_trace
+            assert SECRET not in str(log.attributes)
         exported_metrics = [
             metric
             for batch in metric_exporter.data

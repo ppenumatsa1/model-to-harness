@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from maf_double_charge.application.commands import ApprovalCommand, ScenarioInput
 from maf_double_charge.application.errors import UncertainRefundResponseError
@@ -36,21 +38,23 @@ async def test_native_workflow_resumes_after_postgres_and_runtime_reconstruction
         checkpoint_storage_factory=PostgresRunCheckpointStorage,
     )
     existing_refund_id = None
+    command = ScenarioInput(
+        request_id=uuid4(),
+        operator_id="test-operator",
+        complaint="I was charged twice for the same purchase.",
+        customer_id="customer-100",
+        scenario_id=scenario_id,
+    )
     await first.start()
     try:
-        started = await first.service.start(
-            ScenarioInput(
-                complaint="I was charged twice for the same purchase.",
-                customer_id="customer-100",
-                scenario_id=scenario_id,
-            )
-        )
+        started = await first.service.start(command)
         assert started.status == RunStatus.PAUSED
         assert started.checkpoint_id
         approval = ApprovalCommand(
             checkpoint_id=started.checkpoint_id,
             decision=ApprovalDecision.APPROVE,
             reviewer_id="restart-reviewer",
+            reason="Reviewed fixture evidence.",
         )
         await first.service.record_approval(started.run_id, approval)
         original_approval = await first.repository.get_approval(started.run_id)
@@ -80,9 +84,12 @@ async def test_native_workflow_resumes_after_postgres_and_runtime_reconstruction
     )
     await restarted.start()
     try:
+        assert await restarted.service.start(command) == started
         await restarted.service.record_approval(started.run_id, approval)
         assert await restarted.repository.get_approval(started.run_id) == original_approval
-        completed = await restarted.service.resume(started.run_id, started.checkpoint_id)
+        completed = await restarted.service.resume(
+            started.run_id, started.checkpoint_id, operator_id="test-resumer"
+        )
         assert completed.status == RunStatus.COMPLETED
         assert completed.refund_status == "verified"
         assert completed.notification_status == "sent"
@@ -98,5 +105,8 @@ async def test_native_workflow_resumes_after_postgres_and_runtime_reconstruction
         assert sum(event.event_type == "notification.sent" for event in events) == 1
         assert any(event.event_type == "workflow.resumed" for event in events)
         assert any(event.event_type.startswith("maf.native.") for event in events)
+        assert await restarted.service.start(command) == started
+        assert await restarted.service.get_state(started.run_id) == completed
+        assert await restarted.repository.list_events(started.run_id) == events
     finally:
         await restarted.close()

@@ -32,6 +32,7 @@ async def evaluate() -> list[EvaluationResult]:
         repository = InMemoryRepository()
         runtime = create_runtime(
             Settings(
+                _env_file=None,
                 foundry_project_endpoint=None,
                 foundry_model=None,
                 applicationinsights_connection_string=None,
@@ -56,6 +57,7 @@ async def evaluate_case(
     source = fixture.scenario_input
     started = await service.start(
         ScenarioInput(
+            operator_id="evaluation-runner",
             complaint=source.complaint_text,
             customer_id=source.customer_id,
             account_id=source.account_id,
@@ -76,9 +78,12 @@ async def evaluate_case(
                 checkpoint_id=started.checkpoint_id,
                 decision=decision,
                 reviewer_id="evaluation-runner",
+                reason="Deterministic evaluation evidence reviewed.",
             ),
         )
-        await service.resume(started.run_id, started.checkpoint_id)
+        await service.resume(
+            started.run_id, started.checkpoint_id, operator_id="evaluation-runner"
+        )
     outcome = await service.get_outcome(started.run_id)
     if outcome is None:
         return EvaluationResult(

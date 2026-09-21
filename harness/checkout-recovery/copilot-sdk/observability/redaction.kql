@@ -1,0 +1,16 @@
+union requests, dependencies, traces, exceptions
+| where timestamp > ago(2h)
+| where cloud_RoleName in ("checkout-recovery-copilot", "checkout-recovery-copilot-api", "agentsv2")
+| extend messageText = tostring(column_ifexists("message", "")),
+    fixtureCapture = coalesce(tobool(customDimensions["checkout.fixture_content"]), false),
+    toolName = tostring(customDimensions["gen_ai.tool.name"]),
+    hasToolPayload = isnotempty(customDimensions["gen_ai.tool.call.arguments"])
+        or isnotempty(customDimensions["gen_ai.tool.call.result"])
+| summarize rows=count(),
+    contentAttributes=countif(isnotempty(customDimensions["gen_ai.input.messages"]) or isnotempty(customDimensions["gen_ai.output.messages"]) or isnotempty(customDimensions["db.connection_string"]) or isnotempty(customDimensions["tool.arguments"]) or isnotempty(customDimensions["tool.result"])),
+    fixtureDiagnosticRecords=countif(hasToolPayload and fixtureCapture
+        and toolName in ("read_order", "read_payment", "read_inventory")),
+    unexpectedToolPayloads=countif(hasToolPayload and
+        (not(fixtureCapture) or toolName !in ("read_order", "read_payment", "read_inventory"))),
+    credentialText=countif(messageText contains "postgresql://" or messageText contains "PRIVATE-CONTENT-CANARY")
+    by cloud_RoleName

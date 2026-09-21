@@ -12,6 +12,7 @@ from ..application.records import (
     ApprovalRequest,
     CaseView,
     NativeEvent,
+    ResumeRequest,
     StartCaseRequest,
     StartCaseResponse,
 )
@@ -20,7 +21,9 @@ from ..config import Settings
 from ..infrastructure.domain_gateway import shared_package_available
 from ..infrastructure.persistence.migrations import StorageNotReadyError
 from ..projections.agui import project_events
+from ..projections.workspace import CasePage, WorkspaceView
 from .schemas import CopilotRunPayload, ExplainRequest, ExplainResponse, HealthResponse
+from .streams import MAX_SEQUENCE, audit_stream
 
 
 def create_router(settings: Settings) -> APIRouter:
@@ -74,7 +77,6 @@ def create_router(settings: Settings) -> APIRouter:
             {"id": "transient-failure", "label": "Transient read failure"},
             {"id": "retry-safe-refund", "label": "Retry-safe refund"},
             {"id": "resumed-approval", "label": "Resumed approval"},
-            {"id": "verification-mismatch", "label": "Verification mismatch"},
         ]
 
     @router.get("/api/copilotkit/info")
@@ -138,15 +140,38 @@ def create_router(settings: Settings) -> APIRouter:
     async def start_case(body: StartCaseRequest, request: Request) -> StartCaseResponse:
         return await service(request).start(body)
 
+    @router.get("/api/cases", response_model=CasePage)
+    async def list_cases(
+        request: Request,
+        limit: int = Query(default=10, ge=1, le=100),
+        cursor: str | None = Query(default=None, max_length=1024),
+    ) -> CasePage:
+        try:
+            return await service(request).list_cases(limit, cursor)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid case history cursor") from None
+
     @router.get("/api/cases/{case_id}", response_model=CaseView)
     async def get_case(case_id: str, request: Request) -> CaseView:
         return await service(request).get_case(case_id)
+
+    @router.get("/api/cases/{case_id}/workspace", response_model=WorkspaceView)
+    async def workspace(case_id: str, request: Request) -> WorkspaceView:
+        return await service(request).workspace(case_id)
+
+    @router.get("/api/cases/{case_id}/events/stream")
+    async def native_stream(
+        case_id: str, request: Request,
+        after: int = Query(default=0, ge=0, le=MAX_SEQUENCE),
+        follow: bool = True,
+    ) -> StreamingResponse:
+        return await audit_stream(request, service(request), case_id, after, follow)
 
     @router.get("/api/cases/{case_id}/events", response_model=list[NativeEvent])
     async def events(
         case_id: str,
         request: Request,
-        after: int = Query(default=0, ge=0),
+        after: int = Query(default=0, ge=0, le=MAX_SEQUENCE),
     ) -> list[NativeEvent]:
         return await service(request).list_events(case_id, after)
 
@@ -160,8 +185,10 @@ def create_router(settings: Settings) -> APIRouter:
         return {"status": "recorded"}
 
     @router.post("/api/cases/{case_id}/resume", response_model=StartCaseResponse)
-    async def resume(case_id: str, request: Request) -> StartCaseResponse:
-        return await service(request).resume(case_id)
+    async def resume(
+        case_id: str, body: ResumeRequest, request: Request
+    ) -> StartCaseResponse:
+        return await service(request).resume(case_id, body)
 
     @router.post("/api/cases/{case_id}/explain", response_model=ExplainResponse)
     async def explain(case_id: str, body: ExplainRequest, request: Request) -> ExplainResponse:
@@ -172,7 +199,7 @@ def create_router(settings: Settings) -> APIRouter:
     async def agui_stream(
         case_id: str,
         request: Request,
-        after: int = Query(default=0, ge=0),
+        after: int = Query(default=0, ge=0, le=MAX_SEQUENCE),
     ) -> StreamingResponse:
         async def generate() -> AsyncIterator[str]:
             cursor = after

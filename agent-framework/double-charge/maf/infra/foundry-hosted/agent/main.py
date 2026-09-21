@@ -8,11 +8,17 @@ from uuid import uuid4
 
 from azure.ai.agentserver.responses import ResponsesAgentServerHost, TextResponse
 from maf_double_charge.application.commands import ApprovalCommand, ResumeCommand, ScenarioInput
+from maf_double_charge.application.errors import (
+    StartExecutionError,
+    StartRequestConflictError,
+    StartRequestInProgressError,
+)
 from maf_double_charge.bootstrap import Runtime, create_runtime
 from maf_double_charge.infrastructure.telemetry import (
     apply_hosted_instrumentation_policy,
     telemetry_context,
 )
+from maf_double_charge.projections.workspace import safe_state
 
 _lock = asyncio.Lock()
 _active_runtime: Runtime | None = None
@@ -96,19 +102,23 @@ def _command(text: str) -> dict[str, Any]:
 
 async def _execute(command: dict[str, Any], conversation_id: str) -> dict[str, Any]:
     runtime = await _runtime()
-    service, repository = runtime.service, runtime.repository
+    service = runtime.service
     action = str(command.get("action", "start")).strip().lower()
     if action == "start":
         started = await service.start(
             ScenarioInput(
+                operator_id=command.get("operator_id"),
                 complaint=str(command.get("complaint") or "I may have been charged twice."),
                 customer_id=str(command.get("customer_id") or "foundry-customer"),
                 account_id=command.get("account_id"),
                 scenario_id=str(command.get("scenario_id") or "duplicate-confirmed"),
-                existing_case_id=str(
-                    command.get("existing_case_id") or command.get("case_id") or conversation_id
+                existing_case_id=(
+                    str(command.get("existing_case_id") or command.get("case_id"))
+                    if command.get("existing_case_id") or command.get("case_id")
+                    else None if command.get("request_id") else conversation_id
                 ),
                 idempotency_key=command.get("idempotency_key"),
+                request_id=command.get("request_id"),
             )
         )
         run_id = started.run_id
@@ -126,16 +136,18 @@ async def _execute(command: dict[str, Any], conversation_id: str) -> dict[str, A
         state = await service.get_state(run_id)
         run_id = state.run_id
         with telemetry_context(case_id=state.case_id, run_id=state.run_id):
+            resume_command = ResumeCommand.model_validate(command)
             await service.resume(
                 run_id,
-                ResumeCommand.model_validate(command).checkpoint_id,
+                resume_command.checkpoint_id,
+                operator_id=resume_command.operator_id,
             )
     else:
         raise ValueError("action must be start, approval, or resume")
 
     state = await service.get_state(run_id)
     outcome = await service.get_outcome(run_id)
-    events = await repository.list_events(run_id)
+    events = await service.list_events(run_id)
     return {
         "case_id": state.case_id,
         "run_id": state.run_id,
@@ -147,6 +159,12 @@ async def _execute(command: dict[str, Any], conversation_id: str) -> dict[str, A
         "refund_status": state.refund_status,
         "retry_count": sum(event.event_type == "tool.call.retried" for event in events),
         "outcome": outcome.model_dump(mode="json") if outcome else None,
+        "investigation": safe_state(state).model_dump(
+            mode="json",
+            include={
+                "duplicate_found", "duplicate_summary", "billing_validation", "policy_validation",
+            },
+        ),
         "events": [
             {
                 "sequence": event.sequence,
@@ -182,7 +200,22 @@ async def response_handler(
         if isinstance(value, str) and value
     }
     with telemetry_context(**correlations):
-        result = await _execute(command, conversation_id or f"foundry-{uuid4().hex[:16]}")
+        try:
+            result = await _execute(command, conversation_id or f"foundry-{uuid4().hex[:16]}")
+        except StartRequestConflictError:
+            return TextResponse(context, create_response, text=json.dumps({
+                "error": "Start request is bound to another command.",
+                "code": "start_request_conflict",
+            }))
+        except (StartRequestInProgressError, StartExecutionError) as error:
+            return TextResponse(context, create_response, text=json.dumps({
+                "error": str(error),
+                "code": (
+                    "start_execution_failed"
+                    if isinstance(error, StartExecutionError) else "start_in_progress"
+                ),
+                "case_id": error.case_id, "run_id": error.run_id,
+            }))
         with telemetry_context(case_id=result["case_id"], run_id=result["run_id"]):
             return TextResponse(context, create_response, text=json.dumps(result, default=str))
 

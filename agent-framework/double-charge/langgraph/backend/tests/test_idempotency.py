@@ -4,11 +4,13 @@ from model_to_harness_langgraph.application.ports import (
     ApprovalCommandConflictError,
     RefundIdempotencyConflictError,
 )
-from model_to_harness_langgraph.application.records import ApprovalRequest, StartCaseRequest
 from model_to_harness_langgraph.application.service import InvalidCommandError, WorkflowService
 from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
 from model_to_harness_langgraph.infrastructure.domain_gateway import SharedDomainGateway
 from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.testing.commands import approval_request as ApprovalRequest
+from model_to_harness_langgraph.testing.commands import resume_request
+from model_to_harness_langgraph.testing.commands import start_request as StartCaseRequest
 from model_to_harness_langgraph.testing.fakes import FakeDomainGateway, FakeModel
 
 APPROVAL = {
@@ -70,7 +72,7 @@ async def test_service_accepts_identical_approval_retry_and_rejects_mutation():
             started.case_id,
             command.model_copy(update={"decision": "deny"}),
         )
-    resumed = await service.resume(started.case_id)
+    resumed = await service.resume(started.case_id, resume_request(started))
     await service.submit_approval(started.case_id, command)
     with pytest.raises(InvalidCommandError, match="different approval command"):
         await service.submit_approval(
@@ -140,7 +142,7 @@ async def test_uncertain_refund_survives_gateway_and_workflow_reconstruction():
             reviewer_id="reviewer-1",
         ),
     )
-    interrupted = await service2.resume(started.case_id)
+    interrupted = await service2.resume(started.case_id, resume_request(started))
     assert interrupted.status == "running"
     assert len(audit.refunds) == 1
 

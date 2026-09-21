@@ -85,11 +85,21 @@ class ApprovalExecutor(Executor):
         await self.audit.save(resumed)
         await self.audit.emit(
             resumed,
+            "workflow.continued",
+            "Processing continued using the recorded reviewer decision.",
+            node=self.id,
+        )
+        await self.audit.emit(
+            resumed,
             "approval.resolved",
-            f"Approval was {response.decision.value} by {response.reviewer_id}.",
+            f"Recorded reviewer decision applied: {response.decision.value}.",
             node=self.id,
             checkpoint_id=state.checkpoint_id,
-            payload={"decision": response.decision.value, "reviewer_id": response.reviewer_id},
+            payload={
+                "decision": response.decision.value,
+                "reviewer_id": response.reviewer_id,
+                "reason": response.reason,
+            },
         )
         target = (
             "submit_refund" if response.decision == ApprovalDecision.APPROVE else "close_denied"

@@ -135,6 +135,7 @@ def investigation_executors(
             payload={
                 "decision": evidence["decision"],
                 "matching_charge_count": len(evidence["matching_charge_ids"]),
+                "matching_charge_ids": evidence["matching_charge_ids"],
                 "amount": evidence.get("amount"),
                 "currency": evidence.get("currency"),
             },

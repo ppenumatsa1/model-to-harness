@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
 
 from model_to_harness_shared import DuplicateEvidence, WorkflowOutcome
@@ -8,8 +9,10 @@ from model_to_harness_shared import DuplicateEvidence, WorkflowOutcome
 from .models import (
     ApprovalDecision,
     ApprovalResponse,
+    CaseSummary,
     DurableEvent,
     RefundLedgerEntry,
+    StartResult,
     WorkflowState,
 )
 
@@ -23,11 +26,23 @@ class Repository(Protocol):
 
     async def create_run(self, state: WorkflowState) -> None: ...
 
+    async def claim_start(
+        self, request_id: str, fingerprint: str, state: WorkflowState
+    ) -> StartResult | None: ...
+
+    async def complete_start(self, request_id: str, result: StartResult) -> None: ...
+
     async def save_state(self, state: WorkflowState) -> None: ...
 
     async def get_state(self, run_id: str) -> WorkflowState | None: ...
 
     async def get_state_by_case(self, case_id: str) -> WorkflowState | None: ...
+
+    async def list_cases(
+        self, limit: int, before: tuple[datetime, str] | None = None
+    ) -> list[CaseSummary]: ...
+
+    async def get_run_created_at(self, run_id: str) -> datetime: ...
 
     async def save_memory(self, case_id: str, memory: dict[str, object]) -> None: ...
 
@@ -35,7 +50,9 @@ class Repository(Protocol):
 
     async def append_event(self, event: DurableEvent) -> DurableEvent: ...
 
-    async def list_events(self, run_id: str, after: int = 0) -> list[DurableEvent]: ...
+    async def list_events(
+        self, run_id: str, after: int = 0, limit: int | None = None
+    ) -> list[DurableEvent]: ...
 
     async def save_approval(
         self, run_id: str, checkpoint_id: str, response: ApprovalResponse

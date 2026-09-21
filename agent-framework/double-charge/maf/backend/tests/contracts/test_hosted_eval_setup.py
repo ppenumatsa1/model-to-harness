@@ -248,6 +248,21 @@ def test_invalid_case_contract_is_rejected_before_mutation(setup, change):
     setup.client.evals.create.assert_not_called()
 
 
+@pytest.mark.parametrize("operator", [None, "", " \t ", 42, "x" * 129])
+def test_invalid_operator_is_rejected_before_mutation(setup, operator):
+    command = json.loads(setup.rows[0]["query"])
+    if operator is None:
+        command.pop("operator_id")
+    else:
+        command["operator_id"] = operator
+    setup.rows[0]["query"] = json.dumps(command)
+    setup.source.write_text("\n".join(json.dumps(row) for row in setup.rows))
+    with pytest.raises(setup.helper.SetupError):
+        execute(setup)
+    setup.project_factory.assert_not_called()
+    setup.client.evals.create.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "key,value",
     [

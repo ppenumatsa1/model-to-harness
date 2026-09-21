@@ -12,6 +12,7 @@ from .repository import InMemoryRepository
 
 def create_test_app() -> FastAPI:
     settings = Settings(
+        _env_file=None,
         foundry_project_endpoint=None,
         foundry_model=None,
         applicationinsights_connection_string=None,

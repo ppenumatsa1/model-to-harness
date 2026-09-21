@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy
 
-from ...infrastructure.telemetry import instrument_node
+from ...infrastructure.telemetry import instrument_node as trace_node
 from ..state import DoubleChargeState
 
 if TYPE_CHECKING:
@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 
 
 def build_graph(self: "DoubleChargeWorkflow") -> StateGraph:
+    def instrument_node(name, function):
+        return trace_node(name, self.observe_node(name, function))
+
     builder = StateGraph(DoubleChargeState)
     builder.add_node(
         "normalize_complaint",

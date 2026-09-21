@@ -156,20 +156,23 @@ async def test_reconstructed_native_runner_restores_memory_checkpoints() -> None
     await repository.initialize()
 
     def reconstruct_service() -> DoubleChargeService:
+        model = FakeModelClient()
         return DoubleChargeService(
             repository,
             MafWorkflowRunner(
                 repository,
-                FakeModelClient(),
+                model,
                 checkpoint_storage_factory=InMemoryRunCheckpointStorage,
                 actions_factory=SimulatedActions.for_fixture,
                 max_tool_attempts=3,
             ),
+            model,
         )
 
     service = reconstruct_service()
     started = await service.start(
         ScenarioInput(
+            operator_id="test-operator",
             complaint="I was charged twice.",
             customer_id="customer-100",
             scenario_id="duplicate-confirmed",
@@ -183,12 +186,15 @@ async def test_reconstructed_native_runner_restores_memory_checkpoints() -> None
             checkpoint_id=started.checkpoint_id,
             decision=ApprovalDecision.APPROVE,
             reviewer_id="memory-restart-reviewer",
+            reason="Reviewed fixture evidence.",
         ),
     )
     await repository.close()
     await repository.initialize()
     reconstructed = reconstruct_service()
-    terminal = await reconstructed.resume(started.run_id, started.checkpoint_id)
+    terminal = await reconstructed.resume(
+        started.run_id, started.checkpoint_id, operator_id="test-resumer"
+    )
     assert terminal.terminal_status == "completed_refunded"
     assert terminal.refund_status == "verified"
     assert await repository.count_refunds(terminal.idempotency_key) == 1

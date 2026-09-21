@@ -62,6 +62,7 @@ def check_scenario(client: httpx.Client, scenario: str, decision: str | None, te
         "/api/cases",
         json={
             "complaint": "Please investigate two captured charges for one purchase.",
+            "operator_id": identifier,
             "customer_id": identifier,
             "scenario_id": scenario,
             "existing_case_id": identifier,
@@ -80,7 +81,10 @@ def check_scenario(client: httpx.Client, scenario: str, decision: str | None, te
             client,
             "POST",
             f"/api/cases/{case_id}/approval",
-            json={"checkpoint_id": checkpoint, "decision": decision, "reviewer_id": identifier},
+            json={
+                "checkpoint_id": checkpoint, "decision": decision, "reviewer_id": identifier,
+                "reason": "Acceptance harness reviewed the deterministic scenario evidence",
+            },
         )
         recorded = request(client, "GET", f"/api/cases/{case_id}")
         require(recorded.get("status") == "paused", "Approval implicitly resumed execution")
@@ -94,12 +98,18 @@ def check_scenario(client: httpx.Client, scenario: str, decision: str | None, te
             and not recorded["workflow_state"].get("refund_id"),
             "Refund occurred before explicit resume",
         )
-        request(client, "POST", f"/api/cases/{case_id}/resume")
+        request(
+            client, "POST", f"/api/cases/{case_id}/resume",
+            json={"checkpoint_id": checkpoint, "operator_id": identifier},
+        )
     finished = request(client, "GET", f"/api/cases/{case_id}")
     require(finished.get("run_id") == run_id, "Resume changed the durable run identity")
     verify_outcome(finished.get("outcome"), terminal)
     if terminal == "completed_refunded":
-        repeated = client.post(f"/api/cases/{case_id}/resume")
+        repeated = client.post(
+            f"/api/cases/{case_id}/resume",
+            json={"checkpoint_id": checkpoint, "operator_id": identifier},
+        )
         require(repeated.status_code in {200, 409}, "Repeated resume failed unexpectedly")
         after_repeat = request(client, "GET", f"/api/cases/{case_id}")
         require(

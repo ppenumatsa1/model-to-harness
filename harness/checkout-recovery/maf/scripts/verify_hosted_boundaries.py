@@ -7,7 +7,7 @@ import logging
 import sys
 import traceback
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENT = ROOT / "infra/foundry-hosted/agent"
@@ -23,11 +23,13 @@ async def main() -> None:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    module._service = CheckoutRecoveryService(InMemoryCaseRepository())
+    service = CheckoutRecoveryService(InMemoryCaseRepository())
     logs = io.StringIO()
     logger = logging.getLogger(module.__name__)
     handler = logging.StreamHandler(logs)
     logger.addHandler(handler)
+    service_patch = patch.object(module, "_checkout_service", AsyncMock(return_value=service))
+    service_patch.start()
     try:
         with patch.object(module, "TextResponse", side_effect=lambda *args, text: text):
             response = await module.response_handler(
@@ -35,7 +37,7 @@ async def main() -> None:
             )
             assert response == '{"error":"checkout command was rejected"}'
         with patch.object(
-            module._service, "start_case", side_effect=OperationalError("PRIVATE-CONTENT-CANARY")
+            service, "start_case", side_effect=OperationalError("PRIVATE-CONTENT-CANARY")
         ):
             try:
                 await module.response_handler(
@@ -49,6 +51,7 @@ async def main() -> None:
         assert "PRIVATE-CONTENT-CANARY" not in logs.getvalue()
         print("Hosted boundary: unknown command and persistence error redaction passed")
     finally:
+        service_patch.stop()
         logger.removeHandler(handler)
 
 

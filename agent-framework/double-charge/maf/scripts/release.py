@@ -17,6 +17,7 @@ import tarfile
 import time
 import zipfile
 from contextlib import contextmanager
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -28,6 +29,9 @@ SERVICE = "model-harness-maf"
 DEPLOYMENT = "model-harness-maf-app"
 SCHEMA = "maf_double_charge_cutover"
 RUNTIME_PARAMETERS = {"backendImage", "frontendImage", "backendTargetPort", "postgresSchema"}
+APP_UPDATE_DEPLOYMENT = DEPLOYMENT + "-update"
+APP_API_VERSION = "2025-07-01"
+DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 class ReleaseError(RuntimeError):
@@ -164,6 +168,160 @@ def verify_code_archive(root: Path, content: bytes, expected_hash: str) -> str:
     return digest
 
 
+def app_spec(resource: dict[str, Any], *, redact_secrets: bool = False) -> dict[str, Any]:
+    """Keep writable state; remove only known service-owned readback fields."""
+    value = deepcopy(resource)
+    supported_fields = {
+        "id", "name", "type", "apiVersion", "resourceGroup", "systemData",
+        "location", "tags", "identity", "properties",
+    }
+    if any(val is not None for key, val in value.items() if key not in supported_fields):
+        raise ReleaseError("App-only update encountered unsupported resource fields")
+    properties = required(value, "properties")
+    if properties.pop("delegatedIdentities", []) != []:
+        raise ReleaseError("App-only update does not support delegated identities")
+    readonly = {
+        "provisioningState", "runningStatus", "latestRevisionName", "latestReadyRevisionName",
+        "latestRevisionFqdn", "customDomainVerificationId", "outboundIpAddresses",
+        "eventStreamEndpoint",
+    }
+    supported = {
+        "configuration", "template", "managedEnvironmentId", "environmentId", "workloadProfileName",
+    }
+    if set(properties) - readonly - supported:
+        raise ReleaseError("App-only update encountered unsupported application properties")
+    for key in readonly:
+        properties.pop(key, None)
+    configuration = required(properties, "configuration")
+    if configuration.get("identitySettings") == []:
+        configuration.pop("identitySettings")
+    ingress = required(configuration, "ingress")
+    ingress.pop("fqdn", None)
+    if ingress.get("exposedPort") == 0:
+        ingress.pop("exposedPort")
+    for registry in configuration.get("registries") or []:
+        if registry.get("identity"):
+            for key in ("username", "passwordSecretRef"):
+                if registry.get(key) == "":
+                    registry.pop(key)
+    template = required(properties, "template")
+    if template.get("revisionSuffix") == "":
+        template.pop("revisionSuffix")
+    for container in template.get("containers", []):
+        container.get("resources", {}).pop("ephemeralStorage", None)
+    identity = required(value, "identity")
+    if identity.get("type") != "UserAssigned" or not identity.get("userAssignedIdentities"):
+        raise ReleaseError("App-only update requires existing user-assigned identities")
+    identity["userAssignedIdentities"] = {
+        key: {} for key in identity["userAssignedIdentities"]
+    }
+    identity.pop("principalId", None)
+    identity.pop("tenantId", None)
+    if redact_secrets:
+        for secret in configuration.get("secrets") or []:
+            secret.pop("value", None)
+
+    def without_nulls(item: Any) -> Any:
+        if isinstance(item, dict):
+            return {key: without_nulls(val) for key, val in item.items() if val is not None}
+        if isinstance(item, list):
+            return [without_nulls(val) for val in item]
+        return item
+
+    return without_nulls({
+        "name": required(value, "name"),
+        "location": required(value, "location").replace(" ", "").lower(),
+        "tags": value.get("tags") or {},
+        "identity": identity,
+        "properties": properties,
+    })
+
+
+def app_only_what_if(
+    result: dict[str, Any],
+    baseline: dict[str, dict[str, Any]],
+    desired: dict[str, dict[str, Any]],
+) -> None:
+    if (
+        result.get("status") != "Succeeded" or result.get("error")
+        or result.get("diagnostics") or not isinstance(result.get("changes"), list)
+        or not result["changes"] or set(baseline) != set(desired) or len(baseline) != 2
+    ):
+        raise ReleaseError("App-only what-if lacks complete successful resource evidence")
+    seen: set[str] = set()
+    for change in result["changes"]:
+        if not isinstance(change, dict):
+            raise ReleaseError("App-only what-if contains malformed resource evidence")
+        identifier = str(change.get("resourceId", "")).lower()
+        if (
+            not identifier or identifier in seen or change.get("error")
+            or change.get("diagnostics") or change.get("unsupportedReason")
+        ):
+            raise ReleaseError("App-only what-if has duplicate or incomplete resource evidence")
+        seen.add(identifier)
+        kind = change.get("changeType")
+        before, after = change.get("before"), change.get("after")
+        delta = change.get("delta", [])
+        if delta is None:
+            delta = []
+        if not isinstance(delta, list):
+            raise ReleaseError("App-only what-if has malformed property evidence")
+        if identifier not in baseline:
+            if (
+                kind not in {"Ignore", "NoChange"} or not isinstance(before, dict)
+                or not before or before != after or delta
+            ):
+                raise ReleaseError(
+                    "App-only what-if changes or cannot evaluate an unmanaged resource"
+                )
+            continue
+        if (
+            kind not in {"Modify", "NoChange"} or not isinstance(before, dict)
+            or not isinstance(after, dict) or not before or not after
+            or (kind == "NoChange" and (delta or before != after))
+            or (kind == "Modify" and (not delta or before == after))
+            or str(before.get("id", "")).lower() != identifier
+            or str(after.get("id", "")).lower() != identifier
+        ):
+            raise ReleaseError("App-only what-if did not fully evaluate both existing apps")
+        for entry in delta:
+            if not isinstance(entry, dict) or entry.get("path") not in {
+                "properties.template.containers", "properties.runningStatus",
+                "properties.configuration.ingress.exposedPort",
+            }:
+                raise ReleaseError("App-only what-if contains a non-image configuration change")
+        left, right = deepcopy(before), deepcopy(after)
+        # ARM omits these two service defaults even when the HTTP app is unchanged.
+        for parent, key, default in (
+            ("properties", "runningStatus", "Running"),
+            ("ingress", "exposedPort", 0),
+        ):
+            a, b = left["properties"], right["properties"]
+            if parent == "ingress":
+                a, b = a["configuration"]["ingress"], b["configuration"]["ingress"]
+            if key in a and key not in b:
+                if a[key] != default:
+                    raise ReleaseError("App-only what-if omitted a nondefault runtime property")
+                del a[key]
+        current = baseline[identifier]
+        expected = desired[identifier]
+        before_spec = app_spec(before, redact_secrets=True)
+        after_spec = app_spec(after, redact_secrets=True)
+        if (
+            before_spec != app_spec(current, redact_secrets=True)
+            or after_spec != app_spec(expected, redact_secrets=True)
+        ):
+            raise ReleaseError("App-only what-if differs from verified source or desired app state")
+        containers = left["properties"]["template"]["containers"]
+        if len(containers) != 1:
+            raise ReleaseError("App-only update requires one verified container per app")
+        containers[0]["image"] = expected["properties"]["template"]["containers"][0]["image"]
+        if left != right:
+            raise ReleaseError("App-only what-if changed full resource state outside the image")
+    if not set(baseline).issubset(seen):
+        raise ReleaseError("App-only what-if omitted a managed application")
+
+
 class Release:
     def __init__(self, args: argparse.Namespace, runner: Runner | None = None):
         self.args = args
@@ -182,6 +340,13 @@ class Release:
         ]
 
     def app(self, name: str) -> dict[str, Any]:
+        if self.args.app_only:
+            return self.runner.json(self.az(
+                "rest", "--method", "get", "--url",
+                f"https://management.azure.com/subscriptions/{self.subscription}"
+                f"/resourceGroups/{self.group}/providers/Microsoft.App/containerApps/{name}"
+                f"?api-version={APP_API_VERSION}",
+            ))
         return self.runner.json(
             self.az("containerapp", "show", "--resource-group", self.group, "--name", name)
         )
@@ -297,6 +462,170 @@ class Release:
         ):
             raise ReleaseError("Existing app image is a placeholder; refusing direct cutover")
         self.database_url = database_url
+        if self.args.app_only:
+            self.app_baseline = {
+                app["id"].lower(): self.read_app_spec(app)
+                for app in (self.backend, self.frontend)
+            }
+
+    def read_app_spec(self, app: dict[str, Any]) -> dict[str, Any]:
+        spec = app_spec(app)
+        props = app["properties"]
+        if (
+            props.get("provisioningState", "").lower() != "succeeded"
+            or props.get("runningStatus") != "Running"
+            or not props.get("latestRevisionName")
+            or props.get("latestRevisionName") != props.get("latestReadyRevisionName")
+            or len(spec["properties"]["template"]["containers"]) != 1
+            or spec["properties"]["template"].get("revisionSuffix")
+        ):
+            raise ReleaseError("App-only update requires healthy existing application revisions")
+        configuration = spec["properties"]["configuration"]
+        if configuration.get("activeRevisionsMode") != "Single":
+            raise ReleaseError("App-only update requires the existing single-revision topology")
+        expected_external = app["name"] == self.frontend_name
+        if configuration["ingress"].get("external") is not expected_external:
+            raise ReleaseError("App-only update must preserve private API and public frontend")
+        descriptors = configuration.get("secrets", [])
+        if descriptors:
+            secrets = self.runner.json(self.az(
+                "containerapp", "secret", "list", "-g", self.group, "-n", app["name"],
+                "--show-values",
+            ))
+            if not isinstance(secrets, list):
+                raise ReleaseError("Cannot verify existing application secrets")
+            by_name = {secret["name"]: secret for secret in secrets}
+            if (
+                len(by_name) != len(secrets) or len(by_name) != len(descriptors)
+                or set(by_name) != {s["name"] for s in descriptors}
+            ):
+                raise ReleaseError("Existing application secret names disagree")
+            for descriptor in descriptors:
+                actual = by_name[descriptor["name"]]
+                if set(actual) - {"name", "value", "identity", "keyVaultUrl"}:
+                    raise ReleaseError("Unsupported application secret representation")
+                if actual.get("keyVaultUrl"):
+                    actual = {k: v for k, v in actual.items() if k != "value"}
+                elif (
+                    not isinstance(actual.get("value"), str) or not actual["value"]
+                    or set(actual["value"]) == {"*"}
+                ):
+                    raise ReleaseError("Existing application secret value could not be verified")
+                if (
+                    {k: v for k, v in actual.items() if k != "value" and v is not None}
+                    != {k: v for k, v in descriptor.items() if k != "value" and v is not None}
+                ):
+                    raise ReleaseError("Existing application secret bindings disagree")
+                descriptor.clear()
+                descriptor.update(actual)
+        return app_spec(spec)
+
+    def app_parameters(self, specs: dict[str, dict[str, Any]]) -> dict[str, Any]:
+        apps = {
+            "backend": specs[self.backend["id"].lower()],
+            "frontend": specs[self.frontend["id"].lower()],
+        }
+        redacted = {kind: app_spec(spec, redact_secrets=True) for kind, spec in apps.items()}
+        secret_values = {
+            kind: {
+                secret["name"]: secret["value"]
+                for secret in spec["properties"]["configuration"].get("secrets", [])
+                if "value" in secret
+            }
+            for kind, spec in apps.items()
+        }
+        literals = [value for values in secret_values.values() for value in values.values()]
+
+        def contains_secret(value: Any) -> bool:
+            if isinstance(value, str):
+                return any(secret in value for secret in literals)
+            if isinstance(value, dict):
+                return any(contains_secret(item) for item in value.values())
+            if isinstance(value, list):
+                return any(contains_secret(item) for item in value)
+            return False
+
+        if contains_secret(redacted):
+            raise ReleaseError("Existing app exposes a secret outside its secret configuration")
+        return {**redacted, "secretValues": secret_values}
+
+    def deploy_apps_only(
+        self, specs: dict[str, dict[str, Any]], *, preview: bool
+    ) -> dict[str, Any]:
+        with parameter_file(self.workspace, self.app_parameters(specs)) as path:
+            command = self.az(
+                "deployment", "group", "what-if" if preview else "create",
+                "--resource-group", self.group, "--name", APP_UPDATE_DEPLOYMENT,
+                "--template-file", str(LANE / "infra/app/update-existing.bicep"),
+                "--parameters", f"@{path}", "--mode", "Incremental",
+            )
+            if preview:
+                command.extend([
+                    "--result-format", "FullResourcePayloads", "--no-pretty-print",
+                    "--validation-level", "Provider",
+                ])
+            result = self.runner.json(command)
+        if preview:
+            artifact = self.workspace / f"app-only-what-if-{uuid4().hex}.json"
+            with open(
+                artifact, "x", opener=lambda name, flags: os.open(name, flags, 0o600)
+            ) as handle:
+                json.dump(result, handle)
+            changes = result.get("changes")
+            if not isinstance(changes, list) or any(not isinstance(c, dict) for c in changes):
+                raise ReleaseError("App-only what-if has malformed resource evidence")
+            print(json.dumps({
+                "app_only_preview": str(artifact),
+                "changes": [
+                    {"resourceId": c.get("resourceId"), "changeType": c.get("changeType")}
+                    for c in changes
+                ],
+            }))
+        elif result.get("properties", {}).get("provisioningState") != "Succeeded":
+            raise ReleaseError("App-only rollout did not finish Succeeded")
+        return result
+
+    def verify_app_state(self, expected: dict[str, dict[str, Any]]) -> None:
+        for app in (self.backend, self.frontend):
+            actual = self.read_app_spec(self.app(app["name"]))
+            if actual != expected[app["id"].lower()]:
+                raise ReleaseError("Application state or secrets drifted from the verified release")
+
+    def execute_app_only(self, commit: str) -> None:
+        self.verify_existing_schema()
+        app_only_what_if(
+            self.deploy_apps_only(self.app_baseline, preview=True),
+            self.app_baseline, self.app_baseline,
+        )
+        print(json.dumps({
+            "mode": "apply" if self.args.apply else "preview", "app_only": True,
+            "environment": self.args.environment, "source_commit": commit,
+            "uncommitted_runtime_changes": self.dirty, "schema": self.schema,
+        }))
+        if not self.args.apply:
+            return
+        images = self.build(commit, f"{commit}-{uuid4().hex[:12]}")
+        desired = deepcopy(self.app_baseline)
+        for kind, app in (("backend", self.backend), ("frontend", self.frontend)):
+            image = images[kind + "Image"]
+            prefix = f"{self.registry_server}/model-harness-maf-{kind}@"
+            if not image.startswith(prefix) or not DIGEST.fullmatch(image[len(prefix):]):
+                raise ReleaseError("App-only rollout requires verified lane image digests")
+            desired[app["id"].lower()]["properties"]["template"]["containers"][0]["image"] = image
+        self.source_commit()
+        app_only_what_if(
+            self.deploy_apps_only(desired, preview=True), self.app_baseline, desired
+        )
+        self.verify_app_state(self.app_baseline)
+        self.source_commit()
+        self.deploy_apps_only(desired, preview=False)
+        self.wait_apps({**self.parameters, **images})
+        self.verify_app_state(desired)
+        version = self.deploy_hosted()
+        print(json.dumps({
+            "released_commit": commit, "app_only": True, **images,
+            "hosted_version": version, "schema": self.schema,
+        }))
 
     def verify_existing_schema(self) -> None:
         from maf_double_charge.application.errors import StorageReadinessError
@@ -480,7 +809,8 @@ class Release:
             )
         )
 
-    def build(self, commit: str, tag: str) -> None:
+    def build(self, commit: str, tag: str) -> dict[str, str]:
+        images: dict[str, str] = {}
         with private_workspace(self.workspace) as directory:
             archive = directory / "source.tar"
             self.runner.run(
@@ -538,10 +868,60 @@ class Release:
                         "false",
                     )
                 )
+                metadata = self.runner.json(self.az(
+                    "acr", "repository", "show", "--name", self.registry_name,
+                    "--image", image,
+                ))
+                digest = metadata.get("digest", "")
+                outputs = result.get("outputImages", [])
+                if (
+                    not isinstance(digest, str) or not DIGEST.fullmatch(digest)
+                    or not isinstance(outputs, list) or len(outputs) != 1
+                    or not isinstance(outputs[0], dict)
+                    or outputs[0].get("digest") != digest
+                    or outputs[0].get("registry") != self.registry_server
+                    or outputs[0].get("repository") != f"model-harness-maf-{kind}"
+                    or outputs[0].get("tag") != tag
+                    or metadata.get("changeableAttributes", {}).get("writeEnabled") is not False
+                    or metadata.get("changeableAttributes", {}).get("deleteEnabled") is not False
+                ):
+                    raise ReleaseError(
+                        "Built image digest, provenance or immutability is unverified"
+                    )
+                manifest = f"model-harness-maf-{kind}@{digest}"
+                self.runner.run(self.az(
+                    "acr", "repository", "update", "--name", self.registry_name,
+                    "--image", manifest, "--write-enabled", "false", "--delete-enabled", "false",
+                ))
+                for reference in (manifest, image):
+                    actual = self.runner.json(self.az(
+                        "acr", "repository", "show", "--name", self.registry_name,
+                        "--image", reference,
+                    ))
+                    attributes = actual.get("changeableAttributes", {})
+                    if (
+                        actual.get("digest") != digest
+                        or attributes.get("writeEnabled") is not False
+                        or attributes.get("deleteEnabled") is not False
+                    ):
+                        raise ReleaseError("Built manifest and tag protection readback failed")
+                images[kind + "Image"] = f"{self.registry_server}/{manifest}"
+        return images
 
     def execute(self) -> None:
+        if self.args.app_only and (
+            not self.args.update_existing
+            or self.args.foundation
+            or self.args.operator_ip is not None
+        ):
+            raise ReleaseError(
+                "--app-only requires --update-existing and forbids foundation/firewall changes"
+            )
         commit = self.source_commit()
         self.discover()
+        if self.args.app_only:
+            self.execute_app_only(commit)
+            return
         tag = f"{commit}-{uuid4().hex[:12]}"
         final = dict(
             self.parameters,
@@ -633,6 +1013,24 @@ class Release:
         print("Rolling out final app images and schema.")
         self.deploy_parameters(final, preview=False)
         self.wait_apps(final)
+        version = self.deploy_hosted()
+        print(
+            json.dumps(
+                {
+                    "released_commit": commit,
+                    "hosted_version": version,
+                    "schema": self.schema,
+                    "frontend_url": required(self.outputs, "frontendUrl"),
+                    "next": "Run API, browser, hosted, evaluation and telemetry acceptance gates.",
+                },
+                indent=2,
+            )
+        )
+
+    def deploy_hosted(self) -> str:
+        migration_env = {
+            **os.environ, "DATABASE_URL": self.database_url, "DATABASE_SCHEMA": self.schema,
+        }
         self.runner.run(
             azd_args(self.args.environment, "env", "set", "DATABASE_SCHEMA", self.schema)
         )
@@ -652,19 +1050,7 @@ class Release:
             azd_args(self.args.environment, "deploy", SERVICE, "--no-prompt"),
             env=migration_env,
         )
-        version = self.wait_hosted()
-        print(
-            json.dumps(
-                {
-                    "released_commit": commit,
-                    "hosted_version": version,
-                    "schema": self.schema,
-                    "frontend_url": required(self.outputs, "frontendUrl"),
-                    "next": "Run API, browser, hosted, evaluation and telemetry acceptance gates.",
-                },
-                indent=2,
-            )
-        )
+        return self.wait_hosted()
 
 
 def parser() -> argparse.ArgumentParser:
@@ -674,6 +1060,10 @@ def parser() -> argparse.ArgumentParser:
     mode.add_argument("--apply", action="store_true", help="Execute the reviewed ordered cutover")
     result.add_argument("--environment", default="maf-dev")
     result.add_argument("--schema", default=SCHEMA)
+    result.add_argument(
+        "--app-only", action="store_true",
+        help="Update only the existing app images; requires --update-existing",
+    )
     result.add_argument(
         "--update-existing",
         action="store_true",

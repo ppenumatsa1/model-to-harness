@@ -1,0 +1,62 @@
+from contextlib import AbstractContextManager, nullcontext
+from typing import Any, Literal, Protocol
+
+from model_to_harness_shared import CheckoutApprovalDecision, CheckoutSimulator
+
+from .models import AuditEvent, CaseRecord, InvestigationResult, RemediationIntent
+
+type OperationName = Literal["start", "approval", "resume", "remediation", "verification"]
+
+
+class Instrumentation(Protocol):
+    def __call__(
+        self, name: OperationName, case_id: str | None = None
+    ) -> AbstractContextManager[None]: ...
+
+
+def no_instrumentation(
+    name: OperationName, case_id: str | None = None
+) -> AbstractContextManager[None]:
+    return nullcontext()
+
+
+class RuntimeHealth(Protocol):
+    def ready(self) -> bool: ...
+
+
+class InvestigationIncompleteError(RuntimeError):
+    pass
+
+
+class Investigator(Protocol):
+    def investigate(self, simulator: CheckoutSimulator) -> InvestigationResult: ...
+
+
+class CaseRepository(Protocol):
+    def transaction(self, case_id: str) -> AbstractContextManager[None]: ...
+
+    def save_framework_state(self, case_id: str, state: dict[str, Any]) -> None: ...
+
+    def framework_state_for(self, case_id: str) -> dict[str, Any] | None: ...
+
+    def ready(self) -> bool: ...
+
+    def create(self, case: CaseRecord, simulator: CheckoutSimulator) -> None: ...
+
+    def get(self, case_id: str) -> CaseRecord | None: ...
+
+    def save(self, case: CaseRecord) -> None: ...
+
+    def save_approval(
+        self, case_id: str, decision: CheckoutApprovalDecision, reviewer_id: str
+    ) -> None: ...
+
+    def simulator_for(self, case: CaseRecord) -> CheckoutSimulator: ...
+
+    def append_event(self, case_id: str, event: AuditEvent) -> None: ...
+
+    def events_for(self, case_id: str) -> tuple[AuditEvent, ...]: ...
+
+    def remediation_intent_for(self, case_id: str) -> RemediationIntent | None: ...
+
+    def save_remediation_intent(self, case_id: str, intent: RemediationIntent) -> None: ...

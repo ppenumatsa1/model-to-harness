@@ -2,11 +2,13 @@ import asyncio
 
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.application.records import ApprovalRequest, StartCaseRequest
 from model_to_harness_langgraph.application.service import InvalidCommandError, WorkflowService
 from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
 from model_to_harness_langgraph.infrastructure.domain_gateway import ToolResult
 from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.testing.commands import approval_request as ApprovalRequest
+from model_to_harness_langgraph.testing.commands import resume_request
+from model_to_harness_langgraph.testing.commands import start_request as StartCaseRequest
 from model_to_harness_langgraph.testing.fakes import FakeDomainGateway, FakeModel
 
 
@@ -57,7 +59,7 @@ async def test_interrupt_checkpoint_reconciles_after_audit_update_crash(monkeypa
     interrupted = await restarted.continue_run("crash-case")
     assert interrupted.status == "paused" and interrupted.checkpoint_id
     await approve(restarted, interrupted)
-    result = await restarted.resume("crash-case")
+    result = await restarted.resume("crash-case", resume_request(interrupted))
     assert result.status == "completed"
     events = await restarted.list_events("crash-case")
     assert sum(e.event_type == "human_approval_requested" for e in events) == 1
@@ -78,10 +80,10 @@ async def test_completed_checkpoint_reconciles_without_repeating_verified_effect
 
     monkeypatch.setattr(first.results, "persist", fail_terminal)
     with pytest.raises(RuntimeError, match="worker lost"):
-        await first.resume(started.case_id)
+        await first.resume(started.case_id, resume_request(started))
     assert await audit.get_pending_approval(started.run_id)
     before = sum(gateway.refund_calls.values())
-    resumed = await service(audit, saver, gateway).resume(started.case_id)
+    resumed = await service(audit, saver, gateway).resume(started.case_id, resume_request(started))
     assert resumed.status == "completed"
     assert sum(gateway.refund_calls.values()) == before == 1
     assert await audit.get_pending_approval(started.run_id) is None
@@ -100,10 +102,12 @@ async def test_audit_completion_before_approval_consumption_crash_is_recoverable
 
     monkeypatch.setattr(audit, "consume_approval", fail)
     with pytest.raises(RuntimeError, match="interrupted"):
-        await first.resume(started.case_id)
+        await first.resume(started.case_id, resume_request(started))
     assert (await audit.get_run_by_case(started.case_id))["status"] == "completed"
     monkeypatch.setattr(audit, "consume_approval", consume)
-    assert (await service(audit, saver).resume(started.case_id)).status == "completed"
+    assert (
+        await service(audit, saver).resume(started.case_id, resume_request(started))
+    ).status == "completed"
     assert await audit.get_pending_approval(started.run_id) is None
 
 
@@ -121,11 +125,11 @@ async def test_concurrent_resume_rejected_and_lock_released():
     first, second = service(audit, saver, gateway), service(audit, saver, gateway)
     started = await first.start(request())
     await approve(first, started)
-    task = asyncio.create_task(first.resume(started.case_id))
+    task = asyncio.create_task(first.resume(started.case_id, resume_request(started)))
     await asyncio.wait_for(entered.wait(), 2)
     try:
         with pytest.raises(InvalidCommandError, match="Another command"):
-            await second.resume(started.case_id)
+            await second.resume(started.case_id, resume_request(started))
     finally:
         release.set()
         await task
@@ -142,7 +146,7 @@ async def test_verification_must_match_the_durable_refund_id():
     runtime = service(InMemoryAuditRepository(), InMemorySaver(), Gateway())
     started = await runtime.start(request())
     await approve(runtime, started)
-    result = await runtime.resume(started.case_id)
+    result = await runtime.resume(started.case_id, resume_request(started))
     assert result.status == "manual_review"
     case = await runtime.get_case(started.case_id)
     assert case.workflow_state["failure_code"] == "VERIFY_MISMATCH"
@@ -163,7 +167,7 @@ async def test_notification_receipt_prevents_replay_after_checkpoint_loss():
     runtime = service(audit, saver, gateway)
     started = await runtime.start(request())
     await approve(runtime, started)
-    await runtime.resume(started.case_id)
+    await runtime.resume(started.case_id, resume_request(started))
     state = await runtime.workflow.snapshot(started.run_id)
     replay = await runtime.workflow.notify_customer(state)
     assert replay["notification_status"] == "sent"
@@ -202,12 +206,14 @@ async def test_refund_effect_and_receipt_crash_windows_reconcile(
 
     monkeypatch.setattr(audit, "record_refund", crash)
     with pytest.raises(RuntimeError, match="external acceptance"):
-        await runtime.resume(started.case_id)
+        await runtime.resume(started.case_id, resume_request(started))
     assert len(gateway.refunds) == 1
     monkeypatch.setattr(audit, "record_refund", record)
     restarted_gateway = FakeDomainGateway() if durable_receipt_written else gateway
     reconstructed = service(audit, saver, restarted_gateway)
-    assert (await reconstructed.resume(started.case_id)).status == "completed"
+    assert (
+        await reconstructed.resume(started.case_id, resume_request(started))
+    ).status == "completed"
     assert len(audit.refunds) == 1
     assert (await reconstructed.get_case(started.case_id)).outcome.refund_status == "verified"
     if durable_receipt_written:

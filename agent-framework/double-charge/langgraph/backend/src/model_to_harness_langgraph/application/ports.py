@@ -3,23 +3,7 @@ from typing import Any, Protocol
 
 from .records import EventData, NativeEvent
 
-SAFE_EVENT_DATA_KEYS = {
-    "attempt",
-    "branch",
-    "checkpoint_id",
-    "decision",
-    "eligible",
-    "failure_code",
-    "latency_ms",
-    "model",
-    "refund_id",
-    "retry_in_ms",
-    "route",
-    "tool",
-    "tool_call_id",
-    "usage",
-    "verified_count",
-}
+SAFE_EVENT_DATA_KEYS = set(EventData.model_fields)
 
 
 def safe_event_data(data: dict[str, Any] | None) -> dict[str, Any]:
@@ -51,6 +35,12 @@ class AuditRepository(Protocol):
 
     async def get_run_by_case(self, case_id: str) -> dict[str, Any] | None: ...
 
+    async def list_runs(
+        self, limit: int, before: tuple[Any, str] | None = None
+    ) -> list[dict[str, Any]]: ...
+
+    async def workspace_records(self, case_id: str) -> dict[str, Any] | None: ...
+
     async def append_event(
         self,
         *,
@@ -62,9 +52,12 @@ class AuditRepository(Protocol):
         status: str | None = None,
         data: dict[str, Any] | None = None,
         dedupe_key: str | None = None,
+        actor_id: str | None = None,
     ) -> NativeEvent: ...
 
-    async def list_events(self, run_id: str, after: int = 0) -> list[NativeEvent]: ...
+    async def list_events(
+        self, run_id: str, after: int = 0, limit: int | None = None
+    ) -> list[NativeEvent]: ...
 
     async def save_approval(self, run_id: str, approval: dict[str, Any]) -> None: ...
 
@@ -86,6 +79,8 @@ class AuditRepository(Protocol):
 
 
 class WorkflowRunner(Protocol):
+    def graph_metadata(self) -> dict[str, Any]: ...
+
     def trace_run(self, run_id: str, *, case_id: str, command: str) -> AbstractContextManager: ...
 
     async def start(self, state: dict[str, Any]) -> dict[str, Any]: ...

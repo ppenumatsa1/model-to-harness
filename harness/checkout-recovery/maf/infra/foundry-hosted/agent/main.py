@@ -14,9 +14,12 @@ from checkout_recovery_maf.application import (
     CaseNotFoundError,
     CheckoutRecoveryService,
     InvalidCaseCommandError,
+    RecordApprovalCommand,
+    ResumeCaseCommand,
+    StartCaseCommand,
 )
-from checkout_recovery_maf.infrastructure import PostgresCaseRepository
-from checkout_recovery_maf.maf.investigation import MafInvestigator
+from checkout_recovery_maf.bootstrap import Runtime, create_runtime
+from checkout_recovery_maf.config import Settings
 from checkout_recovery_maf.projections import project_case
 from model_to_harness_shared import CheckoutApprovalDecision
 from psycopg import Error as DatabaseError
@@ -30,6 +33,9 @@ class StartCommand(BaseModel):
     fixture_id: str = Field(min_length=1, max_length=120)
     request_id: UUID | None = None
 
+    def to_command(self) -> StartCaseCommand:
+        return StartCaseCommand(self.fixture_id, str(self.request_id) if self.request_id else None)
+
 
 class ApprovalCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -41,6 +47,15 @@ class ApprovalCommand(BaseModel):
     approval_request_id: UUID
     reason: str = Field(min_length=1, max_length=500)
 
+    def to_command(self) -> RecordApprovalCommand:
+        return RecordApprovalCommand(
+            self.case_id,
+            self.decision,
+            self.reviewer_id,
+            str(self.approval_request_id),
+            self.reason,
+        )
+
 
 class ResumeCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -48,10 +63,12 @@ class ResumeCommand(BaseModel):
     action: str
     case_id: str = Field(min_length=1)
 
+    def to_command(self) -> ResumeCaseCommand:
+        return ResumeCaseCommand(self.case_id)
+
 
 _runtime_lock = asyncio.Lock()
-_repository: PostgresCaseRepository | None = None
-_service: CheckoutRecoveryService | None = None
+_runtime: Runtime | None = None
 
 
 def _payload(create_response: Any) -> dict[str, Any]:
@@ -98,56 +115,39 @@ def _command(create_response: Any) -> dict[str, Any]:
 
 
 async def _checkout_service() -> CheckoutRecoveryService:
-    global _repository, _service
-    if _service is not None:
-        return _service
+    global _runtime
     async with _runtime_lock:
-        if _service is None:
-            database_url = os.getenv("CHECKOUT_RECOVERY_DATABASE_URL")
-            if not database_url:
-                raise RuntimeError("CHECKOUT_RECOVERY_DATABASE_URL is required")
-            repository = PostgresCaseRepository(database_url)
-            await asyncio.to_thread(repository.open)
-            await asyncio.to_thread(repository.ready)
-            _repository = repository
-            _service = CheckoutRecoveryService(
-                repository,
-                investigator=MafInvestigator(
-                    os.environ["CHECKOUT_RECOVERY_FOUNDRY_PROJECT_ENDPOINT"],
-                    os.environ["CHECKOUT_RECOVERY_FOUNDRY_MODEL_DEPLOYMENT"],
-                ),
-                max_auto_inventory_quantity=int(
-                    os.getenv("CHECKOUT_RECOVERY_MAX_AUTO_INVENTORY_QUANTITY", "1")
-                ),
-            )
-    return _service
+        if _runtime is None:
+            runtime = create_runtime(Settings(_env_file=None, execution_mode="maf"), host="hosted")
+            try:
+                await asyncio.to_thread(runtime.start)
+            except BaseException:
+                await asyncio.to_thread(runtime.close)
+                raise
+            _runtime = runtime
+        return _runtime.service
+
+
+async def _close_runtime() -> None:
+    global _runtime
+    async with _runtime_lock:
+        runtime, _runtime = _runtime, None
+        if runtime is not None:
+            await asyncio.to_thread(runtime.close)
 
 
 async def _execute(command: dict[str, Any]) -> dict[str, Any]:
     service = await _checkout_service()
     action = command.get("action")
     if action == "start":
-        validated = StartCommand.model_validate(command)
-        case = await asyncio.to_thread(
-            service.start_case,
-            validated.fixture_id,
-            str(validated.request_id) if validated.request_id else None,
-        )
+        validated = StartCommand.model_validate(command).to_command()
     elif action == "approval":
-        validated = ApprovalCommand.model_validate(command)
-        case = await asyncio.to_thread(
-            service.record_approval,
-            validated.case_id,
-            decision=validated.decision,
-            reviewer_id=validated.reviewer_id,
-            approval_request_id=str(validated.approval_request_id),
-            reason=validated.reason,
-        )
+        validated = ApprovalCommand.model_validate(command).to_command()
     elif action == "resume":
-        validated = ResumeCommand.model_validate(command)
-        case = await asyncio.to_thread(service.resume_case, validated.case_id)
+        validated = ResumeCommand.model_validate(command).to_command()
     else:
         raise ValueError("action must be start, approval, or resume")
+    case = await asyncio.to_thread(service.execute, validated)
     return project_case(case).model_dump(mode="json")
 
 
@@ -177,14 +177,10 @@ def create_host() -> ResponsesAgentServerHost:
 
 
 async def main() -> None:
-    global _repository, _service
     try:
         await create_host().run_async()
     finally:
-        if _repository is not None:
-            _repository.close()
-        _repository = None
-        _service = None
+        await _close_runtime()
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tomllib
 import zipfile
+from copy import deepcopy
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -307,13 +308,539 @@ def test_discovery_preserves_existing_target_and_reports_stopped_postgres(module
         assert not {"create", "deploy", "provision", "start", "set"} & set(call.args[0])
 
 
-def test_apply_rejects_dirty_commit(modules):
+@pytest.mark.parametrize("app_only", [False, True])
+def test_apply_rejects_dirty_commit(modules, app_only):
     release, *_ = modules
-    args = release.parser().parse_args(["--apply", "--source-commit", "a" * 40])
+    args = release.parser().parse_args(
+        ["--apply", "--source-commit", "a" * 40]
+        + (["--app-only", "--update-existing"] if app_only else [])
+    )
     runner = Mock()
     runner.run.side_effect = ["a" * 40, "a" * 40, " M backend/runtime.py"]
     with pytest.raises(release.ReleaseError):
         release.Release(args, runner).source_commit()
+
+
+def app_only_fixture(release):
+    apps = {}
+    for kind in ("backend", "frontend"):
+        name = f"maf-{kind}"
+        identifier = (
+            f"/subscriptions/sub/resourceGroups/maf-only/providers/Microsoft.App/containerApps/{name}"
+        )
+        props = {
+            "managedEnvironmentId": "/existing-environment",
+            "environmentId": "/existing-environment",
+            "configuration": {
+                "activeRevisionsMode": "Single",
+                "ingress": {
+                    "external": kind == "frontend", "targetPort": 8010 if kind == "backend" else 80,
+                    "transport": "auto", "exposedPort": 0,
+                    "traffic": [{"latestRevision": True, "weight": 100}],
+                },
+                "registries": [{"server": "registry.azurecr.io", "identity": "/existing-identity"}],
+            },
+            "template": {
+                "containers": [{
+                    "name": kind, "image": f"registry.azurecr.io/model-harness-maf-{kind}:old",
+                    "env": [{"name": "DATABASE_SCHEMA", "value": release.SCHEMA}],
+                    "resources": {"cpu": 0.5, "memory": "1Gi"},
+                }],
+                "scale": {"minReplicas": 1, "maxReplicas": 2},
+            },
+        }
+        if kind == "backend":
+            props["configuration"]["secrets"] = [{"name": "database-url", "value": "private-old"}]
+        apps[identifier.lower()] = {
+            "id": identifier, "name": name, "location": "northcentralus",
+            "type": "Microsoft.App/containerApps",
+            "identity": {
+                "type": "UserAssigned", "userAssignedIdentities": {"/existing-identity": {}},
+            },
+            "properties": props,
+        }
+    baseline = {identifier: release.app_spec(app) for identifier, app in apps.items()}
+    return apps, baseline
+
+
+def app_only_preview(apps, desired):
+    changes = []
+    for identifier, app in apps.items():
+        before = deepcopy(app)
+        after = deepcopy(app)
+        after["properties"]["template"]["containers"][0]["image"] = (
+            desired[identifier]["properties"]["template"]["containers"][0]["image"]
+        )
+        for resource in (before, after):
+            for secret in resource["properties"]["configuration"].get("secrets", []):
+                secret["value"] = "**********"
+        changed = before != after
+        changes.append({
+            "resourceId": identifier, "changeType": "Modify" if changed else "NoChange",
+            "before": before, "after": after,
+            "delta": [{"path": "properties.template.containers", "propertyChangeType": "Array"}]
+            if changed else [],
+        })
+    return {"status": "Succeeded", "changes": changes}
+
+
+@pytest.mark.parametrize("rollout", [False, True])
+def test_app_only_full_preview_preserves_everything_but_images(modules, rollout):
+    release, *_ = modules
+    apps, baseline = app_only_fixture(release)
+    desired = deepcopy(baseline)
+    if rollout:
+        for spec in desired.values():
+            spec["properties"]["template"]["containers"][0]["image"] += "-new"
+    preview = app_only_preview(apps, desired)
+    preview["changes"].append({
+        "resourceId": "/untouched/foundation", "changeType": "Ignore",
+        "before": {"id": "/untouched/foundation"}, "after": {"id": "/untouched/foundation"},
+    })
+    release.app_only_what_if(preview, baseline, desired)
+
+
+@pytest.mark.parametrize("invalid", [
+    "foundation-modify", "foundation-delete", "foundation-ignore-delta", "managed-ignore",
+    "missing-app", "duplicate", "missing-before", "wrong-id", "failed", "diagnostic",
+    "environment", "identity", "traffic", "secret", "schema", "scale", "extra-property",
+    "wrong-image", "unknown-delta", "nondefault-running", "unexpected-default-change",
+])
+def test_app_only_preview_rejects_unapproved_full_resource_changes(modules, invalid):
+    release, *_ = modules
+    apps, baseline = app_only_fixture(release)
+    desired = deepcopy(baseline)
+    preview = app_only_preview(apps, desired)
+    change = preview["changes"][0]
+    after = change["after"]
+    if invalid.startswith("foundation"):
+        unmanaged = {
+            "resourceId": "/unmanaged", "changeType": "Modify",
+            "before": {"id": "/unmanaged", "sharing": False},
+            "after": {"id": "/unmanaged", "sharing": True},
+        }
+        if invalid == "foundation-delete":
+            unmanaged["changeType"] = "Delete"
+        elif invalid == "foundation-ignore-delta":
+            unmanaged["changeType"] = "Ignore"
+            unmanaged["after"] = deepcopy(unmanaged["before"])
+            unmanaged["delta"] = [{"path": "sharing"}]
+        preview["changes"].append(unmanaged)
+    elif invalid == "managed-ignore":
+        change["changeType"] = "Ignore"
+    elif invalid == "missing-app":
+        preview["changes"].pop()
+    elif invalid == "duplicate":
+        preview["changes"].append(deepcopy(change))
+    elif invalid == "missing-before":
+        change.pop("before")
+    elif invalid == "wrong-id":
+        after["id"] = "/different-app"
+    elif invalid == "failed":
+        preview["status"] = "Failed"
+    elif invalid == "diagnostic":
+        change["diagnostics"] = [{"message": "cannot evaluate"}]
+    else:
+        change["changeType"] = "Modify"
+        change["delta"] = [{"path": "properties.template.containers"}]
+        if invalid == "environment":
+            after["properties"]["managedEnvironmentId"] = "/another-environment"
+        elif invalid == "identity":
+            after["identity"]["userAssignedIdentities"] = {"/another-identity": {}}
+        elif invalid == "traffic":
+            after["properties"]["configuration"]["ingress"]["external"] = True
+        elif invalid == "secret":
+            after["properties"]["configuration"]["secrets"][0]["value"] = "changed-private"
+        elif invalid == "schema":
+            after["properties"]["template"]["containers"][0]["env"][0]["value"] = "maf_other"
+        elif invalid == "scale":
+            after["properties"]["template"]["scale"]["maxReplicas"] = 20
+        elif invalid == "extra-property":
+            after["properties"]["unknownSetting"] = True
+        elif invalid == "wrong-image":
+            after["properties"]["template"]["containers"][0]["image"] = "unreviewed"
+        elif invalid == "unknown-delta":
+            change["delta"] = [{"path": "properties.configuration.secrets"}]
+        elif invalid == "nondefault-running":
+            change["before"]["properties"]["runningStatus"] = "Stopped"
+        elif invalid == "unexpected-default-change":
+            change["before"]["properties"]["configuration"]["ingress"]["exposedPort"] = 1234
+            after["properties"]["configuration"]["ingress"].pop("exposedPort")
+    with pytest.raises(release.ReleaseError):
+        release.app_only_what_if(preview, baseline, desired)
+
+
+def test_app_only_accepts_only_observed_service_default_omissions(modules):
+    release, *_ = modules
+    apps, baseline = app_only_fixture(release)
+    preview = app_only_preview(apps, baseline)
+    for change in preview["changes"]:
+        change["before"]["properties"]["runningStatus"] = "Running"
+        change["after"]["properties"]["configuration"]["ingress"].pop("exposedPort")
+        change["changeType"] = "Modify"
+        change["delta"] = [
+            {"path": "properties.runningStatus"},
+            {"path": "properties.configuration.ingress.exposedPort"},
+        ]
+    release.app_only_what_if(preview, baseline, baseline)
+
+
+@pytest.mark.parametrize("arguments", [
+    ["--app-only"], ["--app-only", "--update-existing", "--foundation"],
+    ["--app-only", "--update-existing", "--operator-ip", "192.0.2.1"],
+])
+def test_app_only_invalid_mode_stops_before_discovery(modules, arguments):
+    release, *_ = modules
+    runner = Mock()
+    with pytest.raises(release.ReleaseError, match="requires --update-existing"):
+        release.Release(release.parser().parse_args(arguments), runner).execute()
+    runner.run.assert_not_called()
+    runner.json.assert_not_called()
+
+
+@pytest.mark.parametrize("apply", [False, True])
+def test_app_only_orders_gates_without_foundation_or_migration(modules, monkeypatch, apply):
+    release, *_ = modules
+    apps, baseline = app_only_fixture(release)
+    subject = release.Release(release.parser().parse_args(
+        ["--app-only", "--update-existing"]
+        + (["--apply", "--source-commit", "a" * 40] if apply else [])
+    ))
+    subject.backend, subject.frontend = list(apps.values())
+    subject.app_baseline = baseline
+    subject.schema = release.SCHEMA
+    subject.dirty = False
+    subject.registry_server = "registry.azurecr.io"
+    subject.parameters = {"postgresSchema": release.SCHEMA}
+    operations = []
+    monkeypatch.setattr(subject, "source_commit", lambda: operations.append("source") or "a" * 40)
+    monkeypatch.setattr(subject, "discover", lambda: operations.append("discover"))
+    monkeypatch.setattr(subject, "verify_existing_schema", lambda: operations.append("schema"))
+    monkeypatch.setattr(
+        subject, "deploy_parameters", Mock(side_effect=AssertionError("foundation"))
+    )
+    monkeypatch.setattr(
+        subject, "deploy_hosted", lambda: operations.append("hosted-verified") or "9"
+    )
+    monkeypatch.setattr(subject, "wait_apps", lambda _: operations.append("ready"))
+    monkeypatch.setattr(subject, "verify_app_state", lambda _: operations.append("readback"))
+
+    def build(*_):
+        operations.append("build")
+        return {
+            kind + "Image": f"registry.azurecr.io/model-harness-maf-{kind}@sha256:" + "a" * 64
+            for kind in ("backend", "frontend")
+        }
+
+    def deploy(specs, *, preview):
+        operations.append("preview" if preview else "rollout")
+        return app_only_preview(apps, specs)
+
+    monkeypatch.setattr(subject, "build", build)
+    monkeypatch.setattr(subject, "deploy_apps_only", deploy)
+    subject.execute()
+    assert operations == (
+        ["source", "discover", "schema", "preview"]
+        + (["build", "source", "preview", "readback", "source", "rollout", "ready",
+            "readback", "hosted-verified"] if apply else [])
+    )
+
+
+def test_app_only_uses_separate_incremental_template_and_private_parameters(
+    modules, tmp_path, capsys
+):
+    release, *_ = modules
+    apps, baseline = app_only_fixture(release)
+    runner = Mock()
+    runner.json.return_value = app_only_preview(apps, baseline)
+    subject = release.Release(
+        release.parser().parse_args(["--app-only", "--update-existing"]), runner
+    )
+    subject.backend, subject.frontend = list(apps.values())
+    subject.group, subject.subscription = "group", "subscription"
+    subject.workspace = tmp_path
+    subject.deploy_apps_only(baseline, preview=True)
+    command = runner.json.call_args.args[0]
+    assert command[command.index("--name") + 1] == release.APP_UPDATE_DEPLOYMENT
+    assert command[command.index("--template-file") + 1].endswith("/update-existing.bicep")
+    assert command[command.index("--mode") + 1] == "Incremental"
+    assert "--no-pretty-print" in command
+    assert command[command.index("--validation-level") + 1] == "Provider"
+    assert "private-old" not in " ".join(command)
+    assert "private-old" not in capsys.readouterr().out
+    receipts = list(tmp_path.glob("app-only-what-if-*.json"))
+    assert len(receipts) == 1 and stat.S_IMODE(receipts[0].stat().st_mode) == 0o600
+    assert not list(tmp_path.glob("*/parameters.json"))
+
+
+def test_app_only_secret_drift_prevents_rollout(modules, monkeypatch):
+    release, *_ = modules
+    apps, baseline = app_only_fixture(release)
+    subject = release.Release(release.parser().parse_args(["--app-only", "--update-existing"]))
+    subject.backend, subject.frontend = list(apps.values())
+    monkeypatch.setattr(subject, "app", lambda _: {})
+    changed = deepcopy(next(iter(baseline.values())))
+    changed["properties"]["configuration"]["secrets"][0]["value"] = "new-private"
+    monkeypatch.setattr(subject, "read_app_spec", lambda _: changed)
+    with pytest.raises(release.ReleaseError, match="secrets drifted"):
+        subject.verify_app_state(baseline)
+
+
+def test_app_only_rejects_non_image_change_even_when_desired_snapshot_matches(modules):
+    release, *_ = modules
+    apps, baseline = app_only_fixture(release)
+    desired = deepcopy(baseline)
+    identifier = next(iter(desired))
+    desired[identifier]["properties"]["configuration"]["ingress"]["external"] = True
+    preview = app_only_preview(apps, desired)
+    change = preview["changes"][0]
+    change["after"]["properties"]["configuration"]["ingress"]["external"] = True
+    change["changeType"] = "Modify"
+    change["delta"] = [{"path": "properties.template.containers"}]
+    with pytest.raises(release.ReleaseError, match="full resource"):
+        release.app_only_what_if(preview, baseline, desired)
+
+
+@pytest.mark.parametrize("invalid", [
+    "create", "delete", "unsupported", "unsupported-reason", "malformed-delta",
+    "malformed-change", "contradictory-nochange", "unresolved-image",
+])
+def test_app_only_rejects_incomplete_or_contradictory_evidence(modules, invalid):
+    release, *_ = modules
+    apps, baseline = app_only_fixture(release)
+    preview = app_only_preview(apps, baseline)
+    change = preview["changes"][0]
+    if invalid in {"create", "delete", "unsupported"}:
+        change["changeType"] = invalid.title()
+    elif invalid == "unsupported-reason":
+        change["unsupportedReason"] = "Cannot evaluate"
+    elif invalid == "malformed-delta":
+        change["delta"] = {}
+    elif invalid == "malformed-change":
+        preview["changes"][0] = None
+    else:
+        change["after"]["properties"]["template"]["containers"][0]["image"] = "[reference('app')]"
+        if invalid == "unresolved-image":
+            change["changeType"] = "Modify"
+            change["delta"] = [{"path": "properties.template.containers"}]
+    with pytest.raises(release.ReleaseError):
+        release.app_only_what_if(preview, baseline, baseline)
+
+
+def test_app_only_stable_readback_matches_template_api(modules):
+    release, *_ = modules
+    runner = Mock()
+    subject = release.Release(
+        release.parser().parse_args(["--app-only", "--update-existing"]), runner
+    )
+    subject.subscription, subject.group = "subscription", "group"
+    subject.app("existing-api")
+    command = runner.json.call_args.args[0]
+    assert command[:4] == ["az", "rest", "--method", "get"]
+    assert command[command.index("--url") + 1].endswith(
+        f"/containerApps/existing-api?api-version={release.APP_API_VERSION}"
+    )
+    template = (LANE / "infra/app/update-existing.bicep").read_text()
+    assert template.count(f"Microsoft.App/containerApps@{release.APP_API_VERSION}") == 2
+    assert "Microsoft.DBforPostgreSQL" not in template
+    assert "isSharedToAll" not in template
+
+
+def test_app_only_snapshot_normalizes_only_absent_service_defaults(modules):
+    release, *_ = modules
+    apps, baseline = app_only_fixture(release)
+    raw = deepcopy(next(iter(apps.values())))
+    props = raw["properties"]
+    props["delegatedIdentities"] = []
+    props["configuration"]["identitySettings"] = []
+    props["configuration"]["registries"][0].update(username="", passwordSecretRef="")
+    props["template"]["revisionSuffix"] = ""
+    assert release.app_spec(raw) == next(iter(baseline.values()))
+    props["configuration"]["registries"][0]["username"] = "retained"
+    assert release.app_spec(raw)["properties"]["configuration"]["registries"][0]["username"]
+    props["delegatedIdentities"] = [{"resourceId": "/some-identity"}]
+    with pytest.raises(release.ReleaseError, match="delegated identities"):
+        release.app_spec(raw)
+    props["delegatedIdentities"] = []
+    raw["extendedLocation"] = {"name": "unhandled"}
+    with pytest.raises(release.ReleaseError, match="unsupported resource fields"):
+        release.app_spec(raw)
+
+
+@pytest.mark.parametrize("variant", [
+    "literal", "key-vault", "masked", "empty", "missing", "duplicate", "duplicate-descriptor",
+    "changed-binding", "extra-field", "custom-revision",
+])
+def test_app_only_reads_and_preserves_existing_secret_bindings(modules, capsys, variant):
+    release, *_ = modules
+    apps, _ = app_only_fixture(release)
+    app = deepcopy(next(iter(apps.values())))
+    props = app["properties"]
+    props.update(
+        provisioningState="Succeeded", runningStatus="Running",
+        latestRevisionName="revision", latestReadyRevisionName="revision",
+    )
+    descriptor = {"name": "database-url"}
+    actual = {"name": "database-url", "value": "private-old"}
+    if variant == "key-vault":
+        descriptor.update(
+            keyVaultUrl="https://vault/secrets/database", identity="/existing-identity"
+        )
+        actual = {**descriptor, "value": None}
+    props["configuration"]["secrets"] = [descriptor]
+    secrets = [actual]
+    if variant == "masked":
+        actual["value"] = "**********"
+    elif variant == "empty":
+        actual["value"] = ""
+    elif variant == "missing":
+        secrets = []
+    elif variant == "duplicate":
+        secrets.append(dict(actual))
+    elif variant == "duplicate-descriptor":
+        props["configuration"]["secrets"].append(dict(descriptor))
+    elif variant == "changed-binding":
+        actual["keyVaultUrl"] = "https://different-vault/secrets/database"
+    elif variant == "extra-field":
+        actual["unknown"] = True
+    elif variant == "custom-revision":
+        props["template"]["revisionSuffix"] = "fixed"
+    runner = Mock()
+    runner.json.return_value = secrets
+    subject = release.Release(
+        release.parser().parse_args(["--app-only", "--update-existing"]), runner
+    )
+    subject.frontend_name = "maf-frontend"
+    subject.group, subject.subscription = "group", "subscription"
+    if variant in {"literal", "key-vault"}:
+        result = subject.read_app_spec(app)
+        expected = actual if variant == "literal" else descriptor
+        assert result["properties"]["configuration"]["secrets"] == [expected]
+        assert "--show-values" in runner.json.call_args.args[0]
+    else:
+        with pytest.raises(release.ReleaseError):
+            subject.read_app_spec(app)
+    assert "private-old" not in capsys.readouterr().out
+
+
+def test_app_only_parameters_separate_secrets_from_nonsecret_objects(modules):
+    release, *_ = modules
+    apps, baseline = app_only_fixture(release)
+    subject = release.Release(release.parser().parse_args(["--app-only", "--update-existing"]))
+    subject.backend, subject.frontend = list(apps.values())
+    parameters = subject.app_parameters(baseline)
+    assert parameters["secretValues"] == {
+        "backend": {"database-url": "private-old"}, "frontend": {},
+    }
+    assert "private-old" not in json.dumps(parameters["backend"])
+    first = next(iter(baseline.values()))
+    first["properties"]["template"]["containers"][0]["env"].append(
+        {"name": "ACCIDENTAL_PLAINTEXT", "value": "private-old"}
+    )
+    with pytest.raises(release.ReleaseError, match="secret outside"):
+        subject.app_parameters(baseline)
+
+
+@pytest.mark.parametrize("invalid", [
+    None, "digest", "registry", "repository", "tag", "write-lock", "delete-lock",
+    "missing-output", "bad-status", "manifest-digest", "manifest-write-lock",
+    "manifest-delete-lock", "tag-drift", "post-tag-write-lock", "post-tag-delete-lock",
+])
+@pytest.mark.parametrize("app_only", [False, True])
+def test_build_checks_archive_image_provenance_and_both_lock_scopes(
+    modules, tmp_path, invalid, app_only,
+):
+    release, *_ = modules
+    runner = Mock()
+    subject = release.Release(
+        release.parser().parse_args(
+            ["--app-only", "--update-existing"] if app_only else []
+        ), runner
+    )
+    subject.workspace = tmp_path
+    subject.subscription = "subscription"
+    subject.registry_name, subject.registry_server = "registry", "registry.azurecr.io"
+    commit = "a" * 40
+    tag = commit + "-unique"
+    digest = "sha256:" + "b" * 64
+    responses = []
+    for kind in ("backend", "frontend"):
+        responses.extend([
+            {"status": "Succeeded", "outputImages": [{
+                "digest": digest, "registry": "registry.azurecr.io",
+                "repository": f"model-harness-maf-{kind}", "tag": tag,
+            }]},
+            {"digest": digest, "changeableAttributes": {
+                "writeEnabled": False, "deleteEnabled": False,
+            }},
+            {"digest": digest, "changeableAttributes": {
+                "writeEnabled": False, "deleteEnabled": False,
+            }},
+            {"digest": digest, "changeableAttributes": {
+                "writeEnabled": False, "deleteEnabled": False,
+            }},
+        ])
+    if invalid in {"digest", "registry", "repository", "tag"}:
+        responses[0]["outputImages"][0][invalid] = "mismatch"
+    elif invalid == "write-lock":
+        responses[1]["changeableAttributes"]["writeEnabled"] = True
+    elif invalid == "delete-lock":
+        responses[1]["changeableAttributes"]["deleteEnabled"] = True
+    elif invalid == "missing-output":
+        responses[0]["outputImages"] = None
+    elif invalid == "bad-status":
+        responses[0]["status"] = "Failed"
+    elif invalid == "manifest-digest":
+        responses[2]["digest"] = "sha256:" + "c" * 64
+    elif invalid == "manifest-write-lock":
+        responses[2]["changeableAttributes"]["writeEnabled"] = True
+    elif invalid == "manifest-delete-lock":
+        responses[2]["changeableAttributes"]["deleteEnabled"] = True
+    elif invalid == "tag-drift":
+        responses[3]["digest"] = "sha256:" + "c" * 64
+    elif invalid == "post-tag-write-lock":
+        responses[3]["changeableAttributes"]["writeEnabled"] = True
+    elif invalid == "post-tag-delete-lock":
+        responses[3]["changeableAttributes"]["deleteEnabled"] = True
+    runner.json.side_effect = responses
+
+    def run(command, **kwargs):
+        if command[:2] == ["git", "archive"]:
+            assert commit in command
+            assert command[command.index("--") + 1:] == [
+                "LICENSE", ".dockerignore", "shared", "agent-framework/double-charge/maf",
+            ]
+            path = next(
+                arg.removeprefix("--output=") for arg in command if arg.startswith("--output=")
+            )
+            with release.tarfile.open(path, "w"):
+                pass
+        return ""
+
+    runner.run.side_effect = run
+    if invalid:
+        with pytest.raises(release.ReleaseError):
+            subject.build(commit, tag)
+    else:
+        assert subject.build(commit, tag) == {
+            f"{kind}Image": f"registry.azurecr.io/model-harness-maf-{kind}@{digest}"
+            for kind in ("backend", "frontend")
+        }
+        locks = [
+            c.args[0] for c in runner.run.call_args_list
+            if c.args[0][1:3] == ["acr", "repository"]
+        ]
+        assert len(locks) == 4
+        assert all(c[c.index("--write-enabled") + 1] == "false" for c in locks)
+        assert all(c[c.index("--delete-enabled") + 1] == "false" for c in locks)
+        assert {c[c.index("--image") + 1] for c in locks} == {
+            reference
+            for kind in ("backend", "frontend")
+            for reference in (
+                f"model-harness-maf-{kind}:{tag}", f"model-harness-maf-{kind}@{digest}"
+            )
+        }
+    assert not list(tmp_path.iterdir())
 
 
 def configured_release(
@@ -793,6 +1320,7 @@ async def test_hosted_adapter_executes_explicit_workflow_commands(
                 {
                     "action": "start",
                     "scenario_id": scenario,
+                    "operator_id": identifier,
                     "customer_id": identifier,
                     "existing_case_id": identifier,
                     "idempotency_key": identifier,
@@ -800,10 +1328,21 @@ async def test_hosted_adapter_executes_explicit_workflow_commands(
                 identifier,
             )
             assert started["case_id"] == identifier
+            assert len(started["events"]) <= 20
+            investigation = started["investigation"]
+            assert set(investigation) == {
+                "duplicate_found", "duplicate_summary", "billing_validation", "policy_validation",
+            }
+            assert identifier not in json.dumps(investigation)
             result = started
             if decision:
                 assert started["status"] == "paused" and started["approval_required"]
+                assert investigation["duplicate_found"] is True
+                assert investigation["duplicate_summary"]
+                assert investigation["billing_validation"]["ok"] is True
+                assert investigation["policy_validation"]["ok"] is True
                 checkpoint = {
+                    "operator_id": identifier,
                     "run_id": started["run_id"],
                     "checkpoint_id": started["checkpoint_id"],
                 }
@@ -813,6 +1352,7 @@ async def test_hosted_adapter_executes_explicit_workflow_commands(
                         "action": "approval",
                         "decision": decision,
                         "reviewer_id": identifier,
+                        "reason": "Reviewed fixture evidence.",
                     },
                     identifier,
                 )
@@ -837,6 +1377,46 @@ async def test_hosted_adapter_executes_explicit_workflow_commands(
                     assert result[key.removeprefix("expected_")] == expected, item["id"]
     finally:
         await runtime.close()
+
+
+async def test_hosted_start_identity_survives_a_new_conversation(monkeypatch, runtime, repository):
+    from uuid import uuid4
+
+    from maf_double_charge.application.errors import StartRequestConflictError
+
+    adapter, _ = load_hosted_adapter(monkeypatch)
+    monkeypatch.setattr(adapter, "_runtime", AsyncMock(return_value=runtime))
+    command = {
+        "action": "start", "request_id": str(uuid4()), "operator_id": "hosted-operator",
+        "scenario_id": "no-duplicate",
+    }
+    first = await adapter._execute(command, "conversation-one")
+    second = await adapter._execute(command, "conversation-two")
+    assert first == second
+    assert len(repository.states) == 1
+    assert first["case_id"] not in {"conversation-one", "conversation-two"}
+    with pytest.raises(StartRequestConflictError):
+        await adapter._execute({**command, "operator_id": "another"}, "conversation-three")
+
+
+@pytest.mark.parametrize("pending", [False, True])
+async def test_hosted_handler_returns_explicit_start_reconciliation_errors(monkeypatch, pending):
+    from maf_double_charge.application.errors import (
+        StartRequestConflictError,
+        StartRequestInProgressError,
+    )
+
+    adapter, _ = load_hosted_adapter(monkeypatch)
+    error = (
+        StartRequestInProgressError("original-case", "original-run")
+        if pending else StartRequestConflictError("PRIVATE conflicting fingerprint")
+    )
+    monkeypatch.setattr(adapter, "_execute", AsyncMock(side_effect=error))
+    await adapter.response_handler({"input": '{"action":"start"}'})
+    result = json.loads(adapter.TextResponse.call_args.kwargs["text"])
+    assert result["code"] == ("start_in_progress" if pending else "start_request_conflict")
+    assert "PRIVATE" not in json.dumps(result)
+    assert ("case_id" in result) == pending
 
 
 def test_hosted_history_never_infers_approval_from_chat(monkeypatch):
@@ -940,7 +1520,7 @@ async def test_hosted_commands_correlate_authoritative_state_before_execution(mo
     )
     observed = {}
 
-    async def execute(run_id, command):
+    async def execute(run_id, command, *, operator_id=None):
         assert run_id == state.run_id
         observed.update(current_log_context())
         return state
@@ -948,12 +1528,11 @@ async def test_hosted_commands_correlate_authoritative_state_before_execution(mo
     service = SimpleNamespace(
         get_state=AsyncMock(return_value=state),
         get_outcome=AsyncMock(return_value=None),
+        list_events=AsyncMock(return_value=[]),
         record_approval=AsyncMock(side_effect=execute),
         resume=AsyncMock(side_effect=execute),
     )
-    runtime = SimpleNamespace(
-        service=service, repository=SimpleNamespace(list_events=AsyncMock(return_value=[]))
-    )
+    runtime = SimpleNamespace(service=service)
     monkeypatch.setattr(adapter, "_runtime", AsyncMock(return_value=runtime))
     with telemetry_context(
         conversation_id="platform-conversation", response_id="platform-response"
@@ -961,14 +1540,17 @@ async def test_hosted_commands_correlate_authoritative_state_before_execution(mo
         await adapter._execute(
             {
                 "action": action,
+                "operator_id": "hosted-operator",
                 "run_id": "requested-run",
                 "checkpoint_id": "checkpoint",
                 "decision": "approve",
                 "reviewer_id": "reviewer",
+                "reason": "Reviewed fixture evidence.",
             },
             "platform-conversation",
         )
     assert service.get_state.call_args_list[0].args == ("requested-run",)
+    service.list_events.assert_awaited_once_with(state.run_id)
     assert observed == {
         "case_id": correlation_id(state.case_id),
         "run_id": correlation_id(state.run_id),

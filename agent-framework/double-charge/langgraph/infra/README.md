@@ -63,6 +63,11 @@ Responses start/approval/resume using explicit doubles. Neither is a substitute 
 cloud smoke, seven API/hosted scenarios, browser E2E, SQL/evaluation evidence and
 per-operation trace gates after rollout.
 
-The template enables public service endpoints and the PostgreSQL Azure-services
-firewall rule for a compact educational deployment. Production deployments should
+The existing foundation retains public service endpoints and the PostgreSQL Azure-services
+firewall rule for a compact educational deployment; this app-release template does
+not rewrite them. Production deployments should
 replace those defaults with private networking and explicitly approved egress.
+
+The lane's [physical architecture](../docs/design/architecture.md#4-physical-view)
+and [historical ledger](../docs/design/issues-changes-fixes.md) distinguish this
+configured topology from dated release evidence and current local source changes.

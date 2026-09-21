@@ -48,11 +48,15 @@ async def open_runtime(
     configure_logging(settings.log_level, hosted=hosted)
     async with AsyncExitStack() as stack:
         try:
-            telemetry = configure_telemetry(hosted=hosted)
+            needs_storage = audit is None or checkpointer is None
+            if needs_storage:
+                settings.require_storage()
+            if model is None:
+                settings.require_model()
+            telemetry = configure_telemetry(settings, hosted=hosted)
             stack.callback(telemetry.close)
             # Exporter handlers can be installed by the distro after console setup.
             configure_logging(settings.log_level, hosted=hosted)
-            needs_storage = audit is None or checkpointer is None
             if needs_storage:
                 await setup_storage(settings, verify_only=True)
             if audit is None:

@@ -69,6 +69,8 @@ def create_runtime(
     settings = settings if settings is not None else get_settings()
     if repository is not None and checkpoint_storage_factory is None:
         raise ValueError("an injected repository requires an explicit checkpoint_storage_factory")
+    if repository is None:
+        settings.require_database_url()
     model = model if model is not None else FoundryModelClient(settings)
     repository = (
         repository
@@ -88,7 +90,7 @@ def create_runtime(
         max_tool_attempts=settings.max_tool_attempts,
     )
     return Runtime(
-        service=DoubleChargeService(repository, runner),
+        service=DoubleChargeService(repository, runner, model),
         repository=repository,
         model=model,
         settings=settings,

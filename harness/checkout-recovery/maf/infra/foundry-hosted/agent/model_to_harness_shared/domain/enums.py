@@ -60,4 +60,5 @@ class FailureCode(StrEnum):
     APPROVAL_CONFLICT = "approval_conflict"
     REFUND_IDEMPOTENCY_CONFLICT = "refund_idempotency_conflict"
     REFUND_SUBMISSION_FAILED = "refund_submission_failed"
+    REFUND_OUTCOME_UNCERTAIN = "refund_outcome_uncertain"
     REFUND_VERIFICATION_MISMATCH = "refund_verification_mismatch"

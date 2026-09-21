@@ -61,7 +61,6 @@ describe("selected-run CopilotKit client", () => {
       <CopilotKit runtimeUrl="/api/copilotkit">
         <SelectedRunAssistant
           caseId="case-1"
-          safeContext={{ status: "completed" }}
         />
       </CopilotKit>
     );

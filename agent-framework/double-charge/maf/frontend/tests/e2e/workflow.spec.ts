@@ -1,24 +1,9 @@
-import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { parseAguiSse } from "../../src/api";
 
 test("shows graph, retry evidence, approval controls, and terminal outcome", async ({ page }) => {
   let copilotRuntimePosts = 0;
   let directAssistantPosts = 0;
-  await page.route("**/api/cases", async (route) => {
-    const request = route.request();
-    if (request.method() !== "POST") {
-      await route.continue();
-      return;
-    }
-    await route.continue({
-      postData: JSON.stringify({
-        ...request.postDataJSON(),
-        existing_case_id: `browser-${randomUUID()}`,
-        idempotency_key: `browser-${randomUUID()}`
-      })
-    });
-  });
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
     if (
@@ -35,21 +20,31 @@ test("shows graph, retry evidence, approval controls, and terminal outcome", asy
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Double-charge case workspace" })).toBeVisible();
   await page.getByLabel("Scenario fixture").selectOption("retry-safe-refund");
+  await page.getByLabel("Operator identity", { exact: true }).fill("browser-opener");
   await page.getByRole("button", { name: "Start workflow" }).click();
   await expect(page.getByRole("heading", { name: "Approval checkpoint" })).toBeVisible();
+  await page.getByLabel("Reviewer", { exact: true }).fill("browser-reviewer");
+  await page.getByLabel("Reason", { exact: true }).fill("Verified duplicate charge evidence.");
   await page.getByRole("button", { name: "Record approval" }).click();
+  await page.getByLabel("Resume operator", { exact: true }).fill("browser-resumer");
   await page.getByRole("button", { name: "Resume checkpoint" }).click();
   const retryEvents = page
     .getByRole("region", { name: "Execution timeline" })
     .getByText("tool.call.retried", { exact: true });
   await expect(retryEvents.first()).toBeVisible();
+  const audit = page.getByRole("complementary", { name: "Audit trail" });
+  await expect(audit.getByText("Resume requested", { exact: true })).toBeVisible();
+  await expect(audit.getByText("Processing continued", { exact: true })).toBeVisible();
+  await expect(audit.getByText("Refund verified", { exact: true })).toBeVisible();
+  await expect(audit.getByText("Customer notification simulated", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "outcome" }).click();
   await expect(
     page.locator(".inspector-panel pre").filter({
       hasText: '"terminal_status": "completed_refunded"'
     })
   ).toBeVisible();
-  await expect(page.getByText("No chain-of-thought")).toBeVisible();
+  await page.locator("summary").filter({ hasText: "Safe run explainer" }).click();
+  await expect(page.getByText("No chain-of-thought", { exact: false })).toBeVisible();
   const explanationResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
@@ -77,8 +72,11 @@ test("shows graph, retry evidence, approval controls, and terminal outcome", asy
   expect(copilotRuntimePosts).toBe(1);
   expect(directAssistantPosts).toBe(0);
 
+  await page.getByRole("button", { name: "New case", exact: true }).click();
   await page.getByLabel("Scenario fixture").selectOption("no-duplicate");
+  await page.getByLabel("Operator identity", { exact: true }).fill("browser-second-opener");
   await page.getByRole("button", { name: "Start workflow" }).click();
+  await page.getByRole("button", { name: "outcome", exact: true }).click();
   await expect(
     page.locator(".inspector-panel pre").filter({
       hasText: '"terminal_status": "completed_no_refund"'

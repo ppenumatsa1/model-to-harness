@@ -1,0 +1,17 @@
+**
+!harness/
+!harness/checkout-recovery/
+!harness/checkout-recovery/copilot-sdk/
+!harness/checkout-recovery/copilot-sdk/frontend/
+!harness/checkout-recovery/copilot-sdk/frontend/package.json
+!harness/checkout-recovery/copilot-sdk/frontend/package-lock.json
+!harness/checkout-recovery/copilot-sdk/frontend/.npmrc
+!harness/checkout-recovery/copilot-sdk/frontend/index.html
+!harness/checkout-recovery/copilot-sdk/frontend/tsconfig*.json
+!harness/checkout-recovery/copilot-sdk/frontend/*config.ts
+!harness/checkout-recovery/copilot-sdk/frontend/src/
+!harness/checkout-recovery/copilot-sdk/frontend/src/**
+!harness/checkout-recovery/copilot-sdk/frontend/e2e/
+!harness/checkout-recovery/copilot-sdk/frontend/e2e/**
+!harness/checkout-recovery/copilot-sdk/frontend/nginx/
+!harness/checkout-recovery/copilot-sdk/frontend/nginx/**

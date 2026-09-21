@@ -6,17 +6,24 @@ from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from maf_double_charge.api.app import create_app
 from maf_double_charge.application.models import DurableEvent
+from maf_double_charge.application.ports import ModelResult
 from maf_double_charge.config import Settings
+from maf_double_charge.infrastructure.logging import correlation_id, current_log_context
 from maf_double_charge.infrastructure.telemetry import telemetry_context
 from maf_double_charge.projections.selected_run import selected_run_facts
 from maf_double_charge.projections.workflow_graph import WORKFLOW_GRAPH
 from maf_double_charge.testing.app import create_test_app
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 
 @asynccontextmanager
@@ -30,6 +37,7 @@ async def api_client(app: FastAPI) -> AsyncIterator[AsyncClient]:
 
 def scenario(scenario_id: str = "duplicate-confirmed") -> dict[str, str]:
     return {
+        "operator_id": "api-operator",
         "complaint": "I was charged twice.",
         "customer_id": "customer-100",
         "scenario_id": scenario_id,
@@ -46,6 +54,76 @@ def invocation(thread_id: str, **updates: Any) -> dict[str, Any]:
         "context": [],
         **updates,
     }
+
+
+async def test_start_request_identity_replays_and_conflicts_without_new_run() -> None:
+    app = create_test_app()
+    payload = {**scenario("no-duplicate"), "request_id": str(uuid4())}
+    async with api_client(app) as client:
+        first = await client.post("/api/cases", json=payload)
+        second = await client.post("/api/cases", json=payload)
+        conflict = await client.post(
+            "/api/cases", json={**payload, "complaint": "Different intent."}
+        )
+        invalid = await client.post("/api/cases", json={**payload, "request_id": "not-a-uuid"})
+        assert first.status_code == second.status_code == 200
+        assert first.json() == second.json()
+        assert conflict.status_code == 409
+        assert conflict.json()["detail"]["code"] == "start_request_conflict"
+        assert invalid.status_code == 422
+        assert len((await client.get("/api/cases")).json()["items"]) == 1
+
+
+async def test_start_request_in_progress_exposes_only_safe_reconciliation_ids() -> None:
+    app = create_test_app()
+    payload = {**scenario(), "request_id": str(uuid4())}
+    async with api_client(app) as client:
+        app.state.runtime.service.runner.start = AsyncMock(side_effect=RuntimeError("interrupted"))
+        with pytest.raises(RuntimeError, match="interrupted"):
+            await client.post("/api/cases", json=payload)
+        pending = await client.post("/api/cases", json=payload)
+        assert pending.status_code == 409
+        detail = pending.json()["detail"]
+        assert set(detail) == {"code", "message", "case_id", "run_id"}
+        assert detail["code"] == "start_in_progress"
+        assert (await client.get(f"/api/cases/{detail['case_id']}")).status_code == 200
+
+
+@pytest.mark.parametrize("failure", [ValueError, KeyError])
+async def test_post_claim_model_validation_failure_is_not_a_definite_rejection(failure) -> None:
+    app = create_test_app()
+    payload = {**scenario(), "request_id": str(uuid4())}
+    async with api_client(app) as client:
+        model = app.state.runtime.service.model
+        model.normalize_complaint = AsyncMock(side_effect=failure("PRIVATE model detail"))
+        failed = await client.post("/api/cases", json=payload)
+        assert failed.status_code == 500
+        detail = failed.json()["detail"]
+        assert detail["code"] == "start_execution_failed"
+        assert "PRIVATE" not in failed.text
+        pending = await client.post("/api/cases", json=payload)
+        assert pending.status_code == 409
+        assert pending.json()["detail"]["run_id"] == detail["run_id"]
+        assert len((await client.get("/api/cases")).json()["items"]) == 1
+        model.normalize_complaint.assert_awaited_once()
+
+async def test_demo_scenarios_exclude_internal_verification_mismatch() -> None:
+    async with api_client(create_test_app()) as client:
+        response = await client.get("/api/scenarios")
+    assert response.status_code == 200
+    scenarios = response.json()
+    assert [item["id"] for item in scenarios] == [
+        "duplicate-confirmed",
+        "no-duplicate",
+        "approval-denied",
+        "transient-failure",
+        "retry-safe-refund",
+        "resumed-approval",
+    ]
+    assert all(
+        set(item) == {"id", "description", "expected_terminal_status", "tags"}
+        for item in scenarios
+    )
 
 
 async def test_api_start_events_and_safe_assistant() -> None:
@@ -66,6 +144,7 @@ async def test_api_start_events_and_safe_assistant() -> None:
         started = await client.post(
             "/api/cases",
             json={
+                "operator_id": "api-operator",
                 "complaint": "I was charged twice.",
                 "customer_id": "customer-100",
                 "scenario_id": "no-duplicate",
@@ -155,6 +234,7 @@ async def test_api_keeps_approval_and_resume_as_separate_commands() -> None:
             await client.post(
                 "/api/cases",
                 json={
+                    "operator_id": "api-operator",
                     "complaint": "I was charged twice.",
                     "customer_id": "customer-100",
                     "scenario_id": "duplicate-confirmed",
@@ -167,6 +247,7 @@ async def test_api_keeps_approval_and_resume_as_separate_commands() -> None:
                 "checkpoint_id": started["checkpoint_id"],
                 "decision": "approve",
                 "reviewer_id": "api-reviewer",
+                "reason": "Reviewed fixture evidence.",
             },
         )
         assert approval.status_code == 200
@@ -174,14 +255,14 @@ async def test_api_keeps_approval_and_resume_as_separate_commands() -> None:
         assert still_paused["state"]["status"] == "paused"
         resumed = await client.post(
             f"/api/runs/{started['run_id']}/resume",
-            json={"checkpoint_id": started["checkpoint_id"]},
+            json={"checkpoint_id": started["checkpoint_id"], "operator_id": "api-resumer"},
         )
         assert resumed.status_code == 200
         outcome = await client.get(f"/api/runs/{started['run_id']}/outcome")
         assert outcome.json()["terminal_status"] == "completed_refunded"
 
 
-def test_http_paths_and_request_schemas_are_unchanged() -> None:
+def test_http_paths_and_workspace_request_schemas() -> None:
     schema = create_test_app().openapi()
     assert {
         (method.upper(), path)
@@ -197,9 +278,11 @@ def test_http_paths_and_request_schemas_are_unchanged() -> None:
         ("GET", "/api/copilotkit/runs/{run_id}"),
         ("POST", "/api/copilotkit/agent/selected-run/run"),
         ("POST", "/api/cases"),
+        ("GET", "/api/cases"),
         ("GET", "/api/cases/{case_id}"),
         ("GET", "/api/runs/{run_id}"),
         ("GET", "/api/runs/{run_id}/events"),
+        ("GET", "/api/runs/{run_id}/events/stream"),
         ("GET", "/api/runs/{run_id}/history"),
         ("GET", "/api/runs/{run_id}/outcome"),
         ("POST", "/api/runs/{run_id}/approval"),
@@ -207,8 +290,18 @@ def test_http_paths_and_request_schemas_are_unchanged() -> None:
         ("GET", "/api/runs/{run_id}/ag-ui"),
     }
     contracts = schema["components"]["schemas"]
-    assert contracts["ScenarioInput"]["required"] == ["complaint", "customer_id"]
+    assert schema["paths"]["/api/cases"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/CasePage"}
+    assert set(contracts["CasePage"]["properties"]) == {"items", "next_cursor", "has_more"}
+    assert contracts["CasePage"]["required"] == ["items", "has_more"]
+    assert contracts["CasePage"]["properties"]["items"]["items"] == {
+        "$ref": "#/components/schemas/CaseSummary",
+    }
+    assert contracts["ScenarioInput"]["required"] == ["operator_id", "complaint", "customer_id"]
     assert set(contracts["ScenarioInput"]["properties"]) == {
+        "request_id",
+        "operator_id",
         "complaint",
         "customer_id",
         "account_id",
@@ -222,8 +315,9 @@ def test_http_paths_and_request_schemas_are_unchanged() -> None:
         "checkpoint_id",
         "decision",
         "reviewer_id",
+        "reason",
     ]
-    assert contracts["ResumeCommand"]["required"] == ["checkpoint_id"]
+    assert contracts["ResumeCommand"]["required"] == ["operator_id", "checkpoint_id"]
     assert set(contracts["StartResponse"]["properties"]) == {
         "case_id",
         "run_id",
@@ -237,6 +331,11 @@ def test_http_paths_and_request_schemas_are_unchanged() -> None:
         "memory",
         "outcome",
         "node_statuses",
+        "approval",
+        "can_resume",
+        "can_record_approval",
+        "created_at",
+        "graph",
     }
 
 
@@ -351,8 +450,12 @@ async def test_read_queries_and_cursors_preserve_contract() -> None:
         }
         case = (await client.get(f"/api/cases/{started['case_id']}")).json()
         run = (await client.get(f"/api/runs/{started['run_id']}")).json()
-        assert set(case) == {"state", "memory", "outcome", "node_statuses"}
-        assert set(run) == {"state", "memory", "outcome", "graph"}
+        workspace_fields = {
+            "state", "memory", "outcome", "node_statuses", "graph", "approval",
+            "can_resume", "can_record_approval", "created_at",
+        }
+        assert set(case) == workspace_fields
+        assert set(run) == workspace_fields
         assert case["state"] == run["state"]
         assert case["memory"] == run["memory"]
         assert case["outcome"] == run["outcome"]
@@ -364,6 +467,9 @@ async def test_read_queries_and_cursors_preserve_contract() -> None:
         assert (await client.get(f"{base}/events?after=3")).json() == [
             event for event in events if event["sequence"] > 3
         ]
+        assert (await client.get(f"{base}/events?after=3&limit=2")).json() == [
+            event for event in events if event["sequence"] > 3
+        ][:2]
         assert (await client.get(f"{base}/outcome")).json() == run["outcome"]
 
 
@@ -375,6 +481,7 @@ async def test_read_queries_and_cursors_preserve_contract() -> None:
         ("/api/runs/missing/events", 404, "run not found"),
         ("/api/runs/missing/history", 404, "run not found"),
         ("/api/runs/missing/ag-ui", 404, "run not found"),
+        ("/api/runs/missing/events/stream", 404, "run not found"),
         ("/api/copilotkit/runs/missing", 404, "run not found"),
         ("/api/runs/missing/outcome", 409, "run has not reached a terminal outcome"),
     ],
@@ -396,31 +503,40 @@ async def test_command_validation_and_conflicts() -> None:
             {**scenario(), "account_id": "wrong-account"},
         ):
             assert (await client.post("/api/cases", json=invalid)).status_code == 422
-        for suffix in ("events?after=-1", "ag-ui?after=-1", "ag-ui?follow=invalid"):
+        for suffix in (
+            "events?after=-1", "events?limit=0", "events?limit=501",
+            "ag-ui?after=-1", "ag-ui?follow=invalid",
+        ):
             assert (await client.get(f"/api/runs/missing/{suffix}")).status_code == 422
         assert (
             await client.post(
                 "/api/runs/missing/approval",
-                json={"checkpoint_id": "missing", "decision": "approve", "reviewer_id": "r"},
+                json={"checkpoint_id": "missing", "decision": "approve", "reviewer_id": "r",
+                      "reason": "Reviewed fixture evidence."},
             )
         ).json() == {"detail": "run not found"}
         assert (
-            await client.post("/api/runs/missing/resume", json={"checkpoint_id": "missing"})
+            await client.post(
+                "/api/runs/missing/resume",
+                json={"checkpoint_id": "missing", "operator_id": "api-resumer"},
+            )
         ).status_code == 404
         started = (await client.post("/api/cases", json=scenario())).json()
         base = f"/api/runs/{started['run_id']}"
         checkpoint = started["checkpoint_id"]
         assert (await client.get(f"{base}/outcome")).status_code == 409
         conflicts = [
-            ("resume", {"checkpoint_id": "wrong"}, "checkpoint_id does not match the paused run"),
+            ("resume", {"checkpoint_id": "wrong", "operator_id": "api-resumer"},
+             "checkpoint_id does not match the paused run"),
             (
                 "resume",
-                {"checkpoint_id": checkpoint},
+                {"checkpoint_id": checkpoint, "operator_id": "api-resumer"},
                 "record an approval decision before resuming",
             ),
             (
                 "approval",
-                {"checkpoint_id": "wrong", "decision": "approve", "reviewer_id": "r"},
+                {"checkpoint_id": "wrong", "decision": "approve", "reviewer_id": "r",
+                 "reason": "Reviewed fixture evidence."},
                 "checkpoint_id does not match the current durable checkpoint",
             ),
         ]
@@ -430,18 +546,23 @@ async def test_command_validation_and_conflicts() -> None:
             assert response.json() == {"detail": detail}
         approved = await client.post(
             f"{base}/approval",
-            json={"checkpoint_id": checkpoint, "decision": "deny", "reviewer_id": "r"},
+            json={"checkpoint_id": checkpoint, "decision": "deny", "reviewer_id": "r",
+                  "reason": "Reviewed fixture evidence."},
         )
         assert set(approved.json()) == {"status", "run_id", "state"}
         assert approved.json()["state"]["status"] == "paused"
-        resumed = await client.post(f"{base}/resume", json={"checkpoint_id": checkpoint})
+        resumed = await client.post(
+            f"{base}/resume", json={"checkpoint_id": checkpoint, "operator_id": "api-resumer"}
+        )
         assert set(resumed.json()) == {"status", "state"}
         assert resumed.json()["state"]["terminal_status"] == "closed_denied"
         for route, body, detail in (
-            ("resume", {"checkpoint_id": checkpoint}, "run is not paused"),
+            ("resume", {"checkpoint_id": checkpoint, "operator_id": "api-resumer"},
+             "run is not paused"),
             (
                 "approval",
-                {"checkpoint_id": checkpoint, "decision": "approve", "reviewer_id": "r"},
+                {"checkpoint_id": checkpoint, "decision": "approve", "reviewer_id": "r",
+                 "reason": "Reviewed fixture evidence."},
                 "run is not waiting for approval",
             ),
         ):
@@ -540,6 +661,65 @@ async def test_assistant_request_validation_preserves_error_details() -> None:
             )
             assert response.status_code == 422
             assert response.json() == {"detail": "a user question is required"}
+        missing = await client.post(path, json=invocation("missing", messages=[]))
+        assert missing.status_code == 404
+        assert missing.json() == {"detail": "selected run or case not found"}
+
+
+@pytest.mark.parametrize("select_by", ["run_id", "case_id"])
+@pytest.mark.parametrize("model_fails", [False, True])
+async def test_assistant_service_preserves_context_and_model_parentage(
+    select_by: str, model_fails: bool, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = create_test_app()
+    provider = TracerProvider(shutdown_on_exit=False)
+    exporter = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    tracer = provider.get_tracer("assistant-boundary-test")
+    try:
+        async with api_client(app) as client:
+            started = (await client.post("/api/cases", json=scenario("no-duplicate"))).json()
+            observed = []
+
+            async def explain(question: str, facts: dict[str, object]) -> ModelResult:
+                observed.append(
+                    (trace.get_current_span().get_span_context(), current_log_context())
+                )
+                with tracer.start_as_current_span("chat selected-run"):
+                    if model_fails:
+                        raise RuntimeError("model unavailable")
+                    return ModelResult(text="Safe explanation.", latency_ms=1, model="fake-model")
+
+            monkeypatch.setattr(app.state.runtime.model, "explain_run", explain)
+            before_context = current_log_context()
+            with tracer.start_as_current_span("assistant request") as parent:
+                request = client.post(
+                    "/api/copilotkit/agent/selected-run/run",
+                    json=invocation(started[select_by]),
+                )
+                if model_fails:
+                    with pytest.raises(RuntimeError, match="model unavailable"):
+                        await request
+                else:
+                    response = await request
+                    assert response.status_code == 200
+                    assert f'"threadId": "{started[select_by]}"' in response.text
+                    assert '"runId": "assistant-invocation"' in response.text
+                assert trace.get_current_span() is parent
+                assert current_log_context() == before_context
+            assert observed == [(parent.get_span_context(), {
+                **before_context,
+                "case_id": correlation_id(started["case_id"]),
+                "run_id": correlation_id(started["run_id"]),
+            })]
+            child, exported_parent = exporter.get_finished_spans()
+            assert child.name == "chat selected-run"
+            assert child.parent.span_id == exported_parent.context.span_id
+            assert child.context.trace_id == exported_parent.context.trace_id
+            assert exported_parent.attributes["run_id"] == correlation_id(started["run_id"])
+            assert exported_parent.attributes["case_id"] == correlation_id(started["case_id"])
+    finally:
+        provider.shutdown()
 
 
 async def test_sse_replay_header_precedence_and_keepalive() -> None:
@@ -662,7 +842,8 @@ async def test_approval_and_resume_correlate_explicit_commands(
         )
         assert approved.status_code == 200
         resumed = await client.post(
-            f"{base}/resume", json={"checkpoint_id": started["checkpoint_id"]}
+            f"{base}/resume",
+            json={"checkpoint_id": started["checkpoint_id"], "operator_id": "api-resumer"}
         )
         assert resumed.status_code == 200
         assert correlations == [

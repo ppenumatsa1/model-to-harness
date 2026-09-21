@@ -52,16 +52,35 @@ class ApprovalNodes(NodeContext):
         decision = approval["decision"]
         await self._event(
             state,
+            "run_resumed",
+            "Native execution continued after validating the persisted approval",
+            node=node,
+            status="running",
+            data={"checkpoint_id": approval["checkpoint_id"]},
+            dedupe_key=f"resume-v2:{state['run_id']}",
+        )
+        await self._event(
+            state,
             "human_approval_resolved",
             f"Reviewer decision recorded: {decision}",
             node=node,
             status="resumed",
-            data={"decision": decision},
+            data={
+                "decision": decision, "checkpoint_id": approval["checkpoint_id"],
+                "reviewer_id": approval["reviewer_id"], "reason": approval.get("reason"),
+            },
             dedupe_key=f"approval-resolved:{state['run_id']}",
+        )
+        await self.audit.update_run(
+            state["run_id"],
+            {
+                "status": "running", "current_step": node,
+                "approval_required": False,
+            },
         )
         return {
             "approval_decision": decision,
-            "approval_reviewer": str(response.get("reviewer_id", "unknown")),
+            "approval_reviewer": approval["reviewer_id"],
             "approval_reason": response.get("reason"),
             "approval_checkpoint_label": checkpoint_label,
             "status": "running",

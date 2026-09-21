@@ -4,13 +4,15 @@ from types import SimpleNamespace
 
 import pytest
 from langgraph.checkpoint.memory import InMemorySaver
-from model_to_harness_langgraph.application.records import ApprovalRequest, StartCaseRequest
 from model_to_harness_langgraph.application.service import WorkflowService
 from model_to_harness_langgraph.graph.runner import DoubleChargeWorkflow
 from model_to_harness_langgraph.infrastructure import model_client, telemetry
 from model_to_harness_langgraph.infrastructure.domain_gateway import ToolResult
 from model_to_harness_langgraph.infrastructure.logging import SafeLogFilter
 from model_to_harness_langgraph.testing.audit import InMemoryAuditRepository
+from model_to_harness_langgraph.testing.commands import approval_request as ApprovalRequest
+from model_to_harness_langgraph.testing.commands import resume_request
+from model_to_harness_langgraph.testing.commands import start_request as StartCaseRequest
 from model_to_harness_langgraph.testing.fakes import FakeDomainGateway, FakeModel
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
@@ -95,7 +97,7 @@ async def test_actual_parallel_tool_spans_retries_interrupt_and_safe_parentage(c
             checkpoint_id=result.checkpoint_id, decision="approve", reviewer_id="SECRET reviewer"
         ),
     )
-    await service.resume(result.case_id)
+    await service.resume(result.case_id, resume_request(result))
     spans = captured.get_finished_spans()
     by_id = {s.context.span_id: s for s in spans}
     for span in spans:
@@ -135,7 +137,10 @@ async def test_model_span_wraps_actual_inference_and_real_usage(monkeypatch, cap
     from model_to_harness_langgraph.config import Settings
 
     model = model_client.FoundryComplaintModel(
-        Settings(azure_openai_endpoint="https://example.test", azure_openai_deployment="model"),
+        Settings(
+            _env_file=None, telemetry_enabled=False,
+            azure_openai_endpoint="https://example.test", azure_openai_deployment="model",
+        ),
         credential=object(),
         sync_credential=object(),
         http_client=object(),
@@ -212,6 +217,7 @@ def test_api_partial_exporter_startup_closes_only_new_owned_providers(monkeypatc
 
     monkeypatch.setenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "configured")
     monkeypatch.setattr(trace, "get_tracer_provider", lambda: active[0])
+    monkeypatch.setenv("TELEMETRY_ENABLED", "true")
     monkeypatch.setattr(azure.monitor.opentelemetry, "configure_azure_monitor", configure)
     with pytest.raises(RuntimeError, match="exporter configuration"):
         telemetry.configure_telemetry()
@@ -248,7 +254,7 @@ def test_api_request_spans_use_route_templates_without_urls_or_payloads(monkeypa
 
     monkeypatch.delenv("APPLICATIONINSIGHTS_CONNECTION_STRING", raising=False)
     app = create_app(
-        settings=Settings(_env_file=None),
+        settings=Settings(_env_file=None, telemetry_enabled=False),
         audit=InMemoryAuditRepository(),
         gateway=FakeDomainGateway(),
         model=FakeModel(),
@@ -259,6 +265,7 @@ def test_api_request_spans_use_route_templates_without_urls_or_payloads(monkeypa
             "/api/cases",
             json={
                 "complaint": "SECRET complaint",
+                "operator_id": "SECRET operator",
                 "customer_id": "SECRET customer",
                 "idempotency_key": "SECRET key",
             },

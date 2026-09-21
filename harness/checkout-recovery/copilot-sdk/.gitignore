@@ -1,0 +1,12 @@
+# Generated Foundry metadata, datasets and evaluation evidence
+**/.foundry/
+.acceptance/
+.native-sessions/
+.env.compose
+.env
+.artifacts/
+.venv-cloud/
+/infra/foundry-hosted/agent/copilot-runtime/
+/infra/foundry-hosted/agent/runtime-manifest.json
+/infra/foundry-hosted/agent/checkout_recovery_copilot/
+/infra/foundry-hosted/agent/model_to_harness_shared/

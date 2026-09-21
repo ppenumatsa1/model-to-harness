@@ -1,0 +1,61 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "checkout-recovery-copilot"
+version = "0.1.0"
+description = "Independent checkout recovery using the GitHub Copilot agent runtime"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "github-copilot-sdk[telemetry]==1.0.13",
+  "azure-ai-agentserver-responses==2.1.0",
+  "opentelemetry-proto==1.44.0",
+  "aiohttp>=3.13,<4",
+  "azure-identity>=1.25,<2",
+  "azure-ai-projects>=2.3,<3",
+  "azure-monitor-opentelemetry>=1.8,<2",
+  "opentelemetry-sdk>=1.36,<2",
+  "fastapi>=0.121,<1",
+  "model-to-harness-shared>=0.1.0",
+  "psycopg[binary,pool]>=3.2,<4",
+  "pydantic>=2.12,<3",
+  "pydantic-settings>=2.11,<3",
+  "uvicorn[standard]>=0.38,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.2,<2",
+  "ruff>=0.14,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/src/checkout_recovery_copilot"]
+
+[tool.uv.sources]
+model-to-harness-shared = { path = "../../../shared", editable = true }
+
+[[tool.uv.index]]
+name = "microsoft-package-feed"
+url = "https://packagefeedproxy.microsoft.io/pypi/simple/"
+default = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
+asyncio_mode = "auto"
+testpaths = ["backend/tests"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = ["infra/foundry-hosted/agent/checkout_recovery_copilot", "infra/foundry-hosted/agent/model_to_harness_shared"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/src/checkout_recovery_copilot/api/routers/*.py" = ["B008"]

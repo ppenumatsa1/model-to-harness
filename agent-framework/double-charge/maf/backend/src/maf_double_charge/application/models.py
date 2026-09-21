@@ -134,3 +134,16 @@ class CaseRecord(BaseModel):
     state: WorkflowState
     memory: dict[str, Any] = Field(default_factory=dict)
     outcome: WorkflowOutcome | None = None
+
+
+class CaseSummary(BaseModel):
+    case_id: str
+    run_id: str
+    customer_id: str
+    scenario_id: str
+    status: RunStatus
+    current_step: str
+    approval_required: bool
+    terminal_status: str | None = None
+    created_at: datetime
+    updated_at: datetime

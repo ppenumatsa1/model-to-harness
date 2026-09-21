@@ -36,6 +36,8 @@ async def test_runtime_lifecycle_is_explicit_and_idempotent(
     )
     repository.initialize.assert_not_awaited()
     configure.assert_not_called()
+    assert runtime.service.repository is repository
+    assert runtime.service.model is model
     await runtime.start()
     await runtime.start()
     repository.initialize.assert_awaited_once()

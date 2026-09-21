@@ -158,7 +158,10 @@ class FakeDomainGateway:
         scenario_id: str,
     ) -> ToolResult:
         del run_id, customer_id, message, scenario_id
-        return ToolResult(ok=True, safe_summary="Customer notification sent")
+        return ToolResult(
+            ok=True, value={"simulated": True},
+            safe_summary="Deterministic test notification recorded as sent",
+        )
 
 
 class NoDuplicateGateway(FakeDomainGateway):

@@ -2,13 +2,31 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from model_to_harness_shared import SCENARIO_FIXTURES
 
-from ..dependencies import RepositoryDependency, ServiceDependency
-from ..schemas import CaseView, ScenarioInput, StartResponse
+from ...application.errors import (
+    StartExecutionError,
+    StartRequestConflictError,
+    StartRequestInProgressError,
+)
+from ..dependencies import ServiceDependency
+from ..schemas import CasePage, CaseView, ScenarioInput, StartResponse
 
 router = APIRouter()
+
+
+@router.get("/api/cases", response_model=CasePage)
+async def list_cases(
+    service: ServiceDependency,
+    limit: int = Query(default=10, ge=1, le=100),
+    cursor: str | None = Query(default=None, max_length=512),
+) -> CasePage:
+    try:
+        page = await service.list_cases(limit, cursor)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return CasePage.model_validate(page, from_attributes=True)
 
 
 @router.get("/api/scenarios")
@@ -21,6 +39,7 @@ async def scenarios() -> list[dict[str, Any]]:
             "tags": sorted(fixture.tags),
         }
         for fixture in SCENARIO_FIXTURES.values()
+        if fixture.fixture_id != "verification-mismatch"
     ]
 
 
@@ -29,17 +48,34 @@ async def start_case(command: ScenarioInput, service: ServiceDependency) -> Star
     try:
         result = await service.start(command.to_command())
         return StartResponse.model_validate(result, from_attributes=True)
+    except StartRequestConflictError as exc:
+        raise HTTPException(
+            status_code=409, detail={"code": "start_request_conflict", "message": str(exc)}
+        ) from exc
+    except StartRequestInProgressError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "start_in_progress", "message": str(exc),
+                "case_id": exc.case_id, "run_id": exc.run_id,
+            },
+        ) from exc
+    except StartExecutionError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "start_execution_failed", "message": str(exc),
+                "case_id": exc.case_id, "run_id": exc.run_id,
+            },
+        ) from exc
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/api/cases/{case_id}", response_model=CaseView)
-async def get_case(case_id: str, repository: RepositoryDependency) -> CaseView:
-    state = await repository.get_state_by_case(case_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="case not found")
-    return CaseView(
-        state=state,
-        memory=await repository.get_memory(case_id),
-        outcome=await repository.get_outcome(state.run_id),
-    )
+async def get_case(case_id: str, service: ServiceDependency) -> CaseView:
+    try:
+        workspace = await service.get_case_workspace(case_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="case not found") from exc
+    return CaseView.model_validate(workspace, from_attributes=True)

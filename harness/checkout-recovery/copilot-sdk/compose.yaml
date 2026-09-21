@@ -1,0 +1,22 @@
+name: checkout-recovery-copilot
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: checkoutdev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Create the private .env.compose first}
+      POSTGRES_DB: checkout_recovery_local
+    ports:
+      - "127.0.0.1:45432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

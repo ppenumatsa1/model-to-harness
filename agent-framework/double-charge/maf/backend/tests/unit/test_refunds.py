@@ -22,6 +22,7 @@ async def test_uncertain_refund_is_recovered_from_durable_ledger(
 ) -> None:
     started = await service.start(
         ScenarioInput(
+            operator_id="test-operator",
             complaint="I was charged twice.",
             customer_id="customer-100",
             scenario_id="retry-safe-refund",

@@ -1,7 +1,7 @@
 from typing import Any
 
 from ..projections.outcome import map_framework_outcome
-from ..projections.state import public_state
+from ..projections.state import persisted_state
 from .ports import AuditRepository
 from .records import OutcomeView, RunStatus, StartCaseResponse
 
@@ -12,7 +12,7 @@ class ResultReconciler:
 
     async def persist(self, result: dict[str, Any]) -> StartCaseResponse:
         interrupts = result.get("__interrupt__", ())
-        snapshot = public_state(result)
+        snapshot = persisted_state(result)
         if interrupts:
             pending = interrupts[0]
             checkpoint_id = str(getattr(pending, "id", f"approval:{result['run_id']}"))
@@ -45,6 +45,10 @@ class ResultReconciler:
                 checkpoint_id=checkpoint_id,
             )
 
+        existing = await self.audit.get_run_by_case(result["case_id"])
+        checkpoint_id = (
+            existing.get("checkpoint_id") if existing else result.get("approval_checkpoint_label")
+        )
         if not result.get("terminal_status"):
             current_step = str(result.get("current_step", "running"))
             await self.audit.update_run(
@@ -52,7 +56,7 @@ class ResultReconciler:
                 {
                     "status": "running",
                     "current_step": current_step,
-                    "checkpoint_id": result.get("approval_checkpoint_label"),
+                    "checkpoint_id": checkpoint_id,
                     "approval_required": False,
                     "state": snapshot,
                     "outcome": None,
@@ -64,7 +68,7 @@ class ResultReconciler:
                 status=RunStatus.RUNNING,
                 current_step=current_step,
                 approval_required=False,
-                checkpoint_id=result.get("approval_checkpoint_label"),
+                checkpoint_id=checkpoint_id,
             )
 
         status = str(result["terminal_status"])
@@ -74,7 +78,7 @@ class ResultReconciler:
             {
                 "status": status,
                 "current_step": str(result.get("current_step", status)),
-                "checkpoint_id": result.get("approval_checkpoint_label"),
+                "checkpoint_id": checkpoint_id,
                 "approval_required": False,
                 "state": snapshot,
                 "outcome": outcome.model_dump(mode="json"),
@@ -86,7 +90,7 @@ class ResultReconciler:
             status=RunStatus(status),
             current_step=str(result.get("current_step", status)),
             approval_required=False,
-            checkpoint_id=result.get("approval_checkpoint_label"),
+            checkpoint_id=checkpoint_id,
         )
 
     async def _outcome(self, state: dict[str, Any]) -> OutcomeView:

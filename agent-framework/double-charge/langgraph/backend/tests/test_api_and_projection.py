@@ -9,7 +9,7 @@ from model_to_harness_langgraph.testing.fakes import FakeDomainGateway, FakeMode
 
 def test_api_pause_approval_resume_and_redacted_projection():
     app = create_app(
-        settings=Settings(database_url="unused"),
+        settings=Settings(_env_file=None, database_url="unused", telemetry_enabled=False),
         audit=InMemoryAuditRepository(),
         gateway=FakeDomainGateway(),
         model=FakeModel(),
@@ -20,6 +20,7 @@ def test_api_pause_approval_resume_and_redacted_projection():
             "/api/cases",
             json={
                 "complaint": "I was charged twice for the same purchase.",
+                "operator_id": "api-test-operator",
                 "customer_id": "customer-1",
                 "scenario_id": "duplicate_confirmed",
             },
@@ -34,10 +35,14 @@ def test_api_pause_approval_resume_and_redacted_projection():
                 "checkpoint_id": body["checkpoint_id"],
                 "decision": "approve",
                 "reviewer_id": "reviewer-1",
+                "reason": "Evidence reviewed",
             },
         )
         assert approved.status_code == 202
-        resumed = client.post(f"/api/cases/{body['case_id']}/resume")
+        resumed = client.post(
+            f"/api/cases/{body['case_id']}/resume",
+            json={"checkpoint_id": body["checkpoint_id"], "operator_id": "api-test-operator"},
+        )
         assert resumed.status_code == 200
         assert resumed.json()["status"] == "completed"
 
@@ -73,7 +78,7 @@ def test_api_pause_approval_resume_and_redacted_projection():
 
 def test_wrong_checkpoint_is_rejected():
     app = create_app(
-        settings=Settings(database_url="unused"),
+        settings=Settings(_env_file=None, database_url="unused", telemetry_enabled=False),
         audit=InMemoryAuditRepository(),
         gateway=FakeDomainGateway(),
         model=FakeModel(),
@@ -84,6 +89,7 @@ def test_wrong_checkpoint_is_rejected():
             "/api/cases",
             json={
                 "complaint": "I was charged twice for the same purchase.",
+                "operator_id": "api-test-operator",
                 "customer_id": "customer-1",
             },
         ).json()
@@ -93,6 +99,7 @@ def test_wrong_checkpoint_is_rejected():
                 "checkpoint_id": "wrong",
                 "decision": "approve",
                 "reviewer_id": "reviewer-1",
+                "reason": "Evidence reviewed",
             },
         )
         assert response.status_code == 409
@@ -100,7 +107,7 @@ def test_wrong_checkpoint_is_rejected():
 
 def test_copilotkit_bridge_is_read_only_and_discards_untrusted_context():
     app = create_app(
-        settings=Settings(database_url="unused"),
+        settings=Settings(_env_file=None, database_url="unused", telemetry_enabled=False),
         audit=InMemoryAuditRepository(),
         gateway=FakeDomainGateway(),
         model=FakeModel(),
@@ -111,6 +118,7 @@ def test_copilotkit_bridge_is_read_only_and_discards_untrusted_context():
             "/api/cases",
             json={
                 "complaint": "I was charged twice for the same purchase.",
+                "operator_id": "api-test-operator",
                 "customer_id": "customer-1",
             },
         ).json()

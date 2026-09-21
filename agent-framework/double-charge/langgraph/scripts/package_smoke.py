@@ -116,7 +116,7 @@ async def runtime_context():
     lifecycle.append("open")
     try:
         async with module.open_runtime(
-            Settings(_env_file=None), hosted=True,
+            Settings(_env_file=None, telemetry_enabled=False), hosted=True,
             audit=audit, model=FakeModel(),
             gateway=FakeDomainGateway(), checkpointer=saver,
         ) as runtime:
@@ -155,16 +155,25 @@ async def smoke():
                 assert result["ok"] is ok, result
                 assert lifecycle[before:] == ["open", "close"]
                 return result["case"] if ok else result
-            started = await command({"action": "start", "case_id": "packaged-smoke"})
+            started = await command({
+                "action": "start", "case_id": "packaged-smoke", "operator_id": "package-smoke",
+            })
             assert started["status"] == "paused"
             await command({
                 "action": "approval", "case_id": started["case_id"],
                 "checkpoint_id": started["checkpoint_id"],
                 "decision": "approve", "reviewer_id": "package-smoke",
+                "reason": "Offline package smoke evidence reviewed",
             })
-            resumed = await command({"action": "resume", "case_id": started["case_id"]})
+            resumed = await command({
+                "action": "resume", "case_id": started["case_id"],
+                "checkpoint_id": started["checkpoint_id"], "operator_id": "package-smoke",
+            })
             assert resumed["status"] == "completed"
-            failure = await command({"action": "resume", "case_id": "missing"}, ok=False)
+            failure = await command({
+                "action": "resume", "case_id": "missing",
+                "checkpoint_id": "missing-checkpoint", "operator_id": "package-smoke",
+            }, ok=False)
             assert failure["error"]["code"] == "case_not_found"
 asyncio.run(smoke())
 spans = exporter.get_finished_spans()

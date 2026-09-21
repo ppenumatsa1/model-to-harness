@@ -24,8 +24,9 @@ This project was built with the microsoft-foundry skill. Before working on or an
   not introduce a second workflow authority or infer approval from conversation.
 - Keep frontend traffic same-origin through the nginx `/api` proxy. Do not expose the
   internal backend Container App directly.
-- Keep the Foundry project connected to this lane's Application Insights resource
-  through `infra/main.bicep`. Do not set the platform-reserved
+- Keep the existing Foundry project connected to this lane's Application Insights
+  resource; the app-release `infra/main.bicep` references that foundation rather
+  than rewriting monitoring connections. Do not set the platform-reserved
   `APPLICATIONINSIGHTS_CONNECTION_STRING` in the hosted `azure.yaml`.
 - Preserve the Responses trace boundary and safe correlation hierarchy:
   `foundry.responses.invoke` -> `workflow.run` -> workflow node/model/tool evidence.
@@ -48,6 +49,14 @@ This project was built with the microsoft-foundry skill. Before working on or an
 - Update `docs/design/issues-changes-fixes.md` as problems are found and fixed.
   Use focused intermediate checks, then final integrated acceptance after review;
   never equate active hosted metadata or aggregate telemetry with business readiness.
+- Maintain the seven lane-owned `docs/design/` documents linked from the lane
+  README. Preserve native LangGraph history/SSE, explicit operator/reviewer
+  commands, required new-decision reasons and separate resume. Never infer
+  missing historical actors or claim another lane's acceptance results.
+- Local checkout settings read only this lane's absolute root `.env`; installed
+  packages remain environment-driven. Preserve constructor and `_env_file`
+  overrides. Test factories disable dotenv/export and use explicit doubles.
+  Never read private dotenv in tests or run integration suites against cloud storage.
 - Never trace complaint text, prompts, model content, raw checkpoint state,
   idempotency keys, credentials, connection strings, or unrestricted tool
   arguments/results.

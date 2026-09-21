@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 from maf_double_charge.application.errors import (
     RefundIdempotencyConflictError,
+    StartRequestConflictError,
+    StartRequestInProgressError,
     StorageReadinessError,
 )
 from maf_double_charge.application.models import (
     ApprovalResponse,
+    CaseSummary,
     DurableEvent,
     RefundLedgerEntry,
+    StartResult,
     WorkflowState,
 )
 from model_to_harness_shared import WorkflowOutcome
@@ -62,20 +67,68 @@ class PostgresRepository:
 
     async def create_run(self, state: WorkflowState) -> None:
         async with self.pool.connection() as conn:
-            await conn.execute(
-                """
+            await self._create_run(conn, state)
+
+    @staticmethod
+    async def _create_run(conn: AsyncConnection, state: WorkflowState) -> None:
+        await conn.execute(
+            """
                 INSERT INTO runs (run_id, case_id, status, current_step, state, checkpoint_id)
                 VALUES (%s, %s, %s, %s, %s::jsonb, %s)
                 """,
-                (
-                    state.run_id,
-                    state.case_id,
-                    state.status.value,
-                    state.current_step,
-                    state.model_dump_json(),
-                    state.checkpoint_id,
-                ),
+            (
+                state.run_id,
+                state.case_id,
+                state.status.value,
+                state.current_step,
+                state.model_dump_json(),
+                state.checkpoint_id,
+            ),
+        )
+
+    async def claim_start(
+        self, request_id: str, fingerprint: str, state: WorkflowState
+    ) -> StartResult | None:
+        async with self.pool.connection() as conn:
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(1296123458, hashtext(%s))", (request_id,)
             )
+            cursor = await conn.execute(
+                """
+                SELECT s.command_fingerprint, s.result, s.run_id, r.case_id
+                FROM start_requests s JOIN runs r USING (run_id)
+                WHERE s.request_id = %s::uuid
+                """,
+                (request_id,),
+            )
+            row = await cursor.fetchone()
+            if row is not None:
+                if row["command_fingerprint"] != fingerprint:
+                    raise StartRequestConflictError("Start request is bound to another command.")
+                if row["result"] is None:
+                    raise StartRequestInProgressError(row["case_id"], row["run_id"])
+                return StartResult.model_validate(row["result"])
+            await self._create_run(conn, state)
+            await conn.execute(
+                """
+                INSERT INTO start_requests (request_id, command_fingerprint, run_id)
+                VALUES (%s::uuid, %s, %s)
+                """,
+                (request_id, fingerprint, state.run_id),
+            )
+        return None
+
+    async def complete_start(self, request_id: str, result: StartResult) -> None:
+        async with self.pool.connection() as conn:
+            cursor = await conn.execute(
+                """
+                UPDATE start_requests SET result = %s::jsonb, completed_at = now()
+                WHERE request_id = %s::uuid AND run_id = %s AND result IS NULL
+                """,
+                (result.model_dump_json(), request_id, result.run_id),
+            )
+            if cursor.rowcount != 1:
+                raise StartRequestConflictError("Start receipt cannot be replaced.")
 
     async def save_state(self, state: WorkflowState) -> None:
         async with self.pool.connection() as conn:
@@ -106,6 +159,39 @@ class PostgresRepository:
             row = await result.fetchone()
         return WorkflowState.model_validate(row["state"]) if row else None
 
+    async def get_run_created_at(self, run_id: str) -> datetime:
+        async with self.pool.connection() as conn:
+            result = await conn.execute("SELECT created_at FROM runs WHERE run_id = %s", (run_id,))
+            row = await result.fetchone()
+        if row is None:
+            raise KeyError("run not found")
+        return row["created_at"]
+
+    async def list_cases(
+        self, limit: int, before: tuple[datetime, str] | None = None
+    ) -> list[CaseSummary]:
+        async with self.pool.connection() as conn:
+            result = await conn.execute(
+                """
+                SELECT state, created_at, updated_at FROM runs
+                WHERE (%s::timestamptz IS NULL OR (created_at, run_id) < (%s, %s))
+                ORDER BY created_at DESC, run_id DESC LIMIT %s
+                """,
+                (
+                    before[0] if before else None,
+                    before[0] if before else None,
+                    before[1] if before else None,
+                    limit,
+                ),
+            )
+            rows = await result.fetchall()
+        return [
+            CaseSummary.model_validate(
+                {**row["state"], "created_at": row["created_at"], "updated_at": row["updated_at"]}
+            )
+            for row in rows
+        ]
+
     async def save_memory(self, case_id: str, memory: dict[str, object]) -> None:
         async with self.pool.connection() as conn:
             await conn.execute(
@@ -126,6 +212,11 @@ class PostgresRepository:
 
     async def append_event(self, event: DurableEvent) -> DurableEvent:
         async with self.pool.connection() as conn:
+            # Lock before sequence allocation, through commit, so replay cannot skip late commits.
+            # This dedicated audit namespace never serializes the parallel branch work itself.
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(1296123457, hashtext(%s))", (event.run_id,)
+            )
             result = await conn.execute(
                 """
                 INSERT INTO execution_events
@@ -152,15 +243,17 @@ class PostgresRepository:
             row = await result.fetchone()
         return event.model_copy(update={"sequence": row["sequence"]})
 
-    async def list_events(self, run_id: str, after: int = 0) -> list[DurableEvent]:
+    async def list_events(
+        self, run_id: str, after: int = 0, limit: int | None = None
+    ) -> list[DurableEvent]:
         async with self.pool.connection() as conn:
             result = await conn.execute(
                 """
                 SELECT sequence, event_id::text, case_id, run_id, event_type, node, transition,
                        checkpoint_id, retry_attempt, idempotency_key, summary, payload, created_at
-                FROM execution_events WHERE run_id = %s AND sequence > %s ORDER BY sequence
+                FROM execution_events WHERE run_id = %s AND sequence > %s ORDER BY sequence LIMIT %s
                 """,
-                (run_id, after),
+                (run_id, after, limit),
             )
             rows = await result.fetchall()
         return [DurableEvent.model_validate(row) for row in rows]

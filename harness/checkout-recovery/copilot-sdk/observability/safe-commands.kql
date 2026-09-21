@@ -1,0 +1,21 @@
+// Replace every placeholder with values from the selected deployment.
+// This query intentionally projects only safe request metadata and hashed correlations.
+let lookback = 24h;
+let hostedAgentName = "REPLACE_WITH_HOSTED_AGENT_NAME";
+let hostedAgentVersion = "REPLACE_WITH_HOSTED_AGENT_VERSION";
+requests
+| where timestamp > ago(lookback)
+| extend agentName = coalesce(
+    tostring(customDimensions["gen_ai.agent.name"]),
+    tostring(customDimensions["azure.ai.agentserver.agent_name"])
+  )
+| extend agentVersion = coalesce(
+    tostring(customDimensions["gen_ai.agent.version"]),
+    tostring(customDimensions["agent.version"])
+  )
+| where agentName == hostedAgentName and agentVersion == hostedAgentVersion
+| project timestamp, operation_Id, id, name, success, resultCode, duration,
+    agentName, agentVersion,
+    safeCaseId = tostring(customDimensions["checkout.case_hash"]),
+    safeRunId = tostring(customDimensions["checkout.run_hash"])
+| order by timestamp desc

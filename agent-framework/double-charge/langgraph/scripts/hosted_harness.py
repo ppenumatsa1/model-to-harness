@@ -182,6 +182,7 @@ def run_scenarios(
         started = send(
             {
                 "action": "start",
+                "operator_id": identifier,
                 "scenario_id": scenario,
                 "complaint": "Please investigate two captured charges for one purchase.",
                 "customer_id": identifier,
@@ -206,6 +207,7 @@ def run_scenarios(
                     "checkpoint_id": checkpoint,
                     "decision": decision,
                     "reviewer_id": identifier,
+                    "reason": "Acceptance harness reviewed the deterministic scenario evidence",
                 }
             )["case"]
             require(recorded.get("status") == "paused", "Approval implicitly resumed the graph")
@@ -213,7 +215,10 @@ def run_scenarios(
                 recorded.get("outcome") is None,
                 "Approval pause must not have a terminal outcome",
             )
-            result = send({"action": "resume", "case_id": identifier})["case"]
+            result = send({
+                "action": "resume", "case_id": identifier,
+                "checkpoint_id": checkpoint, "operator_id": identifier,
+            })["case"]
         require(
             result.get("case_id") == identifier and result.get("run_id") == run_id,
             "Hosted reconstruction changed durable identity",

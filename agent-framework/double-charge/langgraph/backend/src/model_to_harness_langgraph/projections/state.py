@@ -35,6 +35,14 @@ class PublicState(SafeProjection):
     safe_summaries: list[str] = Field(default_factory=list)
 
 
+def persisted_state(state: dict[str, Any]) -> dict[str, Any]:
+    result = public_state(state)
+    complaint = state.get("complaint")
+    if isinstance(complaint, str):
+        result["complaint"] = complaint[:4000]
+    return result
+
+
 class SelectedMemory(SafeProjection):
     case_id: str | None = None
     duplicate_decision: str | None = None

@@ -25,6 +25,7 @@ async def settings():
     suffix = uuid4().hex[:12]
     selected = Settings(
         _env_file=None,
+        telemetry_enabled=False,
         database_url=DATABASE,
         langgraph_schema=f"lg_app_{suffix}",
         langgraph_checkpoint_schema=f"lg_cp_{suffix}",

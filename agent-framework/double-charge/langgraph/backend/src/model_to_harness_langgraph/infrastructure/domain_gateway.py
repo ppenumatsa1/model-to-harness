@@ -266,6 +266,7 @@ class SharedDomainGateway:
         return ToolResult(
             ok=True,
             safe_summary="The deterministic teaching notification was recorded as sent",
+            value={"simulated": True},
         )
 
 

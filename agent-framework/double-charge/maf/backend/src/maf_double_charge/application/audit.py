@@ -7,6 +7,7 @@ from .models import DurableEvent, WorkflowState
 from .ports import Repository
 
 logger = logging.getLogger(__name__)
+BUSINESS_AUDIT_VERSION = 2
 
 
 class Audit:
@@ -24,6 +25,7 @@ class Audit:
         retry_attempt: int | None = None,
         checkpoint_id: str | None = None,
         payload: dict[str, Any] | None = None,
+        actor_id: str | None = None,
     ) -> None:
         await self.repository.append_event(
             DurableEvent(
@@ -41,7 +43,13 @@ class Audit:
                     else None
                 ),
                 summary=summary,
-                payload=payload or {},
+                payload={
+                    **(payload or {}),
+                    "audit_version": BUSINESS_AUDIT_VERSION,
+                    "actor_id": actor_id if actor_id is not None else "maf-workflow",
+                    "actor_type": "human" if actor_id is not None else "system",
+                    "actor_source": "operator_supplied" if actor_id is not None else "system",
+                },
             )
         )
         logger.info(

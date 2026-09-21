@@ -137,7 +137,11 @@ parents were absent, even though the business run completed successfully.
 Several records had `itemCount > 1`, indicating sampling. An unset ARM
 `SamplingPercentage` alone does not establish that SDK/collector sampling is off.
 See the [sampling guidance](https://learn.microsoft.com/azure/azure-monitor/app/opentelemetry-sampling)
-and the [issue ledger](../../../../docs/design/issues-changes-fixes.md) for exact evidence.
+and the [MAF issue ledger](../docs/design/issues-changes-fixes.md) for exact evidence.
+Version-6/version-8 observations below are historical 2026-09-10 release evidence,
+not acceptance of the later local workspace, command-actor or configuration changes.
+See the lane's [4+1 architecture](../docs/design/architecture.md) for current
+audit, projection and telemetry ownership.
 
 ### Hosted sampling policy
 

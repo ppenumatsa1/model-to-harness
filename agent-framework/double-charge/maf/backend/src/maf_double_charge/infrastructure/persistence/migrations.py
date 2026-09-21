@@ -290,7 +290,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         applied = asyncio.run(
             apply_migrations(
-                args.database_url or settings.database_url,
+                args.database_url or settings.require_database_url(),
                 args.schema or settings.database_schema,
                 migrations_dir=args.migrations_dir,
                 require_empty=args.require_empty,

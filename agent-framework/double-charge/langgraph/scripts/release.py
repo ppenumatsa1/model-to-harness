@@ -392,6 +392,7 @@ def stage_sources(destination: Path, runner: Runner) -> dict[str, str]:
                     "frontend/tsconfig.node.json",
                     "frontend/tsconfig.app.json",
                     "frontend/vite.config.ts",
+                    "frontend/server-config.ts",
                     "infra/container/Dockerfile",
                     "infra/app/frontend.Dockerfile",
                     "infra/app/nginx.conf.template",

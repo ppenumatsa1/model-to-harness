@@ -10,14 +10,14 @@ export function RunInspector({
 }: {
   state: WorkflowState | null;
   memory: Record<string, unknown>;
-  outcome?: Outcome;
+  outcome?: Outcome | null;
 }) {
   const [tab, setTab] = useState<Tab>("state");
   return (
     <section className="panel inspector-panel" aria-label="Run data inspector">
       <div className="tabs">
         {(["state", "memory", "outcome"] as Tab[]).map((item) => (
-          <button className={tab === item ? "active" : ""} key={item} onClick={() => setTab(item)}>
+          <button aria-pressed={tab === item} className={tab === item ? "active" : ""} key={item} onClick={() => setTab(item)}>
             {item}
           </button>
         ))}
@@ -32,7 +32,7 @@ export function RunInspector({
             ? state
             : tab === "memory"
               ? memory
-              : outcome ?? { status: "Outcome is available after a terminal route." },
+              : outcome ?? { status: "Pending — no persisted outcome is available yet." },
           null,
           2
         )}

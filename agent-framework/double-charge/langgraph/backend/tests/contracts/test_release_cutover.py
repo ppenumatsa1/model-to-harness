@@ -324,6 +324,8 @@ def test_build_staging_excludes_credentials_caches_evaluations_and_other_lane(
         "agent-framework/double-charge/langgraph/infra/foundry-hosted/agent/.foundry/results.json",
         "agent-framework/double-charge/langgraph/backend/src/model_to_harness_langgraph/__pycache__/x.pyc",
         "agent-framework/double-charge/maf/backend/src/private.py",
+        "agent-framework/double-charge/langgraph/frontend/server-config.ts",
+        "agent-framework/double-charge/langgraph/frontend/unrelated-private-config.ts",
     ]
     for name in names:
         path = root / name
@@ -336,7 +338,7 @@ def test_build_staging_excludes_credentials_caches_evaluations_and_other_lane(
 
     stage = tmp_path / "stage"
     manifest = release.stage_sources(stage, Tracked())
-    assert set(manifest) == {names[index] for index in (0, 1, 3, 4, 5)}
+    assert set(manifest) == {names[index] for index in (0, 1, 3, 4, 5, 12)}
     assert {
         path.relative_to(stage).as_posix() for path in stage.rglob("*") if path.is_file()
     } == set(manifest)

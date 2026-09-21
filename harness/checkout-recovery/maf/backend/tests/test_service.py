@@ -1,6 +1,11 @@
 import pytest
-from checkout_recovery_maf.application import CheckoutRecoveryService, InvalidCaseCommandError
+from checkout_recovery_maf.application import (
+    CaseNotFoundError,
+    CheckoutRecoveryService,
+    InvalidCaseCommandError,
+)
 from checkout_recovery_maf.infrastructure import InMemoryCaseRepository
+from checkout_recovery_maf.projections import project_artifact, project_case, project_event
 from model_to_harness_shared import (
     CheckoutApprovalDecision,
     CheckoutFailureCode,
@@ -12,6 +17,36 @@ from model_to_harness_shared import (
 
 def make_service() -> CheckoutRecoveryService:
     return CheckoutRecoveryService(InMemoryCaseRepository())
+
+
+def test_safe_queries_project_without_mutating_domain_or_audit():
+    repository = InMemoryCaseRepository()
+    service = CheckoutRecoveryService(repository)
+    case = service.start_case("captured-payment-approved-remediation")
+    repository.save_framework_state(
+        case.case_id, {"workspace": {"plan.md": "PRIVATE-WORKSPACE-CANARY"}}
+    )
+    before_case = case.model_dump_json()
+    before_events = service.events(case.case_id)
+    assert service.get_case_response(case.case_id) == project_case(case)
+    assert service.list_event_responses(case.case_id) == [
+        project_event(event) for event in before_events
+    ]
+    assert service.get_workspace_artifact_response(case.case_id) == project_artifact(case.artifact)
+    assert service.get_case(case.case_id).model_dump_json() == before_case
+    assert service.events(case.case_id) == before_events
+    safe_json = service.get_case_response(case.case_id).model_dump_json()
+    assert "PRIVATE-WORKSPACE-CANARY" not in safe_json
+    assert service.get_case(case.case_id).order_id
+    assert "order_id" not in service.get_case_response(case.case_id).model_dump()
+
+
+@pytest.mark.parametrize(
+    "query", ["get_case_response", "list_event_responses", "get_workspace_artifact_response"]
+)
+def test_safe_queries_preserve_missing_case_errors(query):
+    with pytest.raises(CaseNotFoundError):
+        getattr(make_service(), query)("missing")
 
 
 def test_recovers_inventory_and_verifies_authoritative_records() -> None:

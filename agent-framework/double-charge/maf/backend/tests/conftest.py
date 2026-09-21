@@ -3,10 +3,21 @@ from __future__ import annotations
 import pytest
 from maf_double_charge.application.service import DoubleChargeService
 from maf_double_charge.bootstrap import Runtime, create_runtime
-from maf_double_charge.config import Settings
+from maf_double_charge.config import Settings, get_settings
 from maf_double_charge.testing.checkpoints import InMemoryRunCheckpointStorage
 from maf_double_charge.testing.model import FakeModelClient
 from maf_double_charge.testing.repository import InMemoryRepository
+
+
+@pytest.fixture(autouse=True)
+def isolated_configuration(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+        monkeypatch.delenv(name.lower(), raising=False)
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture
@@ -22,6 +33,7 @@ def model() -> FakeModelClient:
 @pytest.fixture
 def settings() -> Settings:
     return Settings(
+        _env_file=None,
         foundry_project_endpoint=None,
         foundry_model=None,
         applicationinsights_connection_string=None,

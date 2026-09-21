@@ -74,7 +74,7 @@ Handoffs, supervisor/subagent delegation, and evaluator/revision loops are usefu
 
 ## 6. Worked example: one double-charge case, two implementations
 
-The [business rules](../design/business-rules.md) come before framework syntax. A duplicate requires two distinct captured charges with matching account, purchase reference, amount, and currency. Eligible refunds require approval. Successful refund completion requires a separate verification step.
+The business rules ([MAF](../../agent-framework/double-charge/maf/docs/design/business-rules.md), [LangGraph](../../agent-framework/double-charge/langgraph/docs/design/business-rules.md)) come before framework syntax. A duplicate requires two distinct captured charges with matching account, purchase reference, amount, and currency. Eligible refunds require approval. Successful refund completion requires a separate verification step.
 
 The main path is the same in both implementations. Progress is checkpointed while waiting for approval; the reviewer decision is recorded before execution resumes.
 
@@ -235,7 +235,7 @@ In this repository, durable events are the source for UI projections. AG-UI does
 
 The runtime is the execution substrate beneath the framework: local, self-hosted, or managed. Depending on its implementation and configuration, it supplies workers, persistence infrastructure, isolation, scheduling, recovery, and scaling. The framework still has its own execution/checkpoint semantics; the application still owns approval, retry policy, idempotency, and completion rules. Framework and runtime describe responsibilities that may be supplied by the same product.
 
-The [repository architecture](../design/architecture.md) documents the independent lanes and operating choices. Those details are implementation references, not a claim of current live health, real payment processing, or production readiness. **Runtime recovery does not imply business correctness.** The runtime chapter explores these operating responsibilities in depth.
+The repository architecture ([MAF](../../agent-framework/double-charge/maf/docs/design/architecture.md), [LangGraph](../../agent-framework/double-charge/langgraph/docs/design/architecture.md)) documents the independent lanes and operating choices. Those details are implementation references, not a claim of current live health, real payment processing, or production readiness. **Runtime recovery does not imply business correctness.** The runtime chapter explores these operating responsibilities in depth.
 
 ## 8. From coordination to the harness
 
@@ -243,7 +243,7 @@ A framework is valuable when it makes the next permitted action, current state, 
 
 For the double-charge case, the important evidence is not that a graph finished. It is that approval was recorded, exactly one matching refund was verified, failures followed explicit routes, and durable history explains the outcome.
 
-The implementation companions—[requirements](../design/prd.md), [business rules](../design/business-rules.md), [approval conditions](../design/hitl-approval-conditions.md), and [architecture](../design/architecture.md)—define that contract before either framework expresses it.
+The implementation companions—requirements ([MAF](../../agent-framework/double-charge/maf/docs/design/prd.md), [LangGraph](../../agent-framework/double-charge/langgraph/docs/design/prd.md)), business rules ([MAF](../../agent-framework/double-charge/maf/docs/design/business-rules.md), [LangGraph](../../agent-framework/double-charge/langgraph/docs/design/business-rules.md)), approval conditions ([MAF](../../agent-framework/double-charge/maf/docs/design/business-rules.md#approval-and-resume-rules), [LangGraph](../../agent-framework/double-charge/langgraph/docs/design/business-rules.md#approval-and-resume-rules)), and architecture ([MAF](../../agent-framework/double-charge/maf/docs/design/architecture.md), [LangGraph](../../agent-framework/double-charge/langgraph/docs/design/architecture.md))—define that contract before either framework expresses it.
 
 The next question is what surrounds that coordination: how the agent receives relevant context, accesses tools, works with artifacts, stays within permissions, and checks its result.
 

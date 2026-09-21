@@ -37,7 +37,7 @@ class RefundNodes(NodeContext):
                 "Existing durable refund found for the same request",
                 node=node,
                 status="completed",
-                data={"refund_id": existing["refund_id"]},
+                data={"refund_id": existing["refund_id"], "recovered_existing": True},
             )
             return {
                 "refund_attempts": attempt,
@@ -91,7 +91,10 @@ class RefundNodes(NodeContext):
                 "Refund response was uncertain; retrying with the same idempotency key",
                 node=node,
                 status="retrying",
-                data={"tool": "billing.submit_refund", "attempt": attempt, "route": "retry"},
+                data={
+                    "tool": "billing.submit_refund", "attempt": attempt,
+                    "route": "retry", "uncertain": True,
+                },
             )
         return {
             "refund_attempts": attempt,
@@ -149,7 +152,11 @@ class RefundNodes(NodeContext):
             result.safe_summary or f"Refund verification found {count} matching record(s)",
             node=node,
             status="completed" if verified else "failed",
-            data={"verified_count": count, "refund_id": result.value.get("refund_id")},
+            data={
+                "verified": verified, "verified_count": count,
+                "refund_id": result.value.get("refund_id"),
+                "failure_code": None if verified else result.code or "VERIFY_MISMATCH",
+            },
         )
         return {
             "refund_status": "verified" if verified else "mismatch",

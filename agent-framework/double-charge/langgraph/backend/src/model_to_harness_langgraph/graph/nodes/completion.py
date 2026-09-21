@@ -62,27 +62,34 @@ class CompletionNodes(NodeContext):
         refund_status: str | None = None,
         notification_status: str | None = None,
     ) -> dict[str, Any]:
+        effective_refund = refund_status or state.get("refund_status", "not_requested")
+        effective_notification = notification_status or state.get("notification_status", "not_sent")
         await self._event(
             state,
             "run_completed" if terminal_status != "failed" else "run_failed",
             summary,
             node=terminal_status,
             status=terminal_status,
-            data={"failure_code": state.get("failure_code")},
+            data={
+                "terminal_status": terminal_status,
+                "refund_status": effective_refund,
+                "refund_id": state.get("refund_id"),
+                "notification_status": effective_notification,
+                "failure_code": state.get("failure_code"),
+            },
         )
         selected_memory = {
             "case_id": state["case_id"],
             "duplicate_decision": state.get("duplicate_decision", "unknown"),
-            "refund_status": refund_status or state.get("refund_status", "not_requested"),
+            "refund_status": effective_refund,
         }
         await self.audit.upsert_memory(state["customer_id"], state["case_id"], selected_memory)
         return {
             "terminal_status": terminal_status,
             "status": terminal_status,
             "current_step": terminal_status,
-            "refund_status": refund_status or state.get("refund_status", "not_requested"),
-            "notification_status": notification_status
-            or state.get("notification_status", "not_sent"),
+            "refund_status": effective_refund,
+            "notification_status": effective_notification,
             "selected_memory": selected_memory,
             "safe_summaries": [summary],
         }

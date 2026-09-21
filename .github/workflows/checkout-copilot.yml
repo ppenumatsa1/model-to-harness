@@ -1,0 +1,100 @@
+name: Checkout Copilot
+
+on:
+  push:
+    paths:
+      - "harness/checkout-recovery/copilot-sdk/**"
+      - "shared/**"
+      - ".github/workflows/checkout-copilot.yml"
+  pull_request:
+    paths:
+      - "harness/checkout-recovery/copilot-sdk/**"
+      - "shared/**"
+      - ".github/workflows/checkout-copilot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: copilotci
+          POSTGRES_PASSWORD: isolated-ci-only
+          POSTGRES_DB: checkout_copilot_tests
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U copilotci -d checkout_copilot_tests"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: harness/checkout-recovery/copilot-sdk
+    env:
+      CHECKOUT_TEST_DATABASE_URL: postgresql://copilotci:isolated-ci-only@127.0.0.1:5432/checkout_copilot_tests
+      COPILOT_SKIP_CLI_DOWNLOAD: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.2"
+          enable-cache: true
+          cache-dependency-glob: harness/checkout-recovery/copilot-sdk/requirements-cloud*.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: harness/checkout-recovery/copilot-sdk/frontend/package-lock.json
+      - name: Install hashed cloud dependencies independently of the laptop profile
+        run: python3 scripts/cloud_dependencies.py sync
+      - name: Backend and real PostgreSQL contracts
+        run: |
+          mkdir -p .ci-artifacts/pytest
+          export TMPDIR="$PWD/.ci-artifacts"
+          .venv-cloud/bin/ruff check backend scripts evals infra/foundry-hosted/agent/main.py
+          .venv-cloud/bin/python -m pytest --basetemp .ci-artifacts/pytest backend/tests
+          .venv-cloud/bin/python scripts/prepare_evals.py
+          .venv-cloud/bin/python scripts/verify_evals.py
+          .venv-cloud/bin/python scripts/verify_hosted_boundaries.py
+      - name: Frontend unit tests and production build
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend test
+          npm --prefix frontend run build
+
+  hosted-package:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: harness/checkout-recovery/copilot-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.2"
+      - name: Prepare canonical source and pinned native runtime
+        run: |
+          mkdir -p .ci-artifacts
+          export TMPDIR="$PWD/.ci-artifacts"
+          python3 scripts/cloud_dependencies.py sync
+          .venv-cloud/bin/python scripts/prepare_hosted.py --with-runtime
+          uv venv --python 3.13 .ci-artifacts/hosted-env
+          uv --no-config pip install --python .ci-artifacts/hosted-env/bin/python \
+            --default-index https://pypi.org/simple --require-hashes \
+            -r infra/foundry-hosted/agent/requirements.txt
+      - name: Verify standalone Hosted package and native executable
+        run: |
+          export TMPDIR="$PWD/.ci-artifacts"
+          .ci-artifacts/hosted-env/bin/python scripts/verify_hosted_package.py --require-runtime
+          .venv-cloud/bin/python -m pytest --basetemp .ci-artifacts/pytest-package \
+            backend/tests/test_hosted_archive.py backend/tests/test_evaluation_contract.py

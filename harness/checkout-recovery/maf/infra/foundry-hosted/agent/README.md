@@ -14,14 +14,30 @@ Approval and continuation are separate durable commands:
 {"action":"resume","case_id":"<case-id>"}
 ```
 
-The adapter creates the same `CheckoutRecoveryService` used by FastAPI with a
-PostgreSQL repository. It never runs SQL migrations, resets data, accepts
+The adapter lazily starts the same checkout-owned `bootstrap.create_runtime`
+used by FastAPI, with `host="hosted"` and a PostgreSQL repository. Settings come
+from `config.py`; the adapter explicitly selects MAF regardless of the development
+default. Hosted requires PostgreSQL and MAF configuration but not the
+API proxy token. It does not import the API factory, routers, or middleware.
+Synchronous startup, commands, and shutdown run through `asyncio.to_thread`;
+startup failures and host shutdown close the owned runtime exactly once.
+It never runs SQL migrations, resets data, accepts
 chat-derived decisions, or falls back to memory when the database setting is
 absent. Outputs are the existing safe case projection only.
 
 `scripts/prepare_hosted.py` copies the checked-in backend and framework-neutral
 shared packages into this deployable source directory. It must run after the
 source has been reviewed and before `azd deploy checkout-recovery-maf`.
+`.agentignore` excludes local environments, credentials/configuration, and test
+caches from the upload. After downloading a deployed version's code ZIP,
+`scripts/prepare_hosted.py` exposes the read-only
+`verify_code_archive(root, content, expected_hash)` check: pass this prepared
+source directory, ZIP bytes, and the platform SHA-256 (bare hex or `sha256:`).
+It returns `archive_sha256` and `files` only after verifying the digest, exact
+canonical file set, and every file's contents. Only `main.py`, `requirements.txt`,
+`README.md`, the optional `.agentignore`, and the two prepared package trees are
+allowed; private/local artifacts, testing code, caches, and duplicate entries
+are rejected. This check neither extracts the ZIP nor calls Azure.
 Platform telemetry remains platform-owned; this adapter does not initialize or
 replace an OpenTelemetry provider, and message-content capture is disabled before
 host construction.

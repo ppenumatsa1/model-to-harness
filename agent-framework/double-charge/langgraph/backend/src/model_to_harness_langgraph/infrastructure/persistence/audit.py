@@ -9,12 +9,12 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
+from ...application.audit import audit_data
 from ...application.ports import (
     ApprovalCommandConflictError,
     CommandInProgressError,
     RefundIdempotencyConflictError,
     _approval_identity,
-    safe_event_data,
 )
 from ...application.records import NativeEvent
 
@@ -131,9 +131,53 @@ class PostgresAuditRepository:
             )
             return await result.fetchone()
 
+    async def list_runs(
+        self, limit: int, before: tuple[Any, str] | None = None
+    ) -> list[dict[str, Any]]:
+        where = "WHERE (created_at, run_id) < (%s, %s)" if before else ""
+        async with self.pool.connection() as conn:
+            result = await conn.execute(
+                self._q(
+                    "SELECT run_id, case_id, customer_id, status, current_step, "
+                    "state->>'scenario_id' AS scenario_id, "
+                    "outcome->>'terminal_status' AS terminal_status, created_at, updated_at "
+                    f"FROM {{schema}}.runs {where} "
+                    "ORDER BY created_at DESC, run_id DESC LIMIT %s"
+                ),
+                (*before, limit) if before else (limit,),
+            )
+            return await result.fetchall()
+
+    async def workspace_records(self, case_id: str) -> dict[str, Any] | None:
+        async with self.pool.connection() as conn:
+            async with conn.transaction():
+                await conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+                result = await conn.execute(
+                    self._q("SELECT * FROM {schema}.runs WHERE case_id=%s"), (case_id,)
+                )
+                run = await result.fetchone()
+                if run is None:
+                    return None
+                result = await conn.execute(
+                    self._q("SELECT * FROM {schema}.approvals WHERE run_id=%s"),
+                    (run["run_id"],),
+                )
+                approval = await result.fetchone()
+                result = await conn.execute(
+                    self._q(
+                        "SELECT facts FROM {schema}.selected_memory "
+                        "WHERE customer_id=%s AND case_id=%s"
+                    ),
+                    (run["customer_id"], case_id),
+                )
+                memory = await result.fetchone()
+                return {
+                    "run": run, "approval": approval, "memory": memory["facts"] if memory else {},
+                }
+
     async def append_event(self, **kwargs: Any) -> NativeEvent:
         event_id = str(uuid4())
-        data = safe_event_data(kwargs.pop("data", None))
+        data = audit_data(kwargs.pop("data", None), actor_id=kwargs.pop("actor_id", None))
         dedupe_key = kwargs.pop("dedupe_key", None)
         query = self._q(
             """INSERT INTO {schema}.events
@@ -141,33 +185,51 @@ class PostgresAuditRepository:
                VALUES (%(event_id)s, %(case_id)s, %(run_id)s, %(event_type)s,
                        %(node)s, %(status)s, %(summary)s, %(data)s::jsonb, %(dedupe_key)s)
                ON CONFLICT (run_id, dedupe_key)
-               DO UPDATE SET dedupe_key = EXCLUDED.dedupe_key
+               DO NOTHING
                RETURNING sequence, event_id::text, case_id, run_id, event_type,
                          event_time AS timestamp, node, status, summary, data"""
         )
         async with self.pool.connection() as conn:
-            result = await conn.execute(
-                query,
-                {
-                    "event_id": event_id,
-                    "data": Jsonb(data),
-                    "dedupe_key": dedupe_key,
-                    **kwargs,
-                },
-            )
-            row = await result.fetchone()
+            async with conn.transaction():
+                # Identity allocation must follow the lock, and the lock must survive commit.
+                await conn.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    (f"{self.schema}:event-commit-order",),
+                )
+                result = await conn.execute(
+                    query,
+                    {
+                        "event_id": event_id,
+                        "data": Jsonb(data),
+                        "dedupe_key": dedupe_key,
+                        **kwargs,
+                    },
+                )
+                row = await result.fetchone()
+                if row is None:
+                    result = await conn.execute(
+                        self._q(
+                            "SELECT sequence, event_id::text, case_id, run_id, event_type, "
+                            "event_time AS timestamp, node, status, summary, data "
+                            "FROM {schema}.events WHERE run_id=%s AND dedupe_key=%s"
+                        ),
+                        (kwargs["run_id"], dedupe_key),
+                    )
+                    row = await result.fetchone()
         return NativeEvent.model_validate(row)
 
-    async def list_events(self, run_id: str, after: int = 0) -> list[NativeEvent]:
+    async def list_events(
+        self, run_id: str, after: int = 0, limit: int | None = None
+    ) -> list[NativeEvent]:
         async with self.pool.connection() as conn:
             result = await conn.execute(
                 self._q(
                     """SELECT sequence, event_id::text, case_id, run_id, event_type,
                               event_time AS timestamp, node, status, summary, data
                        FROM {schema}.events
-                       WHERE run_id = %s AND sequence > %s ORDER BY sequence"""
+                       WHERE run_id = %s AND sequence > %s ORDER BY sequence LIMIT %s"""
                 ),
-                (run_id, after),
+                (run_id, after, limit),
             )
             rows = await result.fetchall()
         return [NativeEvent.model_validate(row) for row in rows]

@@ -68,7 +68,10 @@ def validation_executors(
             "parallel.branch.completed",
             result.summary,
             node="billing_validation",
-            payload={"branch": result.branch, "ok": result.ok},
+            payload={
+                "branch": result.branch, "ok": result.ok,
+                "checked_charge_ids": result.evidence.get("checked_charge_ids", []),
+            },
         )
         await audit.node_completed(state, "billing_validation", result.summary)
         await ctx.send_message(result)
@@ -118,7 +121,11 @@ def validation_executors(
             "parallel.branch.completed",
             result.summary,
             node="policy_validation",
-            payload={"branch": result.branch, "ok": result.ok},
+            payload={
+                "branch": result.branch, "ok": result.ok,
+                "policy_code": result.evidence.get("policy_code"),
+                "decision": result.evidence.get("decision"),
+            },
         )
         await audit.node_completed(state, "policy_validation", result.summary)
         await ctx.send_message(result)

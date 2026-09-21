@@ -6,6 +6,30 @@ environments:
   crmaf-20260912:
     lastEval:
       evalId: eval_188058e6d7424429b855697f94735630
+      evalRunId: evalrun_8ea16f99b9d947249f6f44d4bf5dcecf
+      runName: crmaf-20260912-patterns-v5-20260917-retry1
+      agentVersion: "5"
+      startedAt: "2026-09-17T21:59:03Z"
+      status: passed
+      graderType: python
+      passed: 7
+      total: 7
+      exactContractPassed: 7
+      resultsFile: .foundry/results/crmaf-20260912/eval_188058e6d7424429b855697f94735630/evalrun_8ea16f99b9d947249f6f44d4bf5dcecf.json
+    previousAcceptedEval:
+      evalId: eval_188058e6d7424429b855697f94735630
+      evalRunId: evalrun_589414300c88442ab76ad8af8c924db3
+      runName: crmaf-20260912-service-v4-20260917
+      agentVersion: "4"
+      startedAt: "2026-09-17T17:42:49Z"
+      status: passed
+      graderType: python
+      passed: 7
+      total: 7
+      exactContractPassed: 7
+      resultsFile: .foundry/results/crmaf-20260912/eval_188058e6d7424429b855697f94735630/evalrun_589414300c88442ab76ad8af8c924db3.json
+    earlierAcceptedEval:
+      evalId: eval_188058e6d7424429b855697f94735630
       evalRunId: evalrun_2d6557a7f2f54c1dbef6f204e5fe2d48
       runName: crmaf-20260912-agent2-native-verified
       agentVersion: "2"
@@ -15,6 +39,16 @@ environments:
       passed: 7
       total: 7
       exactContractPassed: 7
+    precedingFailedEval:
+      evalId: eval_188058e6d7424429b855697f94735630
+      evalRunId: evalrun_06e051a3f9b54f098da6e3b64481d4ce
+      runName: crmaf-20260912-patterns-v5-20260917
+      agentVersion: "5"
+      status: failed-native-grader-setup
+      scoredOutputItems: 0
+      inferredExecutedTargetCases: 7
+      resultsFile: .foundry/results/crmaf-20260912/eval_188058e6d7424429b855697f94735630/evalrun_06e051a3f9b54f098da6e3b64481d4ce.json
+      reconciliationFile: .foundry/results/crmaf-20260912/eval_188058e6d7424429b855697f94735630/evalrun_06e051a3f9b54f098da6e3b64481d4ce-reconciliation.json
     previousEval:
       evalId: eval_584cd62762874148bc01a303cfa34bcc
       evalRunId: evalrun_a5828c80336d49ceb8be13d0b477f064

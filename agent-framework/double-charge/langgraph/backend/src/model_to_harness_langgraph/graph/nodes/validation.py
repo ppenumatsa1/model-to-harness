@@ -35,7 +35,11 @@ class ValidationNodes(NodeContext):
             "parallel_branch_completed",
             result.safe_summary or "Billing validation completed",
             node=node,
-            data={"branch": "billing", "eligible": result.ok},
+            data={
+                "branch": "billing", "eligible": result.ok, "ok": result.ok,
+                "failure_code": result.code,
+                "checked_charge_ids": result.value.get("checked_charge_ids", [])[:100],
+            },
         )
         return {
             "validation_results": {
@@ -75,7 +79,12 @@ class ValidationNodes(NodeContext):
             "parallel_branch_completed",
             result.safe_summary or "Refund-policy validation completed",
             node=node,
-            data={"branch": "policy", "eligible": result.ok},
+            data={
+                "branch": "policy", "eligible": result.ok, "ok": result.ok or ineligible,
+                "failure_code": result.code,
+                "policy_code": result.value.get("policy_code"),
+                "decision": result.value.get("decision"),
+            },
         )
         return {
             "validation_results": {

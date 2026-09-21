@@ -19,6 +19,7 @@ from model_to_harness_shared import WorkflowOutcome
 
 def command(fixture_id: str) -> ScenarioInput:
     return ScenarioInput(
+        operator_id="test-operator",
         complaint="I was charged twice for the same purchase.",
         customer_id="customer-100",
         scenario_id=fixture_id,
@@ -40,7 +41,7 @@ async def approve_and_resume(
             reason="Fixture decision",
         ),
     )
-    return await service.resume(run_id, checkpoint_id)
+    return await service.resume(run_id, checkpoint_id, operator_id="test-resumer")
 
 
 @pytest.mark.parametrize(
@@ -153,6 +154,7 @@ async def test_approval_conflict_is_rejected(
         checkpoint_id=started.checkpoint_id,
         decision=ApprovalDecision.APPROVE,
         reviewer_id="reviewer-a",
+        reason="Reviewed fixture evidence.",
     )
     await service.record_approval(started.run_id, first)
     with pytest.raises(ValueError, match="another decision"):
@@ -208,9 +210,9 @@ async def test_resume_requires_recorded_approval_and_current_checkpoint(
     started = await service.start(command("duplicate-confirmed"))
     assert started.checkpoint_id
     with pytest.raises(ValueError, match="checkpoint_id"):
-        await service.resume(started.run_id, "stale-checkpoint")
+        await service.resume(started.run_id, "stale-checkpoint", operator_id="test-resumer")
     with pytest.raises(ValueError, match="record an approval"):
-        await service.resume(started.run_id, started.checkpoint_id)
+        await service.resume(started.run_id, started.checkpoint_id, operator_id="test-resumer")
     with pytest.raises(ValueError, match="checkpoint_id"):
         await service.record_approval(
             started.run_id,
@@ -218,6 +220,7 @@ async def test_resume_requires_recorded_approval_and_current_checkpoint(
                 checkpoint_id="stale-checkpoint",
                 decision=ApprovalDecision.APPROVE,
                 reviewer_id="reviewer",
+                reason="Reviewed fixture evidence.",
             ),
         )
 
@@ -233,6 +236,7 @@ async def test_resume_reconstructs_runtime_without_process_local_actions(
             checkpoint_id=started.checkpoint_id,
             decision=ApprovalDecision.APPROVE,
             reviewer_id="restart-reviewer",
+            reason="Reviewed fixture evidence.",
         ),
     )
     runtime = create_runtime(
@@ -243,12 +247,16 @@ async def test_resume_reconstructs_runtime_without_process_local_actions(
     )
     await runtime.start()
     try:
-        completed = await runtime.service.resume(started.run_id, started.checkpoint_id)
+        completed = await runtime.service.resume(
+            started.run_id, started.checkpoint_id, operator_id="test-resumer"
+        )
         assert completed.refund_status == "verified"
         assert completed.notification_status == "sent"
         assert await repository.count_refunds(completed.idempotency_key) == 1
         with pytest.raises(ValueError, match="not paused"):
-            await runtime.service.resume(started.run_id, started.checkpoint_id)
+            await runtime.service.resume(
+                started.run_id, started.checkpoint_id, operator_id="test-resumer"
+            )
     finally:
         await runtime.close()
 

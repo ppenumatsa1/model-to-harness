@@ -86,6 +86,8 @@ def test_configured_temperature_is_forwarded_only_when_present(monkeypatch, temp
     monkeypatch.setattr(model_client, "get_bearer_token_provider", lambda *_: object())
     model_client.FoundryComplaintModel(
         Settings(
+            _env_file=None,
+            telemetry_enabled=False,
             azure_openai_endpoint="https://example.openai.azure.com/",
             azure_openai_deployment="model",
             model_temperature=temperature,

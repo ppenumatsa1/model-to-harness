@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export PYTHONPATH="${PYTHONPATH:-}:backend/src:../../../shared/src"
-exec uvicorn model_to_harness_langgraph.api.app:create_app --factory --reload --host 127.0.0.1 --port 8000
+lane_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$lane_root"
+export PYTHONPATH="$lane_root/backend/src:$lane_root/../../../shared/src${PYTHONPATH:+:$PYTHONPATH}"
+python="$lane_root/.venv/bin/python"
+if [[ ! -x "$python" ]]; then
+  echo "Missing LangGraph .venv/bin/python; install the lane's development environment first." >&2
+  exit 1
+fi
+exec "$python" -m model_to_harness_langgraph.main

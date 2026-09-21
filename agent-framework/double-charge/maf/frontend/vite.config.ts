@@ -1,15 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
+import { devSettings } from "./devSettings";
 
-const apiTarget = process.env.MAF_API_PROXY_TARGET ?? "http://127.0.0.1:8010";
-
-export default defineConfig({
+export default defineConfig(({ command, mode }) => ({
+  root: fileURLToPath(new URL(".", import.meta.url)),
+  envDir: false,
   plugins: [react()],
-  server: {
-    port: 5174,
-    proxy: {
-      "/api": apiTarget,
-      "/health": apiTarget
-    }
-  }
-});
+  server: command === "serve"
+    ? devSettings(mode === "test" ? undefined : fileURLToPath(new URL("../.env", import.meta.url)))
+    : undefined
+}));

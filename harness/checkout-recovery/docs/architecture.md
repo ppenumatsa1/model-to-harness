@@ -1,18 +1,28 @@
 # Architecture
 
+This is the framework-neutral division of responsibilities. The current
+[MAF implementation](../maf/docs/design/architecture.md) supplies its own
+runtime, service, repository, UI and deployment design.
+
 ```mermaid
 flowchart LR
-    user[Support user or reviewer] --> api[MAF-owned FastAPI API]
-    api --> harness[MAF Harness Agent]
-    harness --> tools[Scoped diagnostic and remediation tools]
-    harness --> workspace[Case-scoped workspace]
-    tools --> store[(PostgreSQL business authority)]
-    store --> audit[Audit, approval, outcome, evidence]
-    audit --> projection[Safe UI/event projection]
+    user[Support user or reviewer] --> commands[Explicit commands]
+    commands --> service[Application authority]
+    service --> harness[Read-only investigation harness]
+    harness --> tools[Scoped diagnostic tools]
+    harness --> workspace[Internal case workspace]
+    service --> policy[Deterministic policy and remediation]
+    service --> store[(PostgreSQL business authority)]
+    service --> projection[Safe loaded-data projections]
     projection --> user
 ```
 
-MAF owns the agent harness and its framework session/checkpoint behavior.
-PostgreSQL owns checkout business state and auditing. A Foundry Hosted Agent
-hosts the same application command service; it does not become a second source
-of workflow or business authority.
+Each implementation owns its harness integration and framework session/checkpoint
+behavior. PostgreSQL owns business state, approval commands, auditing and
+verification evidence. A framework checkpoint, model recommendation or UI event
+cannot authorize remediation.
+
+The application, not the model's diagnostic tool registry, owns consequential
+writes. Alternate transports must use the same lane's application authority,
+not introduce a second source of workflow truth. No API, UI, repository,
+telemetry or deployment abstraction is shared between implementations.

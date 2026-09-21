@@ -14,7 +14,7 @@ class E2EFakeModel:
 
 
 app = create_app(
-    settings=Settings(database_url="unused"),
+    settings=Settings(_env_file=None, database_url="unused", telemetry_enabled=False),
     audit=InMemoryAuditRepository(),
     gateway=SharedDomainGateway(),
     model=E2EFakeModel(),
