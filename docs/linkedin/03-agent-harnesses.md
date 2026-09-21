@@ -30,7 +30,7 @@ That is where the harness becomes important. It surrounds the agent loop with
 a controlled working environment: context, tools, workspace, permissions,
 state, and verification.
 
-The progression is:
+The responsibilities can be summarised as:
 
 **Model → reason**
 
@@ -101,8 +101,8 @@ Relevant observations go back to the model through the harness. The rest of the
 working material stays in the environment. The investigation can build on
 previous work instead of starting over on every model call.
 
-Eventually, the evidence may point to a recovery path. **That is where the
-agent's freedom stops.**
+Eventually, the evidence may point to a recovery path. **Repair requires
+additional business authority.**
 
 The application applies business rules, requests approval when required,
 performs the authorized repair, and verifies the result against the
@@ -118,9 +118,10 @@ application reports that outcome instead of declaring success.
 
 Our independent [**MAF implementation**](https://github.com/ppenumatsa1/model-to-harness/tree/main/harness/checkout-recovery/maf)
 and [**Copilot SDK implementation**](https://github.com/ppenumatsa1/model-to-harness/tree/main/harness/checkout-recovery/copilot-sdk)
-follow this same boundary. MAF assembles framework primitives; Copilot SDK configures a supplied
-agent runtime. Both use scoped diagnostic tools and a private plan, without
-shell access or business-write tools.
+follow this same boundary. Our MAF example configures framework-provided harness
+capabilities; our Copilot SDK example embeds a supplied agent runtime. Both use
+scoped diagnostic tools and a private plan, without shell access or
+business-write tools.
 
 These are simulated checkout systems, not live payment integrations. Required
 approval is saved through an explicit command, followed by a separate Resume.
@@ -145,8 +146,8 @@ which deliberately use a smaller workspace centered on `plan.md`.
 
 Working state helps the agent build on previous work. **It is a notebook, not
 the business ledger.** Business systems remain the source of truth.
-Workspace files are not automatically model context, and persistence alone does
-not restore execution.
+Workspace files are not automatically model context. Persisting files alone
+does not restore an interrupted execution.
 
 ## 5. Harness types
 
@@ -155,8 +156,8 @@ Managed services additionally operate more of the environment around it.
 
 ### Harness SDKs and frameworks
 
-**MAF primitives / Deep Agents** help you assemble or configure harness
-capabilities; **MAF Harness / Copilot SDK** offer more preassembled or embedded
+**MAF primitives** help you assemble harness capabilities; **Deep Agents**,
+**MAF Harness**, and **Copilot SDK** offer more preassembled, configurable
 harness behavior.
 
 They provide or expose capabilities such as agent loops, tools, skills,
