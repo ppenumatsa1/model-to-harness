@@ -1,321 +1,258 @@
 # Agent Harnesses: The Environment for Adaptive, Verified Work
 
-## 1. Why: from coordinated workflows to goal-oriented work
+_Part 3 of the model-to-harness series. It follows
+[Part 1: From Models to Harnesses](https://www.linkedin.com/pulse/from-models-harnesses-how-ai-agents-learn-finish-job-penumatsa-g2mjc)
+and
+[Part 2: Agent Frameworks](https://www.linkedin.com/pulse/agent-frameworks-model-can-answer-workflow-finish-penumatsa-sdz6c),
+but this article is designed to stand on its own._
 
-[Part 2](02-agent-frameworks.md) followed a double-charge case through a
-known business process: investigate, validate, obtain approval, refund, verify,
-and notify. Microsoft Agent Framework (MAF) and LangGraph coordinated that
-work through explicit steps, state changes, approval boundaries, and failure
-routes.
-
-That is exactly the right design when the permitted workflow is largely known
-ahead of time. The model can help interpret a complaint or draft a
-notification, but the application defines which transitions are allowed.
-
-Some work begins somewhere different. Consider this request:
+## When the goal is clearer than the path
 
 > **Checkout failed for order 8472. Investigate the issue, safely resolve it,
-> and prove that the order is healthy.**
+> and show the evidence.**
 
-The goal is clear, but the investigation is not. Is the order invalid, is the
-payment still pending, did inventory reservation expire, did a promotion fail,
-or is a downstream service unavailable? The right next step depends on
-evidence the agent does not yet have.
+The goal is clear, but there is no fixed investigation path. The agent must
+inspect the checkout evidence, decide what to check next, and stop when it has
+enough evidence or reaches a limit.
 
-> **Framework:** “We know the workflow. Coordinate it reliably.”
->
-> **Harness:** “We know the goal. Give the agent what it needs to figure out
-> the path.”
+In Part 2, we followed a double-charge case through a workflow designed in
+advance: investigate, validate, get approval, refund, verify, and notify. An
+agent framework works well when the allowed process is already known. The model
+can understand language inside the workflow, while application code controls
+which steps are allowed.
 
-This is a difference in emphasis, not an absolute split between deterministic
-and nondeterministic systems. Frameworks can support model-directed routing and
-agent loops; harnesses can contain pre-structured workflows. In this series,
-frameworks emphasize **pre-structured coordination**, while harnesses emphasize
-**adaptive goal pursuit inside a controlled operating environment**.
+The checkout case starts with a goal instead of a fixed path. The agent needs
+room to choose what to inspect next and continue until it has enough evidence.
 
-The question changes from “what node comes next?” to “what may the agent
-inspect, change, delegate, retain, and use as proof of completion?”
+It also needs clear limits. "Figure it out" cannot mean access to everything,
+running forever, or permission to change business data.
 
-## 2. What: the agent harness
+| | Framework emphasis | Harness emphasis |
+| --- | --- | --- |
+| Starting point | A known or limited process | A goal whose path depends on what the agent finds |
+| Main question | What step or route comes next? | What may the agent inspect, use, retain, delegate, and verify? |
+| Primary contribution | Clear steps, routes, and state changes | A controlled working environment around the agent loop |
+| Completion | The workflow reaches an allowed outcome | Evidence proves the result, or the system clearly explains why it must stop |
 
-An **agent harness** is the execution and working shell around a model/agent
-loop that enables repeated, stateful, tool-using work toward a goal. It is the
-controlled environment in which the agent can inspect, act, delegate, verify,
-and continue.
+This is not an either-or choice. Frameworks can run dynamic agents, and
+harnesses can contain workflows. The difference is the main responsibility:
 
-A loop that alternates model calls and tool calls is necessary, but it is not
-enough. Long-running work also needs an appropriate working context, useful
-capabilities, bounded authority, artifacts, a record of progress, and a way to
-determine whether the requested outcome is actually true.
+> **A framework coordinates the work. A harness equips the agent to pursue and
+> verify the work.**
+
+## The working environment around the loop
+
+An **agent harness** is the working environment around a model-driven loop. It
+brings together the context, tools, workspace, coordination, and controls an
+agent needs to keep making progress toward a goal.
+
+A model-and-tool loop is the center, not the whole system:
 
 ```text
-Goal
-  -> assemble relevant context
-  -> choose a permitted next action
-  -> execute through an appropriate capability
-  -> record useful progress and artifacts
-  -> verify the observed outcome
-  -> continue, ask for input, escalate, or report
+reason -> act -> observe -> repeat
 ```
 
-The harness does not decide business truth by itself. An e-commerce application
-still owns what “order healthy” means: for example, a valid order state, the
-intended payment state, an appropriate inventory reservation, and any required
-customer communication. The harness equips the agent to reach and check that
-definition; the business systems supply the authoritative evidence.
+The model reasons about the next step. The harness checks policy and
+permissions before a tool acts. The result becomes a new observation, state and
+context are updated, and the loop repeats. Verification then decides whether
+the requested outcome is actually supported.
 
-Three related terms should remain separate:
+![A harness builds context, calls the model, validates actions, and executes allowed tools, using a working environment and authorized access to external systems.](../linkedin/assets/03-agent-harness-loop-screenshot.png)
 
-| Term | Meaning in this article |
+_Figure 1. The agent loop drives the work. The rest of the harness prepares,
+controls, records, and verifies that work._
+
+## The building blocks behind the picture
+
+The diagram is a simple way to think about a harness, not a required product
+checklist. A harness may provide these parts directly, combine them from
+libraries, or leave some of them to the application and runtime.
+
+| Primitive group | What it contributes |
 | --- | --- |
-| **State** | Current execution truth, such as the goal, facts found, selected next actions, approval status, and artifacts. |
-| **Memory / knowledge** | Deliberately retained information that may be selected for a later task or decision. |
-| **Context** | The bounded projection of instructions, trusted state, selected knowledge, and tool results supplied to one model decision. |
+| **Model and agent loop** | Uses the goal and current evidence to choose the next action, call a tool, ask a question, or stop. |
+| **Context management** | Chooses the instructions, trusted state, knowledge, and tool results the model needs for one decision. Compaction keeps long tasks within the context limit. |
+| **Tools and skills** | Tools read information or perform limited actions. Skills provide reusable instructions and domain guidance; they do not give the agent permission. |
+| **Environment** | A workspace, filesystem, code editor, shell, browser, or sandbox gives the agent a place to inspect files and create useful work. Enable only what the task needs. |
+| **Coordination** | Sessions, progress events, plans, checkpoints, and limited subagents help work continue or split into smaller investigations. |
+| **Permissions and budgets** | Policies, approvals, access rules, time limits, token limits, and call limits control what the agent can do and spend. |
+| **Verification** | Checks the final result against real evidence before the task is marked complete. |
 
-Neither a long chat transcript nor a successful tool response proves that the
-goal has been met. Context is selected; it is not an unlimited dump of
-conversation history, logs, files, or customer data.
+Three terms are easy to blur:
 
-## 3. Anatomy: five small buckets
+- **State** is what is currently true for this task: the goal, facts found, decisions,
+  approval status, and saved work.
+- **Memory or knowledge** is information saved for later use.
+- **Context** is the selected information given to the model for one decision.
 
-The terms below are a mental model, not a required product checklist. A
-particular harness may provide some primitives directly, compose them from
-libraries, or leave them to the application and runtime.
+A long conversation is not automatically useful context. A checkpoint is not a
+business record. A successful tool response does not prove that the requested
+result is correct.
 
-| Bucket | Core primitives | What it contributes |
-| --- | --- | --- |
-| **Reasoning and control** | Model, agent loop/orchestrator, context management | Turns a goal and selected evidence into a proposed next action. |
-| **Capabilities** | Tool registry/execution, skills, browser/search, code editor and shell | Lets the agent retrieve information or perform bounded work beyond text generation. |
-| **Environment** | Workspace and filesystem | Gives work a place for task files, plans, patches, collected evidence, and inspectable artifacts. |
-| **Coordination** | Session/state, subagents, progress events | Carries a task across decisions and, where appropriate, distributes bounded work. |
-| **Safety and completion** | Permissions, policy, approvals, verification | Constrains authority and makes completion depend on evidence rather than model confidence. |
+The harness selects and organizes the evidence. The application and its
+business systems still decide what is actually true.
 
-A few mechanisms commonly sit within those buckets but should not distract from
-the story:
+## Three ways harnesses are delivered
 
-- **Compaction or summarization** helps preserve the useful task record when
-  history exceeds the available context window. It is a lossy context-management
-  choice, not an authoritative audit record.
-- **Sandboxing and execution isolation** constrain where shell commands,
-  generated code, and browser automation can run. The right boundary depends
-  on the task and its data.
-- **Events and checkpoints** can expose progress and resume an interrupted
-  task. Their durability and semantics depend on the implementation. A
-  checkpoint is not a replacement for business state.
-
-The checkout request needs every bucket, but not every primitive at once. The
-important design question is always: *what does the next safe investigation
-step require?*
-
-## 4. Three ways harnesses show up
-
-The word *harness* describes a capability shape, not a settled industry product
-category. The following forms are useful for orientation:
+The word _harness_ describes a set of capabilities, not one fixed product
+category. Products overlap, but these three forms help explain what your team
+still owns.
 
 | Form | You primarily provide | The offering primarily provides |
 | --- | --- | --- |
-| **Build your own harness** | The application, business rules, integrations, operating choices, and the assembly of harness primitives. | SDKs, agent abstractions, tools, and reusable components. |
-| **Managed harness** | The goal-specific instructions, tools, skills, and business integration. | Much of the harness and its execution infrastructure. |
-| **Finished/general-purpose harness** | A task and task-specific context, within product controls. | An opinionated, assembled experience for users to perform work. |
+| **Harness framework or SDK** | Application logic, business integrations, operating choices, and how the harness parts are assembled | Agent loops, tools, skills, context features, and reusable controls |
+| **Managed harness / Harness-as-a-Service** | Task-specific instructions, tools, skills, policies, and business integration | Most of the harness and the infrastructure that runs it |
+| **Finished or general-purpose harness** | The task and its specific context, within the product's controls | A ready-to-use environment for completing a type of work |
 
-These forms overlap. An SDK may include an opinionated harness agent; a
-finished product can expose an SDK; a managed offering can permit
-application-defined tools and execution environments. The useful question is
-not which label wins, but which responsibilities remain yours: context,
-authority, environment, verification, and runtime operation.
+These examples show the general shape of each form. They are not a feature
+comparison or ranking:
 
-## 5. The checkout investigation: adaptive work in a controlled environment
-
-Return to order 8472. A framework could coordinate an investigation graph if
-the diagnosis and remediation paths had already been designed. A harness starts
-with a narrower commitment: it gives the agent a controlled way to discover
-which path is justified.
-
-```mermaid
-flowchart TB
-    goal["Goal<br/>Make order 8472 healthy and prove it"]
-    order["Inspect order"]
-    context["Gather trusted context"]
-    choose["Choose what to inspect next"]
-    work["Use scoped tools, skills,<br/>and workspace"]
-    delegate["Maybe delegate a bounded investigation"]
-    approve["Ask permission if an action is risky"]
-    remediate["Remediate"]
-    verify["Verify against business systems"]
-    report["Report evidence and remaining limits"]
-
-    goal --> order --> context --> choose --> work
-    work --> delegate
-    delegate --> choose
-    work --> approve
-    approve --> remediate --> verify
-    verify -->|evidence incomplete| choose
-    verify -->|evidence sufficient| report
-```
-
-The arrows describe an investigation, not a promise that a harness should
-generate an unrestricted loop. Each turn has a purpose and a boundary.
-
-### Start with trusted order facts
-
-The agent first uses a scoped order lookup. It receives the order identifier,
-its current status, the customer-visible checkout error, and correlation IDs
-that can be used to inspect related systems. The harness places these selected
-facts, not the complete commerce database, into the next decision context.
-
-At this point, the agent should be able to say what it knows and what it needs
-next. It should not claim that a payment, inventory, or order is healthy merely
-because the order lookup succeeded.
-
-### Let the evidence determine the next inspection
-
-The order record might show a `payment_pending` state. That makes payment
-status and gateway logs relevant. If it shows `inventory_unavailable`, an
-inventory reservation is the better next target. A correlation ID may make
-application traces useful. A customer-facing reproduction might make browser
-state relevant.
-
-This is where harness capabilities matter:
-
-| Investigation need | Harness capability | Control that still matters |
+| Form | Examples | Why they fit |
 | --- | --- | --- |
-| Determine the current order and payment state | Typed, scoped business-system tools | Tool identity and downstream authorization must permit only the requested read. |
-| Find why checkout failed | Log/search tools or a browser, with selected correlation data | Treat retrieved content as data; do not turn logs or web content into instructions. |
-| Follow a repeatable diagnosis procedure | A checkout-triage skill | A skill is guidance, not an authority grant or proof of correctness. |
-| Compare findings and maintain a repair plan | Workspace and filesystem artifacts | Keep task files within the workspace and protect customer data according to policy. |
-| Inspect a repository, configuration, or safe diagnostic script | Code editing and shell execution, where needed | Run within the intended sandbox and permission boundary. |
-| Separate an independent log or inventory investigation | A bounded subagent task | Give the child a narrow goal, scoped tools, and a result the parent verifies. |
+| Harness framework or SDK | [Microsoft Agent Framework Harness](https://learn.microsoft.com/en-us/agent-framework/concepts/harness), [Deep Agents](https://docs.langchain.com/oss/python/deepagents/overview), [GitHub Copilot SDK](https://docs.github.com/en/copilot/how-tos/copilot-sdk/features) | Developers assemble or configure an agent environment and connect application-owned capabilities. |
+| Managed harness | [Managed Deep Agents](https://docs.langchain.com/langsmith/python/managed-deep-agents-overview), [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview) | The provider operates the harness and more of the runtime while the application supplies task-specific behavior and integrations. |
+| Finished or general-purpose harness | [GitHub Copilot](https://docs.github.com/en/copilot), [Claude Code](https://code.claude.com/docs/en/overview), [Codex](https://openai.com/codex/) | Users work through an assembled product experience with opinionated tools, environments, and controls. |
 
-For example, the parent agent may ask a read-only subagent to summarize payment
-gateway errors for the order's correlation ID while it checks inventory. The
-parent does not inherit a conclusion as fact. It compares the returned summary
-with the authoritative payment and order records before choosing a remedy.
+The important question is not which label is best. It is what your team still
+owns: context, integrations, permissions, verification, isolation, saved state,
+and operations.
 
-### Use a workspace to make progress inspectable
+## A checkout case inside the harness
 
-The workspace is not merely a convenient folder. It lets the task leave useful
-artifacts: an investigation plan, redacted diagnostic queries, a list of
-evidence identifiers, a proposed remediation, or a patch for an owned
-configuration repository.
+Our
+[checkout-recovery MAF implementation](../../harness/checkout-recovery/maf/README.md)
+turns the opening request into a limited investigation and controlled recovery.
+It is an educational application backed by PostgreSQL-persisted simulated
+business systems, not a live payment integration.
 
-Those artifacts support continuation and review. They also make it easier to
-separate a safe summary from unrestricted raw tool arguments, tool results,
-prompts, credentials, or checkpoint payloads. A UI can project progress and
-safe decision summaries; it should not receive all of the harness's internal
-context.
+The agent may inspect the systems in a different order for each case. It may not
+decide business policy or change business data.
 
-### Pause at the authority boundary
+![Checkout recovery moves from adaptive investigation and workspace findings to application-controlled business rules, approvals, repair, and outcome verification.](../linkedin/assets/03-checkout-recovery-flow-screenshot.png)
 
-Suppose the evidence shows that payment was captured but inventory reservation
-expired. Recreating a reservation may be permitted under a bounded inventory
-policy. Issuing a customer refund, changing a payment, or overriding an order
-may need a human or policy-approved decision.
+_Figure 2. The harness guides the investigation from task intake to evidence.
+The application still controls approval, repair, and the final business result._
 
-The harness therefore asks for approval through an explicit, durable command
-boundary. It records the proposed action, the applicable evidence summary, and
-the decision needed to proceed. It does not infer approval from chat text or
-keep a worker blocked while waiting.
+### 1. Start with a goal, identity, and constraints
 
-The exact business control belongs to the application and downstream systems.
-As in Part 2, a consequential side effect needs its own authorization and
-idempotency contract. A harness permission prompt is useful control at the
-agent boundary; it does not replace a payment or order service's authorization
-checks.
+A clear Start command creates the case and its business record. The harness
+receives the checkout goal and a small, carefully chosen set of tools. It does
+not receive tools that can refund a payment, update an order, or change
+inventory.
 
-### Verify the business outcome, then report it
+This matters. A prompt that says "do not issue a refund" is useful, but the
+stronger control is simple: the investigation agent has no refund tool.
 
-After remediation, the agent checks the systems that define success. For this
-illustrative checkout case, the report might need evidence that:
+### 2. Let evidence determine the next read
 
-1. the authoritative order record is in a valid state;
-2. the payment service reports the intended final payment state and has no
-   unintended duplicate charge or refund;
-3. inventory shows the expected reservation or allocation;
-4. the diagnostic condition is resolved or has been explicitly escalated; and
-5. any customer-facing notification has the expected delivery state.
+The
+[investigation agent](../../harness/checkout-recovery/maf/backend/src/checkout_recovery_maf/maf/investigation.py)
+loads a checkout-triage skill and chooses when to inspect the order, payment,
+and inventory records. Diagnostic logs are optional. It may give one read-only
+inventory check to a small, focused subagent.
 
-The final output is therefore an evidence-backed result, such as “order is
-healthy; here are the order, payment, and inventory evidence identifiers,” or
-“the investigation reached a manual-review boundary; no refund was issued.”
-It is not “the model believes the plan is complete.”
+This freedom has limits:
 
-An independent [checkout-recovery MAF implementation](../../harness/checkout-recovery/maf/README.md)
-implements a bounded version of this scenario. Its
-[harness investigation](../../harness/checkout-recovery/maf/backend/src/checkout_recovery_maf/maf/investigation.py)
-uses model-selected read tools, a triage skill, a scoped workspace, and optional
-delegation. The [application service](../../harness/checkout-recovery/maf/backend/src/checkout_recovery_maf/application/service.py)
-owns policy, durable approval/resume, and verification against PostgreSQL-persisted
-simulated business records. General shell and browser capabilities are deliberately
-disabled. The [delivery ledger](../../harness/checkout-recovery/maf/docs/issues-changes-fixes.md)
-distinguishes demonstrated local and Foundry behavior from future hardening.
-The Part 2 [MAF](../../agent-framework/double-charge/maf/README.md)
-and [LangGraph](../../agent-framework/double-charge/langgraph/README.md)
-applications remain examples of the earlier, pre-structured workflow layer;
-they are not presented here as an order-8472 harness.
+- order, payment, and inventory evidence are all required;
+- it can delegate the inventory check only once;
+- model iterations, function calls, duration, context, and output are limited;
+- web search, shell execution, and general operating modes are disabled; and
+- the agent must leave a nonempty `plan.md` file in its private workspace.
 
-## 6. Ecosystem: orientation, not a taxonomy debate
+The plan makes the work easier to inspect, but it is not a command. The
+application decides the recovery path from the simulated business records. It
+does not execute the model's recommendation directly.
 
-The table maps current offerings to the three explanatory forms above. It is
-not an adoption ranking or a claim that any product provides every primitive in
-this chapter.
+### 3. Pause at the authority boundary
 
-| Offering | Fitting form(s) | Orientation |
-| --- | --- | --- |
-| [Microsoft Agent Framework](https://learn.microsoft.com/en-us/agent-framework/concepts/harness) | Build your own; packaged harness capability | Its agent, workflow, and Harness Agent capabilities span more than one layer. |
-| [Deep Agents](https://docs.langchain.com/oss/python/deepagents/overview) | Build your own | Provides an agent approach for planning, subagents, and filesystems. |
-| [GitHub Copilot SDK](https://docs.github.com/en/copilot/how-tos/copilot-sdk/features) | Build your own | Exposes sessions, an agent loop, tools/MCP, skills, hooks, events, and scoped subagents for host applications. |
-| [Managed Deep Agents](https://docs.langchain.com/langsmith/python/managed-deep-agents-overview) | Managed | LangChain distinguishes the Deep Agents harness from its managed Agent Server runtime. |
-| [OpenAI Agents API](https://developers.openai.com/api/docs/guides/agents) | Managed | OpenAI documents this as running a managed Codex harness; its separate Agents SDK is application-run. |
-| [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview) | Managed | Anthropic describes a pre-built, configurable harness in managed infrastructure. |
-| [Codex](https://openai.com/codex/) | Finished/general-purpose | An opinionated coding-agent experience; use its current documentation for surface and availability details. |
-| [Claude Code](https://code.claude.com/docs/en/overview) | Finished/general-purpose | An agentic coding tool for codebase, file, command, and development-tool work. |
-| [GitHub Copilot](https://docs.github.com/en/copilot) | Finished/general-purpose | A user-facing product that spans chat, coding, and agentic experiences. |
-| [ChatGPT Work](https://help.openai.com/en/articles/20001275-chatgpt-work-and-codex) | Finished/general-purpose | OpenAI describes Work as an agent for longer, multi-step work and finished deliverables. |
+Suppose the evidence shows an expired inventory reservation. If the quantity is
+within the configured automatic-recovery limit, application policy can allow
+the reservation to be created again. Above that limit, the case goes to manual
+review.
 
-The runtime underneath these offerings is a separate choice. For example, a
-managed product may operate both its harness and runtime, while an SDK lets an
-application assemble a harness that runs in its own chosen environment. Product
-names and capabilities change quickly, so this map should be rechecked against
-the linked first-party material before publication.
+A captured-payment refund follows a stricter path. The
+[application service](../../harness/checkout-recovery/maf/backend/src/checkout_recovery_maf/application/service.py)
+saves an approval request and returns control to the caller. A reviewer records
+an approval or denial, including the request identity and reason. A
+separate Resume command loads that saved decision.
 
-## 7. Boundaries: what a harness does not automatically solve
+Chat text is not approval. A tool permission prompt is not the business approval
+record. A checkpoint that says "approved" is not permission to move money.
 
-Harnesses integrate closely with surrounding concerns, but integration does not
-erase responsibility boundaries.
+### 4. Repair safely, then verify
+
+An allowed repair uses the same operation ID and request fingerprint for every
+matching retry. This lets the example recover when the first response is
+uncertain. It does not guarantee that any agent retry will run exactly once.
+
+After the repair, the application reloads the saved business state and checks
+the order, payment, inventory, and repair records.
+
+The meaning of resolution depends on the remedy:
+
+- inventory recovery expects a confirmed order, authorized payment, reserved
+  inventory, and an applied remediation;
+- refund resolution expects a cancelled order, refunded payment, released
+  inventory, and an applied remediation.
+
+Both are valid, verified results. Neither should be reduced to the vague claim
+"the order is healthy." If the evidence does not match the expected result, the
+case goes to manual review instead of being shown as successful.
+
+The detailed branches and evidence checks are documented in the
+[business rules](../../harness/checkout-recovery/maf/docs/design/business-rules.md)
+and
+[architecture](../../harness/checkout-recovery/maf/docs/design/architecture.md).
+Real payment and inventory systems must still enforce their own permissions,
+safe retry rules, checks for uncertain results, and auditing.
+
+## The usual suspects around a harness
+
+Several important concerns affect every stage of the task. They should work
+with the harness without being confused with the harness itself.
 
 | Adjacent concern | Boundary to preserve |
 | --- | --- |
-| Experience layer | Presents safe progress, approvals, and results; it does not become the authoritative business command path. |
-| Memory and knowledge | Supplies selected, governed knowledge; it does not silently override current system-of-record facts. |
-| Observability and evals | Show what was observed and test behavior; neither establishes business truth for one live order. |
-| Identity, security, and governance | Define who acts, data access, and policy; harness permissions do not replace downstream authorization. |
-| API gateway | Protects traffic and ingress policy; it does not verify the effect of a business operation. |
-| MCP, A2A, and AG-UI | Enable tool, agent, or UI interoperability; they do not define the application's approval or completion semantics. |
+| **Experience layer** | Shows safe progress, decisions, approvals, and results. It should use clear application commands instead of treating chat as authority. |
+| **Memory and knowledge** | Provides selected, controlled information. It must not silently replace current business records. |
+| **Observability and evaluations** | Traces explain what happened, and evaluations test behavior across many cases. Neither proves the result for this specific case. |
+| **Identity, security, and governance** | Defines who is acting, what they can access, which rules apply, and how actions are audited. Harness permissions do not replace permissions in business systems. |
+| **API gateway** | Applies authentication, traffic, quota, and content rules at an integration boundary. It does not prove that a business action worked. |
+| **MCP, A2A, and AG-UI** | Standardize tool, agent, and UI communication. They do not define the application's approval rules or completion checks. |
 
-The division of responsibilities remains:
+The safest architecture keeps the responsibilities visible:
 
 > **Framework coordinates execution.**
 >
 > **Harness equips and verifies execution.**
 >
-> **Runtime provides the execution substrate.**
+> **Runtime provides the infrastructure where the work runs.**
 >
-> **Application and business semantics define what success means.**
+> **Application and business systems define what success means.**
 
-Runtime recovery does not imply business correctness. Checkpoints do not replace
-business state. A model or harness can summarize evidence, but the authoritative
-order, payment, inventory, and policy systems must establish the outcome where
-that evidence matters.
+## What keeps the work alive
 
-## 8. Next: the runtime beneath the harness
+Suppose the reviewer returns tomorrow after the worker restarts. The application
+still needs the case, pending request, recorded decision, operation ID, and
+business evidence. The harness also needs somewhere to run and, when needed,
+restore its task state.
 
-A harness determines how an agent receives context, works with capabilities,
-stays within controls, and checks its result. It still needs somewhere to run:
-locally on a developer machine, on self-hosted infrastructure, or in a managed
-hosted-agent environment.
+That leads to the next layer: runtime infrastructure.
 
-> **The harness defines how the agent works. The runtime defines where that harness executes and how execution survives.**
+[Article 4: Runtime Infrastructure](04-runtime-infra.md) follows the same case
+across local, self-hosted, and managed hosted-agent environments. The harness
+defines how the agent works. The runtime determines where it runs, what it can
+reach, how it is isolated, and how it continues after an interruption.
 
-[Article 4: Runtime Infrastructure](04-runtime-infra.md) follows the same checkout
-investigation through local, self-hosted, and managed hosting arrangements,
-distinguishing architecture and code pointers from verified deployment evidence.
+## References and further reading
+
+- [Part 1: From Models to Harnesses](https://www.linkedin.com/pulse/from-models-harnesses-how-ai-agents-learn-finish-job-penumatsa-g2mjc)
+- [Part 2: Agent Frameworks](https://www.linkedin.com/pulse/agent-frameworks-model-can-answer-workflow-finish-penumatsa-sdz6c)
+- [Microsoft Agent Framework Harness](https://learn.microsoft.com/en-us/agent-framework/concepts/harness)
+- [Deep Agents overview](https://docs.langchain.com/oss/python/deepagents/overview)
+- [GitHub Copilot SDK features](https://docs.github.com/en/copilot/how-tos/copilot-sdk/features)
+- [Managed Deep Agents](https://docs.langchain.com/langsmith/python/managed-deep-agents-overview)
+- [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview)
+- [Model Context Protocol](https://modelcontextprotocol.io/specification/latest)
+- [A2A Protocol](https://a2a-protocol.org/latest/)
+- [AG-UI](https://docs.ag-ui.com/)
