@@ -34,12 +34,13 @@ permissions.
 
 But saying an agent "has a shell" doesn't tell you where that shell runs, what
 it can reach, or who the agent is when it knocks on a door. That's the layer
-underneath: **runtime infrastructure**. (Frameworks also use "runtime" for the
-engine that steps through their workflow. Here, it means the machine, sandbox,
-identity, and lifecycle beneath it all.)
+underneath: **runtime infrastructure**.
 
 > **Harness = what the agent may do. Runtime infrastructure = where it runs,
 > what it reaches, who it is, and how long it lives.**
+
+(Frameworks also use "runtime" for the engine that steps through their workflow.
+Here, it means the machine, sandbox, identity, and lifecycle beneath it all.)
 
 ## 2. Why agents need a laptop and a badge
 
@@ -54,29 +55,29 @@ records every door under their name, and can be revoked on its own.
 
 Agents need the same two things:
 
-**Own computer → explores:** runs, inspects, and retries in its own sandbox,
-where mistakes stay contained.
+**Its own computer:**
 
-**Own computer → keeps going:** files and working state survive between steps.
+- **Explore:** run, inspect, and retry in its own sandbox, where mistakes stay
+  contained.
+- **Keep going:** files and working state survive between steps.
 
-**Own identity → least access:** scoped, short-lived credentials, not a borrowed
-login.
+**Its own identity:**
 
-**Own identity → accountable:** every action traces back to the agent, and can
-be revoked.
+- **Least access:** scoped, short-lived credentials, not a borrowed login.
+- **Accountable:** every action traces back to the agent and can be revoked.
 
 **A computer lets the agent explore. An identity lets it act as itself.
 Together, they turn one-shot answers into work that can run for hours.**
 
 ## 3. Seven building blocks of runtime infrastructure
 
-So what is runtime infrastructure? The simplest answer: **it turns an approved
-action into something that runs somewhere.** To run the log script, it needs
-seven building blocks you'll find under almost every agent platform.
+To run the log script, runtime infrastructure needs seven building blocks you'll
+find under almost every agent platform.
 
 The script needs a process with CPU, memory, and Python: **compute**. It needs
 files that survive a restart, usually a mounted folder for logs and output: the
-**workspace**. It needs a wall between this investigation, other tasks, and the
+**workspace**. The harness decides what goes in it; runtime infrastructure keeps
+the files. It needs a wall between this investigation, other tasks, and the
 host: **isolation**.
 
 It needs a road to the log store, and only there: **networking**. It shows the
@@ -95,8 +96,6 @@ it uses, and how long it lives.
 
 ![Runtime infrastructure puts compute (with Bash, Python, and a browser) and the workspace, mounted files that survive restarts, inside an isolation wall: the sandbox. Networking, identity, resource limits, and lifecycle sit around it. The harness sends approved actions in; results come back. Business systems are reached only through allowed routes with the agent's scoped identity.](assets/04-agent-computer-primitives.png)
 
-The wall itself can be a container, a virtual machine, or a lightweight microVM.
-
 ## 4. One script, one long night
 
 Follow the script from start to finish.
@@ -112,7 +111,7 @@ Follow the script from start to finish.
    model.
 
 The answer arrives at 5:10 p.m.: the inventory reservation expired eleven
-seconds before the payment was confirmed. The agent notes it, runs two more
+seconds before the payment was authorized. The agent notes it, runs two more
 checks, and proposes a fix: re-reserve the stock and confirm the order.
 
 That fix affects a customer, so it needs a person's approval. The on-call
@@ -128,15 +127,12 @@ in the application as an explicit decision. The business system applied the fix
 and checked the real order state. **Restarting a machine doesn't approve a
 fix.**
 
-_(Our published checkout example deliberately gives the agent read-only
-diagnostic tools and no shell. The script here is illustrative.)_
-
 ## 5. Your laptop, your cloud, or theirs?
 
 **Local.** The script runs on a developer's laptop, with their files, network,
 and often their credentials, as with Claude Code or Copilot CLI. It's the
-fastest way to learn, but the trust boundary is the whole laptop, and the agent
-borrows the developer's badge.
+fastest way to learn, but by default the trust boundary is the whole laptop, and
+the agent borrows the developer's badge.
 
 **Self-hosted.** The environment moves into containers or VMs your team runs,
 for example on Azure Container Apps or AKS. You own the image, the network
@@ -153,14 +149,19 @@ LangChain's Managed Deep Agents go further and supply the harness too.
 
 ![Three homes for the same agent compared by compute, identity, isolation, lifecycle, and what runs around it. Local runs on your laptop and borrows your credentials. Self-hosted runs in containers or VMs you operate, or in a rented sandbox, with an identity you issue. Managed, shown as Foundry Hosted Agents, gives each session its own VM-isolated sandbox and the agent its own Entra identity, releases idle compute while keeping files, and runs the endpoint, versions, tools, and tracing. Moving right, the provider runs more.](assets/04-where-runtime-lives.png)
 
-Whichever home you choose, ask the same questions: Where do the loop and tools
-run? What can they reach, and as whom? What survives a pause? Who cleans up?
+Whichever home you choose, ask the same four questions:
 
-## 6. The laptop and the badge, on Foundry
+- Where do the loop and tools run?
+- What can they reach, and as whom?
+- What survives a pause?
+- Who cleans up?
+
+## 6. The computer and the badge, on Foundry
 
 Here's how one managed option, Microsoft Foundry Hosted Agents, fills in the
-building blocks from Figure 1. You package the agent as a container (MAF,
-LangGraph, or your own code) and deploy it.
+building blocks from Figure 1. You package the agent as a container, built with
+Microsoft Agent Framework (MAF), LangGraph, Copilot SDK, or your own code, and
+deploy it.
 
 **Figure 3. Inside managed runtime infrastructure: Foundry Hosted Agents**
 
@@ -202,7 +203,8 @@ The first two worked. The third didn't exist.
 
 A month later, order 9315 gets stuck the same way. A fresh sandbox starts. The
 8472 workspace is long gone, and the order database knows orders, not lessons.
-The agent starts from scratch. What should it have brought along?
+The agent starts from scratch. Memory comes in a few kinds. Conversation history
+belongs to one case; the other four could have crossed from 8472 to 9315:
 
 - **Conversation history:** what was said so far in this case.
 - **Episodic memory:** what happened last time. _"8472 was an inventory
@@ -217,7 +219,7 @@ The agent starts from scratch. What should it have brought along?
 Deciding what to keep, what to forget, and who may read it is a design problem
 of its own.
 
-> **Runtime state ≠ agent memory ≠ business state.**
+> **Runtime state ≠ business state ≠ agent memory.**
 
 Runtime infrastructure gives the agent a place to work. Memory decides what it
 learns from the work. That's where we go next, in Part 5: **memory**.
@@ -229,12 +231,12 @@ learns from the work. That's where we go next, in Part 5: **memory**.
 - **Framework lanes** from
   [Part 2](https://www.linkedin.com/pulse/agent-frameworks-model-can-answer-workflow-finish-penumatsa-sdz6c):
   the
-  [MAF walkthrough](https://github.com/ppenumatsa1/model-to-harness/blob/8a2ac71dc8afb4b82e2e49bd37d35cf9d3647225/agent-framework/double-charge/maf/README.md)
+  [MAF walkthrough](https://github.com/ppenumatsa1/model-to-harness/blob/main/agent-framework/double-charge/maf/README.md)
   and the
-  [LangGraph walkthrough](https://github.com/ppenumatsa1/model-to-harness/blob/8a2ac71dc8afb4b82e2e49bd37d35cf9d3647225/agent-framework/double-charge/langgraph/README.md),
+  [LangGraph walkthrough](https://github.com/ppenumatsa1/model-to-harness/blob/main/agent-framework/double-charge/langgraph/README.md),
   each with a Foundry hosted-agent adapter
-  ([MAF](https://github.com/ppenumatsa1/model-to-harness/tree/8a2ac71dc8afb4b82e2e49bd37d35cf9d3647225/agent-framework/double-charge/maf/infra/foundry-hosted/agent),
-  [LangGraph](https://github.com/ppenumatsa1/model-to-harness/tree/8a2ac71dc8afb4b82e2e49bd37d35cf9d3647225/agent-framework/double-charge/langgraph/infra/foundry-hosted/agent)).
+  ([MAF](https://github.com/ppenumatsa1/model-to-harness/tree/main/agent-framework/double-charge/maf/infra/foundry-hosted/agent),
+  [LangGraph](https://github.com/ppenumatsa1/model-to-harness/tree/main/agent-framework/double-charge/langgraph/infra/foundry-hosted/agent)).
 - **Checkout recovery** from
   [Part 3](https://www.linkedin.com/pulse/agent-harnesses-giving-agents-place-work-praveen-varma-penumatsa-1tmwf):
   [MAF](https://github.com/ppenumatsa1/model-to-harness/tree/main/harness/checkout-recovery/maf)
@@ -246,9 +248,11 @@ learns from the work. That's where we go next, in Part 5: **memory**.
   [Copilot SDK](https://github.com/ppenumatsa1/model-to-harness/tree/main/harness/checkout-recovery/copilot-sdk/infra/foundry-hosted/agent)
   hosted adapters.
 
-Each adapter sends start, approve, and resume as explicit commands to the
-workflow service. They are integration points, not a verified production
-deployment, and the business systems are simulated.
+The published checkout example gives the agent read-only diagnostic tools and no
+shell; the script in this story is illustrative. Each adapter sends start,
+approve, and resume as explicit commands to the workflow service. They are
+integration points, not a verified production deployment, and the business
+systems are simulated.
 
 **References:**
 
