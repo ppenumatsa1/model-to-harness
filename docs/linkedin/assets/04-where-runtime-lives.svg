@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1300" viewBox="0 0 1200 1300" role="img" aria-labelledby="title description">
+  <title id="title">Where runtime infrastructure lives: local, self-hosted, managed</title>
+  <desc id="description">Three homes for the same agent, compared by compute, identity, isolation, lifecycle, and what runs around it. Local: runs on your laptop with tools like Claude Code or Copilot CLI, borrows your credentials, the whole laptop is the boundary, and it ends when you close the lid. Self-hosted: containers or VMs you run on Azure Container Apps or AKS, or a rented sandbox such as Azure Container Apps dynamic sessions or E2B; you issue the identity, configure isolation, and handle pause, save, and cleanup. Managed, shown as Microsoft Foundry Hosted Agents (also Amazon Bedrock AgentCore and Google Agent Platform): a per-session sandbox with CPU and memory you choose, the agent's own Microsoft Entra identity plus RBAC, VM-isolated sandbox per session, compute released when idle with files saved and resumed later, and a platform-run endpoint, versions, Toolbox tools over MCP, and tracing. Moving right, the provider runs more of the runtime infrastructure.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <linearGradient id="shift" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#cbd5e1"/>
+      <stop offset="1" stop-color="#0866c6"/>
+    </linearGradient>
+    <style>
+      text { font-family: Arial, 'Liberation Sans', Helvetica, sans-serif; fill: #152438; }
+      .heading { font-size: 46px; font-weight: 700; }
+      .subtitle { font-size: 29px; fill: #475569; }
+      .card-title { font-size: 30px; font-weight: 700; }
+      .detail { font-size: 25px; }
+      .small { font-size: 23px; fill: #334155; }
+      .note { font-size: 25px; fill: #475569; }
+      .strong-note { font-size: 25px; font-weight: 700; fill: #152438; }
+      .badge { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
+      .tag { font-size: 19px; font-weight: 700; letter-spacing: 1px; fill: #0866c6; }
+      .local { fill: #f8fafc; stroke: #b6c6dc; stroke-width: 2; }
+      .self { fill: #f0f8f5; stroke: #86bda9; stroke-width: 2; }
+      .managed { fill: #f0f6ff; stroke: #0866c6; stroke-width: 3; }
+      .cell { fill: #ffffff; stroke: #d5dfeb; stroke-width: 1.5; }
+      .connector { fill: none; stroke: #475569; stroke-width: 3; marker-start: url(#arrow); marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1200" height="1300" fill="#ffffff"/>
+  <rect x="64" y="34" width="72" height="7" rx="3" fill="#0866c6"/>
+  <text x="64" y="100" class="heading">Where runtime infrastructure lives</text>
+  <text x="64" y="143" class="subtitle">Same agent, three homes. The difference is who runs what.</text>
+
+
+  <!-- LOCAL -->
+  <rect x="64" y="180" width="300" height="905" rx="22" class="local"/>
+  <text x="84" y="228" class="badge" style="fill:#475569">LOCAL</text>
+  <text x="84" y="275" class="card-title">On your laptop</text>
+  <text x="84" y="318" class="small">Claude Code</text>
+  <text x="84" y="350" class="small">Copilot CLI</text>
+  <rect x="84" y="415" width="260" height="118" rx="14" class="cell"/>
+  <text x="104" y="451" class="tag">COMPUTE</text>
+  <text x="104" y="487" class="detail">Your machine</text>
+  <rect x="84" y="547" width="260" height="118" rx="14" class="cell"/>
+  <text x="104" y="583" class="tag">IDENTITY</text>
+  <text x="104" y="619" class="detail">Borrows your</text>
+  <text x="104" y="651" class="detail">credentials</text>
+  <rect x="84" y="679" width="260" height="118" rx="14" class="cell"/>
+  <text x="104" y="715" class="tag">ISOLATION</text>
+  <text x="104" y="751" class="detail">The whole laptop</text>
+  <rect x="84" y="811" width="260" height="118" rx="14" class="cell"/>
+  <text x="104" y="847" class="tag">LIFECYCLE</text>
+  <text x="104" y="883" class="detail">Ends when you</text>
+  <text x="104" y="915" class="detail">close the lid</text>
+  <rect x="84" y="943" width="260" height="118" rx="14" class="cell"/>
+  <text x="104" y="979" class="tag">AROUND IT</text>
+  <text x="104" y="1015" class="detail">Nothing extra</text>
+
+  <!-- SELF-HOSTED -->
+  <rect x="384" y="180" width="300" height="905" rx="22" class="self"/>
+  <text x="404" y="228" class="badge" style="fill:#23795e">SELF-HOSTED</text>
+  <text x="404" y="275" class="card-title">On your infra</text>
+  <text x="404" y="318" class="small">ACA · AKS</text>
+  <text x="404" y="350" class="small">or rent a sandbox:</text>
+  <text x="404" y="382" class="small">ACA sessions · E2B</text>
+  <rect x="404" y="415" width="260" height="118" rx="14" class="cell"/>
+  <text x="424" y="451" class="tag">COMPUTE</text>
+  <text x="424" y="487" class="detail">Containers or VMs</text>
+  <text x="424" y="519" class="detail">you run</text>
+  <rect x="404" y="547" width="260" height="118" rx="14" class="cell"/>
+  <text x="424" y="583" class="tag">IDENTITY</text>
+  <text x="424" y="619" class="detail">An identity you</text>
+  <text x="424" y="651" class="detail">issue and scope</text>
+  <rect x="404" y="679" width="260" height="118" rx="14" class="cell"/>
+  <text x="424" y="715" class="tag">ISOLATION</text>
+  <text x="424" y="751" class="detail">Whatever you</text>
+  <text x="424" y="783" class="detail">configure</text>
+  <rect x="404" y="811" width="260" height="118" rx="14" class="cell"/>
+  <text x="424" y="847" class="tag">LIFECYCLE</text>
+  <text x="424" y="883" class="detail">You pause, save,</text>
+  <text x="424" y="915" class="detail">and clean up</text>
+  <rect x="404" y="943" width="260" height="118" rx="14" class="cell"/>
+  <text x="424" y="979" class="tag">AROUND IT</text>
+  <text x="424" y="1015" class="detail">You build it</text>
+
+  <!-- MANAGED -->
+  <rect x="704" y="180" width="432" height="905" rx="22" class="managed"/>
+  <text x="724" y="228" class="badge" style="fill:#075aaa">MANAGED</text>
+  <text x="724" y="275" class="card-title">Foundry Hosted Agents</text>
+  <text x="724" y="318" class="small">Also: Bedrock AgentCore,</text>
+  <text x="724" y="350" class="small">Google Agent Platform</text>
+  <rect x="724" y="415" width="392" height="118" rx="14" class="cell"/>
+  <text x="744" y="451" class="tag">COMPUTE</text>
+  <text x="744" y="487" class="detail">Per-session sandbox,</text>
+  <text x="744" y="519" class="detail">CPU and memory you pick</text>
+  <rect x="724" y="547" width="392" height="118" rx="14" class="cell"/>
+  <text x="744" y="583" class="tag">IDENTITY</text>
+  <text x="744" y="619" class="detail">Its own Entra agent</text>
+  <text x="744" y="651" class="detail">identity, plus RBAC</text>
+  <rect x="724" y="679" width="392" height="118" rx="14" class="cell"/>
+  <text x="744" y="715" class="tag">ISOLATION</text>
+  <text x="744" y="751" class="detail">VM-isolated, per session</text>
+  <rect x="724" y="811" width="392" height="118" rx="14" class="cell"/>
+  <text x="744" y="847" class="tag">LIFECYCLE</text>
+  <text x="744" y="883" class="detail">Idle → compute released,</text>
+  <text x="744" y="915" class="detail">files saved → resumed</text>
+  <rect x="724" y="943" width="392" height="118" rx="14" class="cell"/>
+  <text x="744" y="979" class="tag">AROUND IT</text>
+  <text x="744" y="1015" class="detail">Endpoint, versions,</text>
+  <text x="744" y="1047" class="detail">Toolbox (MCP), tracing</text>
+
+  <!-- Ownership shift -->
+  <rect x="84" y="1122" width="1032" height="18" rx="9" fill="url(#shift)"/>
+  <text x="84" y="1182" class="note">You run more</text>
+  <text x="1116" y="1182" text-anchor="end" class="note">Provider runs more</text>
+  <path d="M262 1174 H878" class="connector"/>
+
+  <text x="600" y="1250" text-anchor="middle" class="strong-note">Same computer and badge. The question is who runs them.</text>
+</svg>
