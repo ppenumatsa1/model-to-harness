@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1470" viewBox="0 0 1200 1470" role="img" aria-labelledby="title description">
+  <title id="title">Inside managed runtime infrastructure: Foundry Hosted Agents</title>
+  <desc id="description">A client calls the agent's dedicated endpoint over Responses, Invocations, or A2A, signed in with Microsoft Entra ID. Foundry Agent Service runs the endpoint, the agent's own Microsoft Entra identity, immutable versions, durable conversations, a state store, and tracing. Your agent code, built with MAF, LangGraph, Copilot SDK, or your own code, runs in a per-session, VM-isolated sandbox with CPU and memory you choose; $HOME and /files persist. Compute follows the session: active while requests arrive, released after an idle timeout (15 minutes by default) with files kept, then resumed on new compute with files restored. The agent calls Foundry models, Toolbox tools over MCP, and your own services as its own identity, with role assignments for anything beyond the defaults.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <style>
+      text { font-family: Arial, 'Liberation Sans', Helvetica, sans-serif; fill: #152438; }
+      .heading { font-size: 46px; font-weight: 700; }
+      .subtitle { font-size: 29px; fill: #475569; }
+      .card-title { font-size: 33px; font-weight: 700; }
+      .chip-title { font-size: 27px; font-weight: 700; }
+      .detail { font-size: 27px; }
+      .small { font-size: 23px; fill: #334155; }
+      .note { font-size: 25px; fill: #475569; }
+      .strong-note { font-size: 28px; font-weight: 700; }
+      .badge { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
+      .tag { font-size: 19px; font-weight: 700; letter-spacing: 1px; fill: #0866c6; }
+      .client { fill: #f8fafc; stroke: #b6c6dc; stroke-width: 2; }
+      .platform { fill: #f6f9fd; stroke: #0866c6; stroke-width: 3; }
+      .chip { fill: #ffffff; stroke: #92b9ed; stroke-width: 2; }
+      .boundary { fill: #ffffff; stroke: #475569; stroke-width: 2.5; stroke-dasharray: 12 8; }
+      .code { fill: #f0f8f5; stroke: #86bda9; stroke-width: 2; }
+      .life { fill: #ffffff; stroke: #b6c6dc; stroke-width: 2; }
+      .target { fill: #f8fafc; stroke: #b6c6dc; stroke-width: 2; }
+      .connector { fill: none; stroke: #475569; stroke-width: 3; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1200" height="1470" fill="#ffffff"/>
+  <rect x="64" y="34" width="72" height="7" rx="3" fill="#0866c6"/>
+  <text x="64" y="100" class="heading">Inside managed runtime infrastructure</text>
+  <text x="64" y="143" class="subtitle">Foundry Hosted Agents: your code in the sandbox, the platform around it.</text>
+
+  <!-- Client -->
+  <rect x="64" y="180" width="1072" height="84" rx="18" class="client"/>
+  <text x="94" y="233" class="card-title">Client</text>
+  <text x="300" y="233" class="detail">Your app, Teams, or an API call</text>
+  <text x="1106" y="231" text-anchor="end" class="badge" style="fill:#475569">CALLER</text>
+  <path d="M600 264 V330" class="connector"/>
+  <text x="576" y="306" text-anchor="end" class="note">Responses · Invocations · A2A</text>
+  <text x="624" y="306" class="note">Entra ID sign-in</text>
+
+  <!-- Platform -->
+  <rect x="64" y="335" width="1072" height="835" rx="24" class="platform"/>
+  <text x="94" y="385" class="card-title">Foundry Agent Service</text>
+  <text x="1106" y="383" text-anchor="end" class="badge" style="fill:#075aaa">PLATFORM RUNS</text>
+
+  <rect x="94" y="412" width="320" height="116" rx="14" class="chip"/>
+  <text x="116" y="444" class="tag">ACCESS</text>
+  <text x="116" y="478" class="chip-title">Endpoint</text>
+  <text x="116" y="510" class="small">Dedicated per agent</text>
+  <rect x="440" y="412" width="320" height="116" rx="14" class="chip"/>
+  <text x="462" y="444" class="tag">IDENTITY</text>
+  <text x="462" y="478" class="chip-title">Agent identity</text>
+  <text x="462" y="510" class="small">Its own Entra ID</text>
+  <rect x="786" y="412" width="320" height="116" rx="14" class="chip"/>
+  <text x="808" y="444" class="tag">RELEASE</text>
+  <text x="808" y="478" class="chip-title">Versions</text>
+  <text x="808" y="510" class="small">Immutable, per deploy</text>
+  <rect x="94" y="544" width="320" height="116" rx="14" class="chip"/>
+  <text x="116" y="576" class="tag">HISTORY</text>
+  <text x="116" y="610" class="chip-title">Conversations</text>
+  <text x="116" y="642" class="small">Durable, in Foundry</text>
+  <rect x="440" y="544" width="320" height="116" rx="14" class="chip"/>
+  <text x="462" y="576" class="tag">STATE</text>
+  <text x="462" y="610" class="chip-title">State store</text>
+  <text x="462" y="642" class="small">Items and checkpoints</text>
+  <rect x="786" y="544" width="320" height="116" rx="14" class="chip"/>
+  <text x="808" y="576" class="tag">OBSERVABILITY</text>
+  <text x="808" y="610" class="chip-title">Tracing</text>
+  <text x="808" y="642" class="small">OpenTelemetry built in</text>
+
+  <!-- Sandbox -->
+  <rect x="94" y="688" width="1012" height="262" rx="20" class="boundary"/>
+  <text x="124" y="738" class="card-title">Per-session sandbox</text>
+  <text x="1076" y="736" text-anchor="end" class="badge" style="fill:#23795e">YOU OWN THE CODE</text>
+  <text x="124" y="776" class="tag">COMPUTE · ISOLATION · WORKSPACE · LIMITS</text>
+  <rect x="124" y="794" width="520" height="134" rx="16" class="code"/>
+  <text x="150" y="846" class="chip-title">Your agent code</text>
+  <text x="150" y="884" class="small">MAF · LangGraph · Copilot SDK</text>
+  <text x="150" y="912" class="small">or your own, in a container</text>
+  <text x="680" y="836" class="detail">VM-isolated per session</text>
+  <text x="680" y="874" class="detail">$HOME and /files persist</text>
+  <text x="680" y="912" class="detail">CPU and memory you pick</text>
+
+  <!-- Lifecycle -->
+  <text x="94" y="1000" class="tag">LIFECYCLE · COMPUTE FOLLOWS THE SESSION</text>
+  <rect x="94" y="1018" width="290" height="124" rx="14" class="life"/>
+  <text x="116" y="1060" class="chip-title">Active</text>
+  <text x="116" y="1094" class="small">Requests arriving,</text>
+  <text x="116" y="1122" class="small">compute running</text>
+  <rect x="455" y="1018" width="290" height="124" rx="14" class="life"/>
+  <text x="477" y="1060" class="chip-title">Idle · 15 min</text>
+  <text x="477" y="1094" class="small">Compute released,</text>
+  <text x="477" y="1122" class="small">files kept</text>
+  <rect x="816" y="1018" width="290" height="124" rx="14" class="life"/>
+  <text x="838" y="1060" class="chip-title">Resumed</text>
+  <text x="838" y="1094" class="small">New compute,</text>
+  <text x="838" y="1122" class="small">files restored</text>
+  <path d="M388 1080 H449" class="connector"/>
+  <path d="M749 1080 H810" class="connector"/>
+
+  <!-- Outbound -->
+  <path d="M600 1170 V1250" class="connector"/>
+  <text x="576" y="1218" text-anchor="end" class="note">As the agent's own identity</text>
+  <text x="624" y="1218" class="note">Roles you grant · your VNet</text>
+
+  <rect x="64" y="1256" width="340" height="104" rx="16" class="target"/>
+  <text x="88" y="1300" class="chip-title">Foundry models</text>
+  <text x="88" y="1336" class="small">Reachable by default</text>
+  <rect x="430" y="1256" width="340" height="104" rx="16" class="target"/>
+  <text x="454" y="1300" class="chip-title">Toolbox (MCP)</text>
+  <text x="454" y="1336" class="small">Code Interpreter, search</text>
+  <rect x="796" y="1256" width="340" height="104" rx="16" class="target"/>
+  <text x="820" y="1300" class="chip-title">Your services</text>
+  <text x="820" y="1336" class="small">Logs, APIs, databases</text>
+
+  <text x="600" y="1422" text-anchor="middle" class="strong-note">A sandbox per session. An identity per agent. Run for you.</text>
+</svg>
