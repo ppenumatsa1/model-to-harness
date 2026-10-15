@@ -43,23 +43,23 @@
   <rect x="24" y="24" width="1752" height="1302" rx="38" fill="none" stroke="#D7E8F8" stroke-width="3"/>
 
   <rect x="60" y="70" width="520" height="260" rx="32" fill="url(#workflow)" stroke="#2E8BE6" stroke-width="5" filter="url(#shadow)"/>
-  <circle cx="120" cy="130" r="34" fill="#1769AA"/>
-  <path d="M106 110 H128 L136 118 V147 H106 Z M128 110 V119 H136 M113 128 H129 M113 138 H127" class="icon"/>
+  <circle cx="100" cy="130" r="34" fill="#1769AA"/>
+  <path d="M86 110 H108 L116 118 V147 H86 Z M108 110 V119 H116 M93 128 H109 M93 138 H107" class="icon"/>
   <text x="320" y="155" text-anchor="middle" class="title">Workflow state</text>
   <text x="320" y="225" text-anchor="middle" class="label">Progress, checkpoints,</text>
   <text x="320" y="268" text-anchor="middle" class="label">and approval</text>
 
   <rect x="640" y="70" width="520" height="260" rx="32" fill="url(#business)" stroke="#E88A00" stroke-width="5" filter="url(#shadow)"/>
-  <circle cx="700" cy="130" r="34" fill="#E88A00"/>
-  <ellipse cx="700" cy="116" rx="17" ry="8" class="icon"/>
-  <path d="M683 116 V141 C683 146 717 146 717 141 V116 M683 128 C683 133 717 133 717 128" class="icon"/>
+  <circle cx="680" cy="130" r="34" fill="#E88A00"/>
+  <ellipse cx="680" cy="116" rx="17" ry="8" class="icon"/>
+  <path d="M663 116 V141 C663 146 697 146 697 141 V116 M663 128 C663 133 697 133 697 128" class="icon"/>
   <text x="900" y="155" text-anchor="middle" class="title">Business state</text>
   <text x="900" y="225" text-anchor="middle" class="label">Current order and</text>
   <text x="900" y="268" text-anchor="middle" class="label">payment truth</text>
 
   <rect x="1220" y="70" width="520" height="260" rx="32" fill="url(#memory)" stroke="#15915D" stroke-width="5" filter="url(#shadow)"/>
-  <circle cx="1280" cy="130" r="34" fill="#15915D"/>
-  <path d="M1267 141 C1256 130 1263 116 1274 118 C1278 107 1294 111 1293 122 C1305 125 1302 143 1291 143 M1276 115 V145 M1289 120 V143 M1265 130 H1299" class="icon"/>
+  <circle cx="1260" cy="130" r="34" fill="#15915D"/>
+  <path d="M1247 141 C1236 130 1243 116 1254 118 C1258 107 1274 111 1273 122 C1285 125 1282 143 1271 143 M1256 115 V145 M1269 120 V143 M1245 130 H1279" class="icon"/>
   <text x="1480" y="155" text-anchor="middle" class="title">Agent memory</text>
   <text x="1480" y="225" text-anchor="middle" class="label">Selected lessons</text>
   <text x="1480" y="268" text-anchor="middle" class="label">from past work</text>

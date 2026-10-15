@@ -47,7 +47,7 @@ permission to act.
 
 **Figure 1. From durable sources to temporary context**
 
-![Workflow state, authoritative business state, and agent memory flow into a harness that retrieves, filters, and applies access rules. The selected information becomes temporary model context. Workspace files can supply selected artifacts, but a workspace is not model context by itself.](./assets/05-memory-context-sources-linkedin.png)
+![Workflow state, authoritative business state, and agent memory flow into a harness that retrieves, filters, and applies access rules. The selected information becomes temporary model context. Workspace files can supply selected artifacts, but a workspace is not model context by itself.](./assets/05-memory-context-sources-final.png)
 
 ## 3. Two timescales of agent memory
 
@@ -58,7 +58,7 @@ Agent memory operates at two timescales:
 
 **Figure 2. Two timescales of agent memory**
 
-![Figure 2. Two timescales of agent memory](./assets/05-agent-memory-taxonomy-final.png)
+![Taxonomy of short-term memory within one task or thread and long-term episodic, semantic, and procedural memory across tasks or sessions.](./assets/05-agent-memory-taxonomy-final.png)
 
 Short-term memory keeps one task or conversation coherent:
 
@@ -178,7 +178,7 @@ explains the storage differences between basic and standard setup.
 
 **Figure 4. How general memory concepts map to Microsoft Foundry**
 
-![General memory concepts map to Microsoft Foundry as follows: short-term conversation history maps to conversation and response state; user facts and preferences map to user profile memory; summaries of prior conversations map to chat summary memory; reusable methods and patterns map to procedural memory; and a specific event and outcome has no separate documented episodic-memory type.](./assets/05-foundry-memory-mapping-linkedin.png)
+![General memory concepts map to Microsoft Foundry as follows: short-term conversation history maps to conversation and response state; user facts and preferences map to user profile memory; summaries of prior conversations map to chat summary memory; reusable methods and patterns map to procedural memory; and a specific event and outcome has no separate documented episodic-memory type.](./assets/05-foundry-memory-mapping-final.png)
 
 Foundry's three long-term memory types overlap with the general taxonomy, but
 they do not map one-to-one. A chat summary is a distilled summary of selected
