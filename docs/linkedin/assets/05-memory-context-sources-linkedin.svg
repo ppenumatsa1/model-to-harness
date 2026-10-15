@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1350" viewBox="0 0 1800 1350">
+  <style>
+    .title { font: 700 46px Arial, sans-serif; fill: #17324D; }
+    .label { font: 400 30px Arial, sans-serif; fill: #304A60; }
+    .note { font: 400 27px Arial, sans-serif; fill: #304A60; }
+    .line { stroke: #334155; stroke-width: 5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .icon { fill: none; stroke: #FFFFFF; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4F9FF"/>
+    </linearGradient>
+    <linearGradient id="workflow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E5F2FF"/>
+    </linearGradient>
+    <linearGradient id="business" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFF0D9"/>
+    </linearGradient>
+    <linearGradient id="memory" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E2F7EA"/>
+    </linearGradient>
+    <linearGradient id="harness" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EEF7FF"/>
+      <stop offset="1" stop-color="#D9ECFF"/>
+    </linearGradient>
+    <linearGradient id="context" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFDF5"/>
+      <stop offset="1" stop-color="#FFEBC2"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#17324D" flood-opacity="0.13"/>
+    </filter>
+    <marker id="arrow" markerWidth="7" markerHeight="7" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect width="100%" height="100%" fill="url(#page)"/>
+  <rect x="24" y="24" width="1752" height="1302" rx="38" fill="none" stroke="#D7E8F8" stroke-width="3"/>
+
+  <rect x="60" y="70" width="520" height="260" rx="32" fill="url(#workflow)" stroke="#2E8BE6" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="120" cy="130" r="34" fill="#1769AA"/>
+  <path d="M106 110 H128 L136 118 V147 H106 Z M128 110 V119 H136 M113 128 H129 M113 138 H127" class="icon"/>
+  <text x="320" y="155" text-anchor="middle" class="title">Workflow state</text>
+  <text x="320" y="225" text-anchor="middle" class="label">Progress, checkpoints,</text>
+  <text x="320" y="268" text-anchor="middle" class="label">and approval</text>
+
+  <rect x="640" y="70" width="520" height="260" rx="32" fill="url(#business)" stroke="#E88A00" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="700" cy="130" r="34" fill="#E88A00"/>
+  <ellipse cx="700" cy="116" rx="17" ry="8" class="icon"/>
+  <path d="M683 116 V141 C683 146 717 146 717 141 V116 M683 128 C683 133 717 133 717 128" class="icon"/>
+  <text x="900" y="155" text-anchor="middle" class="title">Business state</text>
+  <text x="900" y="225" text-anchor="middle" class="label">Current order and</text>
+  <text x="900" y="268" text-anchor="middle" class="label">payment truth</text>
+
+  <rect x="1220" y="70" width="520" height="260" rx="32" fill="url(#memory)" stroke="#15915D" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="1280" cy="130" r="34" fill="#15915D"/>
+  <path d="M1267 141 C1256 130 1263 116 1274 118 C1278 107 1294 111 1293 122 C1305 125 1302 143 1291 143 M1276 115 V145 M1289 120 V143 M1265 130 H1299" class="icon"/>
+  <text x="1480" y="155" text-anchor="middle" class="title">Agent memory</text>
+  <text x="1480" y="225" text-anchor="middle" class="label">Selected lessons</text>
+  <text x="1480" y="268" text-anchor="middle" class="label">from past work</text>
+
+  <path d="M320 330 L320 465" class="line" marker-end="url(#arrow)"/>
+  <path d="M900 330 L900 465" class="line" marker-end="url(#arrow)"/>
+  <path d="M1480 330 L1480 465" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="170" y="475" width="1460" height="245" rx="34" fill="url(#harness)" stroke="#2587D9" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="255" cy="598" r="40" fill="#1769AA"/>
+  <path d="M234 579 H276 L261 597 V619 L248 626 V597 Z" class="icon"/>
+  <text x="900" y="570" text-anchor="middle" class="title">Harness selects what matters now</text>
+  <text x="900" y="642" text-anchor="middle" class="label">Retrieves, filters, and applies access rules</text>
+
+  <path d="M900 720 L900 825" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="250" y="830" width="1300" height="245" rx="34" fill="url(#context)" stroke="#E6A000" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="335" cy="953" r="40" fill="#E88A00"/>
+  <path d="M335 929 V977 M311 953 H359 M318 936 L352 970 M352 936 L318 970" class="icon"/>
+  <text x="900" y="925" text-anchor="middle" class="title">Model context</text>
+  <text x="900" y="997" text-anchor="middle" class="label">Temporary input for the next decision</text>
+
+  <rect x="180" y="1165" width="1440" height="105" rx="30" fill="#EAF8F1" stroke="#49A37A" stroke-width="3"/>
+  <text x="900" y="1207" text-anchor="middle" class="note">Workspace files can supply selected artifacts;</text>
+  <text x="900" y="1245" text-anchor="middle" class="note">a workspace is not model context by itself.</text>
+</svg>

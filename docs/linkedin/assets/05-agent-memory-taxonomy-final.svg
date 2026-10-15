@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1500" viewBox="0 0 1800 1500">
+  <style>
+    .title { font: 700 47px Arial, sans-serif; fill: #17324D; }
+    .label { font: 400 29px Arial, sans-serif; fill: #304A60; }
+    .card-title { font: 700 34px Arial, sans-serif; fill: #17324D; }
+    .card-label { font: 400 26px Arial, sans-serif; fill: #304A60; }
+    .note { font: 600 27px Arial, sans-serif; fill: #304A60; }
+    .line { stroke: #64748B; stroke-width: 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .icon { fill: none; stroke: #FFFFFF; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4F9FF"/>
+    </linearGradient>
+    <linearGradient id="root" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EEF7FF"/>
+      <stop offset="1" stop-color="#E8E5FF"/>
+    </linearGradient>
+    <linearGradient id="short" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4F2FF"/>
+    </linearGradient>
+    <linearGradient id="long" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E3F7EA"/>
+    </linearGradient>
+    <linearGradient id="episodic" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFE8EF"/>
+    </linearGradient>
+    <linearGradient id="semantic" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E2F7F4"/>
+    </linearGradient>
+    <linearGradient id="procedural" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EEE8FF"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#17324D" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="7" markerHeight="7" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect width="100%" height="100%" fill="url(#page)"/>
+  <rect x="24" y="24" width="1752" height="1452" rx="38" fill="none" stroke="#D7E8F8" stroke-width="3"/>
+
+  <rect x="390" y="45" width="1020" height="170" rx="34" fill="url(#root)" stroke="#6042C5" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="470" cy="130" r="38" fill="#6042C5"/>
+  <path d="M455 143 C443 131 451 115 463 117 C467 104 485 109 484 121 C497 124 493 143 481 144 M464 113 V148 M479 116 V145 M452 131 H490" class="icon"/>
+  <text x="900" y="112" text-anchor="middle" class="title">Agent memory</text>
+  <text x="900" y="170" text-anchor="middle" class="label">Knowledge available for reuse</text>
+
+  <path d="M900 215 L900 255 L440 255 L440 290" class="line"/>
+  <path d="M900 255 L1360 255 L1360 290" class="line"/>
+
+  <rect x="60" y="290" width="760" height="165" rx="32" fill="url(#short)" stroke="#2587D9" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="135" cy="373" r="36" fill="#1769AA"/>
+  <circle cx="135" cy="373" r="20" class="icon"/>
+  <path d="M135 360 V374 L147 381" class="icon"/>
+  <text x="440" y="358" text-anchor="middle" class="title">Short-term</text>
+  <text x="440" y="418" text-anchor="middle" class="label">Within one task or thread</text>
+
+  <rect x="980" y="290" width="760" height="165" rx="32" fill="url(#long)" stroke="#15915D" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="1055" cy="373" r="36" fill="#15915D"/>
+  <path d="M1032 373 C1043 352 1057 352 1067 373 C1077 394 1091 394 1102 373 C1091 352 1077 352 1067 373 C1057 394 1043 394 1032 373 Z" class="icon"/>
+  <text x="1360" y="358" text-anchor="middle" class="title">Long-term</text>
+  <text x="1360" y="418" text-anchor="middle" class="label">Across tasks, threads, or sessions</text>
+
+  <path d="M440 455 L440 490 L240 490 L240 520" class="line"/>
+  <path d="M440 490 L640 490 L640 520" class="line"/>
+
+  <rect x="60" y="520" width="360" height="280" rx="30" fill="#FFFFFF" stroke="#2587D9" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="120" cy="585" r="33" fill="#1769AA"/>
+  <path d="M102 571 H138 V597 H120 L109 607 V597 H102 Z M111 581 H130 M111 590 H126" class="icon"/>
+  <text x="240" y="650" text-anchor="middle" class="card-title" style="font-size:30px">Conversation history</text>
+  <text x="240" y="715" text-anchor="middle" class="card-label">Recent messages</text>
+  <text x="240" y="754" text-anchor="middle" class="card-label">and tool results</text>
+
+  <rect x="460" y="520" width="360" height="280" rx="30" fill="#FFFFFF" stroke="#2587D9" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="520" cy="585" r="33" fill="#1769AA"/>
+  <path d="M503 570 H537 V604 H503 Z M511 580 H529 M511 590 H529 M511 600 H523" class="icon"/>
+  <text x="640" y="650" text-anchor="middle" class="card-title">Working memory</text>
+  <text x="640" y="715" text-anchor="middle" class="card-label">Plan, findings,</text>
+  <text x="640" y="754" text-anchor="middle" class="card-label">and open questions</text>
+
+  <rect x="90" y="880" width="700" height="230" rx="30" fill="#EAF8F1" stroke="#49A37A" stroke-width="4"/>
+  <text x="440" y="950" text-anchor="middle" class="note">Durable persistence does not make</text>
+  <text x="440" y="995" text-anchor="middle" class="note">thread-scoped state long-term memory.</text>
+  <text x="440" y="1060" text-anchor="middle" class="card-label">Scope defines the timescale.</text>
+
+  <path d="M1360 455 L1360 480 L940 480 L940 1215" class="line"/>
+  <path d="M940 625 L980 625" class="line"/>
+  <path d="M940 920 L980 920" class="line"/>
+  <path d="M940 1215 L980 1215" class="line"/>
+
+  <rect x="980" y="520" width="760" height="210" rx="30" fill="url(#episodic)" stroke="#D23B68" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="1055" cy="585" r="34" fill="#A90C46"/>
+  <circle cx="1055" cy="585" r="18" class="icon"/>
+  <path d="M1055 572 V585 L1067 593" class="icon"/>
+  <text x="1390" y="592" text-anchor="middle" class="card-title">Episodic — what happened?</text>
+  <text x="1390" y="655" text-anchor="middle" class="card-label">8472: reservation expired before payment authorization</text>
+
+  <rect x="980" y="790" width="760" height="260" rx="30" fill="url(#semantic)" stroke="#138A83" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="1055" cy="855" r="34" fill="#06777B"/>
+  <path d="M1037 837 H1073 V873 H1037 Z M1055 837 V873 M1043 846 H1051 M1059 846 H1067 M1043 856 H1051 M1059 856 H1067" class="icon"/>
+  <text x="1390" y="862" text-anchor="middle" class="card-title">Semantic — what is true?</text>
+  <text x="1390" y="920" text-anchor="middle" class="card-label">Reservations can expire while payment is processing</text>
+  <rect x="1030" y="952" width="660" height="68" rx="20" fill="#FFF4D6" stroke="#E6A000" stroke-width="4"/>
+  <text x="1360" y="996" text-anchor="middle" class="card-label" style="font-size:24px;font-weight:700">Preference/profile: one-line approval summaries</text>
+
+  <rect x="980" y="1110" width="760" height="210" rx="30" fill="url(#procedural)" stroke="#6042C5" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="1055" cy="1175" r="34" fill="#6042C5"/>
+  <path d="M1039 1159 L1071 1191 M1071 1159 L1039 1191 M1048 1155 L1035 1168 M1075 1182 L1062 1195" class="icon"/>
+  <text x="1390" y="1182" text-anchor="middle" class="card-title" style="font-size:32px">Procedural — how should I do it?</text>
+  <text x="1390" y="1245" text-anchor="middle" class="card-label">Compare reservation and payment timestamps first</text>
+
+  <rect x="180" y="1380" width="1440" height="82" rx="28" fill="#EAF8F1" stroke="#49A37A" stroke-width="3"/>
+  <text x="900" y="1432" text-anchor="middle" class="card-label">An episode can supply evidence for semantic facts, preferences, and procedures.</text>
+</svg>

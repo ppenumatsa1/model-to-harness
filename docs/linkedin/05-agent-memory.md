@@ -6,14 +6,14 @@ _This is Part 5 of the **From Models to Harnesses** series, continuing from
 [Part 3: Agent Harnesses](https://www.linkedin.com/pulse/agent-harnesses-giving-agents-place-work-praveen-varma-penumatsa-1tmwf),
 and
 [Part 4: Runtime Infrastructure](https://www.linkedin.com/pulse/runtime-infrastructure-give-your-agent-computer-badge-penumatsa-nlntc/).
-You do not need the earlier parts to follow this story._
+You don't need the earlier parts to follow this story._
 
 ## 1. The agent solved the problem—then forgot the lesson
 
 At the end of Part 4, order 8472 was resolved. The payment had been authorized,
 but the order was not confirmed. The agent found the cause: the inventory
-reservation expired before payment authorization. A manager approved the fix,
-the workflow resumed, and the business system recorded the result.
+reservation expired before payment authorization. The on-call manager approved
+the fix, the workflow resumed, and the business system recorded the result.
 
 The runtime restored the workspace after the overnight pause. The workflow kept
 the approval and progress. Those mechanisms helped the same case continue. They
@@ -45,10 +45,9 @@ but they do different jobs. A checkpoint can resume a workflow. A memory can
 guide a later investigation. Neither replaces the live order record or grants
 permission to act.
 
-![Workflow state, authoritative business state, and agent memory flow into a harness that retrieves, filters, and applies access rules. The selected information becomes temporary model context. Workspace files can supply selected artifacts, but a workspace is not model context by itself.](assets/05-memory-context-sources-v2.png)
+**Figure 1. From durable sources to temporary context**
 
-_Figure 1. Durable sources remain separate; the harness projects selected
-information into temporary model context._
+![Workflow state, authoritative business state, and agent memory flow into a harness that retrieves, filters, and applies access rules. The selected information becomes temporary model context. Workspace files can supply selected artifacts, but a workspace is not model context by itself.](./assets/05-memory-context-sources-linkedin.png)
 
 ## 3. Two timescales of agent memory
 
@@ -57,10 +56,9 @@ Agent memory operates at two timescales:
 > **Current task or thread → conversation history + working memory. Across tasks
 > or sessions → episodic + semantic + procedural memory.**
 
-![Agent memory has short-term memory within one task or thread and long-term memory across tasks or sessions. Short-term memory includes conversation history and working memory. Long-term memory has three primary forms: episodic memory for a specific event and outcome, semantic memory for facts concepts and profiles including preferences, and procedural memory for reusable methods and instructions.](./assets/05-agent-memory-taxonomy-v2.png)
+**Figure 2. Two timescales of agent memory**
 
-_Figure 2. An episode can supply evidence for semantic facts, preferences, and
-procedures; the retained memory types still answer different questions._
+![Figure 2. Two timescales of agent memory](./assets/05-agent-memory-taxonomy-final.png)
 
 Short-term memory keeps one task or conversation coherent:
 
@@ -73,8 +71,9 @@ For order 9315, working memory might hold a note to compare payment and
 reservation times. Frameworks often persist this thread-scoped information as
 state or checkpoints.
 
-Long-term memory crosses tasks or sessions. Three common forms answer different
-questions:
+Long-term memory crosses tasks or sessions.
+[Three common forms](https://docs.langchain.com/oss/python/concepts/memory)
+answer different questions:
 
 - **Episodic memory — what happened?** It retains a specific situation, the
   actions taken, and the outcome.
@@ -92,16 +91,19 @@ Order 8472 shows how one case can produce several memories:
   authorization.
 - **Semantic fact:** Reservations can expire while payment is still processing.
 - **Procedure:** Compare reservation and payment timestamps first.
-- **Preference/profile fact:** The reviewer prefers one-line approval summaries.
+- **Preference/profile fact:** The on-call manager prefers a one-line summary
+  with every approval request.
 
 The categories can overlap across systems, but this distinction helps us decide
-what to store and how to retrieve it. [3,5]
+what to store and how to retrieve it.
 
 ## 4. The memory lifecycle: keep less, keep better
 
 After order 8472, what should the agent keep? The useful parts are the verified
 cause, the evidence that supports it, and the checks that worked. Keeping every
 log line would make later retrieval slower, noisier, and harder to govern.
+
+A practical, vendor-neutral memory lifecycle has seven steps:
 
 1. **Capture a candidate.** Record the case outcome, useful evidence, and method
    that worked.
@@ -116,11 +118,9 @@ log line would make later retrieval slower, noisier, and harder to govern.
 7. **Update or forget.** Correct stale items, expire them, or delete them when
    required.
 
-[![Memory lifecycle: capture, extract, verify, consolidate, store, retrieve, then update or forget.](./assets/05-memory-lifecycle-v2.png)](./assets/05-memory-lifecycle-v2.png)
+**Figure 3. A practical, vendor-neutral memory lifecycle**
 
-_Figure 3. Memory is a maintained lifecycle, not an append-only archive.
-Retrieved items return as hypotheses and can be corrected or forgotten._
-[Open the full-size diagram.](./assets/05-memory-lifecycle-v2.png)
+![A practical vendor-neutral memory lifecycle: capture, extract, verify, consolidate, store, retrieve, then update or forget.](./assets/05-memory-lifecycle-linkedin.png)
 
 A useful memory record needs more than text. It needs a source, timestamp, scope,
 owner, retention rule, and status such as candidate or verified. Users and
@@ -145,7 +145,7 @@ types.
 
 Retrieved memory is still untrusted input. It can be stale, incorrectly scoped,
 or corrupted. It may guide a decision, but it cannot grant authority or bypass
-business rules and verification. [1–4]
+business rules and verification.
 
 ## 6. Back to order 9315
 
@@ -167,36 +167,41 @@ The agent now follows a shorter path:
 
 ## 7. Mapping the concepts to Microsoft Foundry
 
-Microsoft Foundry Agent Service provides managed long-term memory in preview.
+Microsoft Foundry Agent Service provides
+[managed long-term memory in preview](https://learn.microsoft.com/azure/foundry/agents/concepts/what-is-memory).
 It also persists conversation and response state separately. Basic setup uses
 Microsoft-managed resources. Standard setup stores thread and conversation state
 in the customer's Azure Cosmos DB. This state remains short-term because it is
-scoped to a conversation, even when it is stored durably. [1,7]
+scoped to a conversation, even when it is stored durably. The
+[Agent Service FAQ](https://learn.microsoft.com/azure/foundry/agents/faq)
+explains the storage differences between basic and standard setup.
 
-| General memory concept | Foundry implementation |
-| --- | --- |
-| Short-term conversation history | Agent Service conversation and response state |
-| Long-term user facts and preferences | User profile memory |
-| Long-term summary of prior conversations | Chat summary memory |
-| Reusable methods and operating patterns | Procedural memory |
-| A specific past event, actions, and outcome | No separate episodic-memory type |
+**Figure 4. How general memory concepts map to Microsoft Foundry**
+
+![General memory concepts map to Microsoft Foundry as follows: short-term conversation history maps to conversation and response state; user facts and preferences map to user profile memory; summaries of prior conversations map to chat summary memory; reusable methods and patterns map to procedural memory; and a specific event and outcome has no separate documented episodic-memory type.](./assets/05-foundry-memory-mapping-linkedin.png)
 
 Foundry's three long-term memory types overlap with the general taxonomy, but
 they do not map one-to-one. A chat summary is a distilled summary of selected
 prior conversations, not a complete episode, audit record, or workflow
-checkpoint. [1]
+checkpoint.
 
-Foundry supports a memory search tool and lower-level Memory Store APIs. The
-current preview includes item-level create, read, update, list, and delete
+Foundry supports a memory search tool and
+[lower-level Memory Store APIs](https://learn.microsoft.com/azure/foundry/agents/how-to/memory-usage).
+The current preview includes item-level create, read, update, list, and delete
 operations; store-level default retention; direct remember-or-forget commands;
-and scope-based isolation. When an application calls the APIs directly, it must
-supply the scope explicitly. Preview behavior, limits, regions, and pricing can
-change. [1–2]
+and scope-based partitioning. When an application calls the APIs directly, it
+must supply the scope explicitly. Scope separates memory collections; application
+authentication and authorization still determine who may access them. Foundry's
+extraction and consolidation automate memory management, but application
+verification still determines whether a memory may influence a business action.
+Preview behavior, limits, regions, and pricing can change.
 
-Use memory for learned, reusable context; Foundry IQ or Azure AI Search for
-curated organizational knowledge; framework checkpoints for execution progress;
-and the system of record for business truth. In this series' example, PostgreSQL
-remains authoritative for the case, approval, and audit trail.
+Use memory for learned, reusable context;
+[Foundry IQ](https://learn.microsoft.com/azure/foundry/agents/concepts/what-is-foundry-iq)
+or Azure AI Search for curated organizational knowledge; framework checkpoints
+for execution progress; and the system of record for business truth. In this
+series' implementation, PostgreSQL is the authoritative business database for
+the case, approval, and audit trail.
 
 ## 8. Memory helps. Confidence requires evidence.
 
@@ -241,14 +246,15 @@ across time, run safely, and learn from past work. Part 6 asks whether the whole
 system does those things correctly and consistently—and how to improve it when
 it does not.
 
-## References and further reading
+---
+
+**References and further reading:**
 
 _First-party documentation checked 15 October 2026._
 
-1. [Memory in Microsoft Foundry Agent Service (preview)](https://learn.microsoft.com/azure/foundry/agents/concepts/what-is-memory)
-2. [Create and use memory in Microsoft Foundry Agent Service (preview)](https://learn.microsoft.com/azure/foundry/agents/how-to/memory-usage)
-3. [LangChain and LangGraph: Memory overview](https://docs.langchain.com/oss/python/concepts/memory)
-4. [LangChain: Context engineering in agents](https://docs.langchain.com/oss/python/langchain/context-engineering)
-5. [CoALA: Cognitive Architectures for Language Agents](https://arxiv.org/abs/2309.02427)
-6. [Part 4: Runtime Infrastructure—Give Your Agent a Computer and a Badge](https://www.linkedin.com/pulse/runtime-infrastructure-give-your-agent-computer-badge-penumatsa-nlntc/)
-7. [Foundry Agent Service frequently asked questions](https://learn.microsoft.com/azure/foundry/agents/faq)
+- **Microsoft Foundry:** [Memory in Microsoft Foundry Agent Service (preview)](https://learn.microsoft.com/azure/foundry/agents/concepts/what-is-memory)
+  · [Create and use memory](https://learn.microsoft.com/azure/foundry/agents/how-to/memory-usage)
+  · [Agent Service frequently asked questions](https://learn.microsoft.com/azure/foundry/agents/faq)
+- **Memory and context:** [LangChain and LangGraph memory overview](https://docs.langchain.com/oss/python/concepts/memory)
+  · [LangChain context engineering](https://docs.langchain.com/oss/python/langchain/context-engineering)
+  · [CoALA: Cognitive Architectures for Language Agents](https://arxiv.org/abs/2309.02427)

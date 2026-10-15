@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1500" viewBox="0 0 1800 1500">
+  <style>
+    .title { font: 700 50px Arial, sans-serif; fill: #17324D; }
+    .subtitle { font: 400 30px Arial, sans-serif; fill: #304A60; }
+    .column { font: 700 38px Arial, sans-serif; fill: #17324D; }
+    .row-title { font: 700 31px Arial, sans-serif; fill: #17324D; }
+    .row-label { font: 400 27px Arial, sans-serif; fill: #304A60; }
+    .note { font: 600 28px Arial, sans-serif; fill: #304A60; }
+    .line { stroke: #334155; stroke-width: 5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .icon { fill: none; stroke: #FFFFFF; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4F9FF"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E5F2FF"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E3F7EA"/>
+    </linearGradient>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EEF7FF"/>
+      <stop offset="1" stop-color="#E8E5FF"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#17324D" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="7" markerHeight="7" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect width="100%" height="100%" fill="url(#page)"/>
+  <rect x="24" y="24" width="1752" height="1452" rx="38" fill="none" stroke="#D7E8F8" stroke-width="3"/>
+
+  <rect x="180" y="55" width="1440" height="175" rx="34" fill="url(#header)" stroke="#6042C5" stroke-width="5" filter="url(#shadow)"/>
+  <text x="900" y="125" text-anchor="middle" class="title">General memory concepts → Microsoft Foundry</text>
+  <text x="900" y="185" text-anchor="middle" class="subtitle">The concepts overlap, but the mapping is not one-to-one</text>
+
+  <text x="440" y="300" text-anchor="middle" class="column">General concept</text>
+  <text x="1420" y="300" text-anchor="middle" class="column">Foundry implementation</text>
+
+  <rect x="70" y="340" width="680" height="175" rx="28" fill="url(#left)" stroke="#2587D9" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="135" cy="428" r="34" fill="#1769AA"/>
+  <circle cx="135" cy="428" r="19" class="icon"/>
+  <path d="M135 415 V429 L147 436" class="icon"/>
+  <text x="440" y="413" text-anchor="middle" class="row-title">Short-term conversation history</text>
+  <text x="440" y="463" text-anchor="middle" class="row-label">One conversation or thread</text>
+
+  <rect x="1050" y="340" width="680" height="175" rx="28" fill="url(#right)" stroke="#15915D" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="1115" cy="428" r="34" fill="#15915D"/>
+  <path d="M1098 411 H1132 V445 H1098 Z M1106 421 H1124 M1106 431 H1124 M1106 441 H1118" class="icon"/>
+  <text x="1420" y="405" text-anchor="middle" class="row-title">Conversation and response state</text>
+  <text x="1420" y="452" text-anchor="middle" class="row-label">Persisted separately from</text>
+  <text x="1420" y="487" text-anchor="middle" class="row-label">managed long-term memory</text>
+  <path d="M750 428 L1040 428" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="70" y="550" width="680" height="175" rx="28" fill="url(#left)" stroke="#138A83" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="135" cy="638" r="34" fill="#06777B"/>
+  <path d="M111 622 H159 V654 H111 Z M135 622 V654 M119 632 H129 M141 632 H151 M119 643 H129 M141 643 H151" class="icon"/>
+  <text x="440" y="623" text-anchor="middle" class="row-title">User facts and preferences</text>
+  <text x="440" y="673" text-anchor="middle" class="row-label">Semantic or profile memory</text>
+
+  <rect x="1050" y="550" width="680" height="175" rx="28" fill="url(#right)" stroke="#138A83" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="1115" cy="638" r="34" fill="#06777B"/>
+  <path d="M1102 649 C1091 638 1098 624 1109 626 C1113 615 1129 619 1128 630 C1140 633 1137 651 1126 651 M1111 623 V653 M1124 628 V651 M1100 638 H1134" class="icon"/>
+  <text x="1420" y="638" text-anchor="middle" class="row-title">User profile memory</text>
+  <path d="M750 638 L1040 638" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="70" y="760" width="680" height="175" rx="28" fill="url(#left)" stroke="#D23B68" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="135" cy="848" r="34" fill="#A90C46"/>
+  <path d="M116 834 H154 V861 H135 L123 871 V861 H116 Z M125 844 H145 M125 853 H140" class="icon"/>
+  <text x="440" y="833" text-anchor="middle" class="row-title">Summaries of prior conversations</text>
+  <text x="440" y="883" text-anchor="middle" class="row-label">Distilled continuity across sessions</text>
+
+  <rect x="1050" y="760" width="680" height="175" rx="28" fill="url(#right)" stroke="#D23B68" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="1115" cy="848" r="34" fill="#A90C46"/>
+  <path d="M1096 834 H1134 V861 H1115 L1103 871 V861 H1096 Z M1105 844 H1125 M1105 853 H1120" class="icon"/>
+  <text x="1420" y="848" text-anchor="middle" class="row-title">Chat summary memory</text>
+  <path d="M750 848 L1040 848" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="70" y="970" width="680" height="175" rx="28" fill="url(#left)" stroke="#6042C5" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="135" cy="1058" r="34" fill="#6042C5"/>
+  <path d="M119 1042 L151 1074 M151 1042 L119 1074 M128 1038 L115 1051 M155 1065 L142 1078" class="icon"/>
+  <text x="440" y="1035" text-anchor="middle" class="row-title">Reusable methods and patterns</text>
+  <text x="440" y="1082" text-anchor="middle" class="row-label">How the agent should perform</text>
+  <text x="440" y="1117" text-anchor="middle" class="row-label">recurring work</text>
+
+  <rect x="1050" y="970" width="680" height="175" rx="28" fill="url(#right)" stroke="#6042C5" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="1115" cy="1058" r="34" fill="#6042C5"/>
+  <path d="M1099 1042 L1131 1074 M1131 1042 L1099 1074 M1108 1038 L1095 1051 M1135 1065 L1122 1078" class="icon"/>
+  <text x="1420" y="1058" text-anchor="middle" class="row-title">Procedural memory</text>
+  <path d="M750 1058 L1040 1058" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="70" y="1180" width="680" height="175" rx="28" fill="#FFF8F9" stroke="#D23B68" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="135" cy="1268" r="34" fill="#A90C46"/>
+  <circle cx="135" cy="1268" r="18" class="icon"/>
+  <path d="M135 1255 V1268 L147 1276" class="icon"/>
+  <text x="440" y="1253" text-anchor="middle" class="row-title">A specific event and outcome</text>
+  <text x="440" y="1303" text-anchor="middle" class="row-label">Episodic memory</text>
+
+  <rect x="1050" y="1180" width="680" height="175" rx="28" fill="#FFF8F9" stroke="#D23B68" stroke-width="4" filter="url(#shadow)"/>
+  <circle cx="1115" cy="1268" r="34" fill="#A90C46"/>
+  <path d="M1098 1251 L1132 1285 M1132 1251 L1098 1285" class="icon"/>
+  <text x="1420" y="1240" text-anchor="middle" class="row-title">No separate documented type</text>
+  <text x="1420" y="1287" text-anchor="middle" class="row-label">May inform summaries, profiles,</text>
+  <text x="1420" y="1322" text-anchor="middle" class="row-label">or procedures</text>
+  <path d="M750 1268 L1040 1268" class="line" marker-end="url(#arrow)"/>
+
+  <rect x="180" y="1400" width="1440" height="70" rx="28" fill="#EAF8F1" stroke="#49A37A" stroke-width="3"/>
+  <text x="900" y="1445" text-anchor="middle" class="note">Conversation state can be durable and still remain short-term because its scope is one thread.</text>
+</svg>
