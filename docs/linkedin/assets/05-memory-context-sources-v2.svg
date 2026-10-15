@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1020" viewBox="0 0 2400 1020">
+  <style>
+    .title { font: 700 52px Arial, sans-serif; fill: #17324D; }
+    .label { font: 400 34px Arial, sans-serif; fill: #304A60; }
+    .small-title { font: 700 42px Arial, sans-serif; fill: #17324D; }
+    .small-label { font: 400 28px Arial, sans-serif; fill: #304A60; }
+    .line { stroke: #334155; stroke-width: 4.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .icon { fill: none; stroke: #FFFFFF; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4F9FF"/>
+    </linearGradient>
+    <linearGradient id="workflow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E5F2FF"/>
+    </linearGradient>
+    <linearGradient id="business" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFF0D9"/>
+    </linearGradient>
+    <linearGradient id="memory" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E2F7EA"/>
+    </linearGradient>
+    <linearGradient id="harness" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EEF7FF"/>
+      <stop offset="1" stop-color="#D9ECFF"/>
+    </linearGradient>
+    <linearGradient id="context" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFDF5"/>
+      <stop offset="1" stop-color="#FFEBC2"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="9" stdDeviation="10" flood-color="#17324D" flood-opacity="0.13"/>
+    </filter>
+    <marker id="arrow" markerWidth="7" markerHeight="7" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect width="100%" height="100%" fill="url(#page)"/>
+  <rect x="28" y="28" width="2344" height="964" rx="38" fill="none" stroke="#D7E8F8" stroke-width="3"/>
+
+  <rect x="70" y="70" width="660" height="230" rx="32" fill="url(#workflow)" stroke="#2E8BE6" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="126" cy="126" r="33" fill="#1769AA"/>
+  <path d="M112 106 H134 L142 114 V143 H112 Z M134 106 V115 H142 M119 124 H135 M119 134 H133" class="icon"/>
+  <text x="400" y="154" text-anchor="middle" class="title">Workflow state</text>
+  <text x="400" y="230" text-anchor="middle" class="label">Progress, checkpoints, approval</text>
+  <rect x="870" y="70" width="660" height="230" rx="32" fill="url(#business)" stroke="#E88A00" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="926" cy="126" r="33" fill="#E88A00"/>
+  <ellipse cx="926" cy="112" rx="17" ry="8" class="icon"/>
+  <path d="M909 112 V137 C909 142 943 142 943 137 V112 M909 124 C909 129 943 129 943 124" class="icon"/>
+  <text x="1200" y="154" text-anchor="middle" class="title">Business state</text>
+  <text x="1200" y="230" text-anchor="middle" class="label">Current order and payment truth</text>
+  <rect x="1670" y="70" width="660" height="230" rx="32" fill="url(#memory)" stroke="#15915D" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="1726" cy="126" r="33" fill="#15915D"/>
+  <path d="M1713 137 C1702 126 1709 112 1720 114 C1724 103 1740 107 1739 118 C1751 121 1748 139 1737 139 M1722 111 V141 M1735 116 V139 M1711 126 H1745" class="icon"/>
+  <text x="2000" y="154" text-anchor="middle" class="title">Agent memory</text>
+  <text x="2000" y="230" text-anchor="middle" class="label">Selected lessons from past work</text>
+  <path d="M400 300 L850 405" class="line" marker-end="url(#arrow)"/>
+  <path d="M1200 300 L1200 405" class="line" marker-end="url(#arrow)"/>
+  <path d="M2000 300 L1550 405" class="line" marker-end="url(#arrow)"/>
+  <rect x="560" y="410" width="1280" height="180" rx="32" fill="url(#harness)" stroke="#2587D9" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="632" cy="500" r="37" fill="#1769AA"/>
+  <path d="M612 482 H652 L638 499 V519 L626 526 V499 Z" class="icon"/>
+  <text x="1200" y="478" text-anchor="middle" class="title">Harness selects what matters now</text>
+  <text x="1200" y="546" text-anchor="middle" class="label">retrieves, filters, and applies access rules</text>
+  <path d="M1200 590 L1200 675" class="line" marker-end="url(#arrow)"/>
+  <rect x="560" y="680" width="1280" height="200" rx="32" fill="url(#context)" stroke="#E6A000" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="632" cy="780" r="37" fill="#E88A00"/>
+  <path d="M632 758 V802 M610 780 H654 M616 764 L648 796 M648 764 L616 796" class="icon"/>
+  <text x="1200" y="758" text-anchor="middle" class="title">Model context</text>
+  <text x="1200" y="832" text-anchor="middle" class="label">Temporary input for the next decision</text>
+  <rect x="425" y="916" width="1550" height="70" rx="28" fill="#EAF8F1" stroke="#49A37A" stroke-width="3"/>
+  <text x="1200" y="958" text-anchor="middle" class="small-label">Workspace files can supply selected artifacts; a workspace is not model context by itself.</text>
+
+</svg>

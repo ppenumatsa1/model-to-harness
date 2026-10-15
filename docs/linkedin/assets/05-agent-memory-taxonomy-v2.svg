@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1500" viewBox="0 0 2400 1500">
+  <style>
+    .title { font: 700 52px Arial, sans-serif; fill: #17324D; }
+    .label { font: 400 34px Arial, sans-serif; fill: #304A60; }
+    .small-title { font: 700 42px Arial, sans-serif; fill: #17324D; }
+    .small-label { font: 400 28px Arial, sans-serif; fill: #304A60; }
+    .line { stroke: #334155; stroke-width: 4.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .icon { fill: none; stroke: #FFFFFF; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+  </style>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4F9FF"/>
+    </linearGradient>
+    <linearGradient id="root" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#EEF7FF"/>
+      <stop offset="1" stop-color="#E8E5FF"/>
+    </linearGradient>
+    <linearGradient id="short" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E4F2FF"/>
+    </linearGradient>
+    <linearGradient id="long" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E3F7EA"/>
+    </linearGradient>
+    <linearGradient id="episodic" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFE8EF"/>
+    </linearGradient>
+    <linearGradient id="semantic" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E2F7F4"/>
+    </linearGradient>
+    <linearGradient id="procedural" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EEE8FF"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="9" stdDeviation="10" flood-color="#17324D" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="7" markerHeight="7" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#334155"/>
+    </marker>
+  </defs>
+
+  <rect width="100%" height="100%" fill="url(#page)"/>
+  <rect x="28" y="28" width="2344" height="1444" rx="38" fill="none" stroke="#D7E8F8" stroke-width="3"/>
+
+  <rect x="720" y="50" width="960" height="170" rx="32" fill="url(#root)" stroke="#6042C5" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="785" cy="135" r="36" fill="#6042C5"/>
+  <path d="M770 148 C758 136 766 120 778 122 C782 109 800 114 799 126 C812 129 808 148 796 149 M779 118 V153 M794 121 V150 M767 136 H805" class="icon"/>
+  <text x="1200" y="116" text-anchor="middle" class="title">Agent memory</text>
+  <text x="1200" y="178" text-anchor="middle" class="label">Knowledge available for reuse</text>
+  <path d="M980 220 L575 325" class="line" marker-end="url(#arrow)"/>
+  <path d="M1420 220 L1795 325" class="line" marker-end="url(#arrow)"/>
+  <rect x="70" y="330" width="1010" height="180" rx="32" fill="url(#short)" stroke="#2587D9" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="140" cy="420" r="36" fill="#1769AA"/>
+  <circle cx="140" cy="420" r="20" class="icon"/>
+  <path d="M140 407 V421 L152 428" class="icon"/>
+  <text x="575" y="397" text-anchor="middle" class="title">Short-term</text>
+  <text x="575" y="464" text-anchor="middle" class="label">Within one task or thread</text>
+  <rect x="1260" y="330" width="1070" height="180" rx="32" fill="url(#long)" stroke="#15915D" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="1330" cy="420" r="36" fill="#15915D"/>
+  <path d="M1307 420 C1318 399 1332 399 1342 420 C1352 441 1366 441 1377 420 C1366 399 1352 399 1342 420 C1332 441 1318 441 1307 420 Z" class="icon"/>
+  <text x="1795" y="397" text-anchor="middle" class="title">Long-term</text>
+  <text x="1795" y="464" text-anchor="middle" class="label">Across tasks, threads, or sessions</text>
+  <path d="M575 510 L575 620 M290 620 L860 620 M290 620 L290 645 M860 620 L860 645" class="line" style="stroke-width:5"/>
+  <rect x="70" y="650" width="440" height="360" rx="32" fill="#FFFFFF" stroke="#2587D9" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="290" cy="705" r="34" fill="#1769AA"/>
+  <path d="M271 691 H309 V718 H290 L278 728 V718 H271 Z M280 701 H300 M280 710 H295" class="icon"/>
+  <text x="290" y="765" text-anchor="middle" class="small-title">Conversation history</text>
+  <text x="290" y="845" text-anchor="middle" class="small-label">Recent messages</text>
+  <text x="290" y="890" text-anchor="middle" class="small-label">and tool results</text>
+  <rect x="640" y="650" width="440" height="360" rx="32" fill="#FFFFFF" stroke="#2587D9" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="860" cy="705" r="34" fill="#1769AA"/>
+  <path d="M843 690 H877 V724 H843 Z M851 700 H869 M851 710 H869 M851 720 H863" class="icon"/>
+  <text x="860" y="765" text-anchor="middle" class="small-title">Working memory</text>
+  <text x="860" y="845" text-anchor="middle" class="small-label">Plan, findings,</text>
+  <text x="860" y="890" text-anchor="middle" class="small-label">and open questions</text>
+  <path d="M1795 510 L1160 510 L1160 1280" class="line" style="stroke-width:5"/>
+  <path d="M1160 710 L1235 710 M1160 995 L1235 995 M1160 1280 L1235 1280" class="line" style="stroke-width:5" marker-end="url(#arrow)"/>
+  <rect x="1240" y="600" width="1090" height="220" rx="32" fill="url(#episodic)" stroke="#D23B68" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="1320" cy="710" r="36" fill="#A90C46"/>
+  <circle cx="1320" cy="710" r="19" class="icon"/>
+  <path d="M1320 697 V710 L1332 718" class="icon"/>
+  <text x="1785" y="682" text-anchor="middle" class="small-title">Episodic — what happened?</text>
+  <text x="1785" y="756" text-anchor="middle" class="small-label">8472: reservation expired before payment authorization</text>
+  <rect x="1240" y="860" width="1090" height="270" rx="32" fill="url(#semantic)" stroke="#138A83" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="1320" cy="950" r="36" fill="#06777B"/>
+  <path d="M1301 932 H1339 V968 H1301 Z M1320 932 V968 M1307 941 H1315 M1325 941 H1333 M1307 951 H1315 M1325 951 H1333" class="icon"/>
+  <text x="1785" y="922" text-anchor="middle" class="small-title">Semantic — what is true?</text>
+  <text x="1785" y="982" text-anchor="middle" class="small-label">Fact: reservations can expire while payment is processing</text>
+  <rect x="1390" y="1010" width="790" height="90" rx="22" fill="#FFF4D6" stroke="#E6A000" stroke-width="4"/>
+  <text x="1785" y="1064" text-anchor="middle" class="small-label" style="font-weight:700">Preference/profile: use one-line approval summaries</text>
+  <rect x="1240" y="1170" width="1090" height="220" rx="32" fill="url(#procedural)" stroke="#6042C5" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="1320" cy="1280" r="36" fill="#6042C5"/>
+  <path d="M1304 1264 L1336 1296 M1336 1264 L1304 1296 M1313 1260 L1300 1273 M1340 1287 L1327 1300" class="icon"/>
+  <text x="1785" y="1252" text-anchor="middle" class="small-title">Procedural — how should I do it?</text>
+  <text x="1785" y="1326" text-anchor="middle" class="small-label">Compare reservation and payment timestamps first</text>
+  <rect x="400" y="1418" width="1600" height="62" rx="26" fill="#EAF8F1" stroke="#49A37A" stroke-width="3"/>
+  <text x="1200" y="1468" text-anchor="middle" class="small-label">An episode can supply evidence for semantic facts, preferences, and procedures.</text>
+
+</svg>

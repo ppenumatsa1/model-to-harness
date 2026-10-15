@@ -1,0 +1,2226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Memory Flow Runner: Vendor-Neutral and Microsoft Foundry</title>
+  <style>
+    :root {
+      --navy: #17324d;
+      --text: #304a60;
+      --muted: #66798a;
+      --line: #496b86;
+      --blue: #e8f1fa;
+      --blue-border: #9bb5cc;
+      --green: #e9f5ee;
+      --green-border: #91b79f;
+      --gold: #fff4d6;
+      --gold-border: #d8b55b;
+      --coral: #fcece8;
+      --coral-border: #c98b7e;
+      --gray: #f3f5f7;
+      --gray-border: #b6c0c9;
+      --white: #ffffff;
+      --shadow: 0 8px 24px rgba(23, 50, 77, 0.09);
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--white);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+
+    button,
+    select,
+    input {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .page-shell {
+      width: min(1480px, 96vw);
+      margin: 0 auto;
+      padding: 24px 0 48px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.7fr);
+      gap: 22px;
+      align-items: stretch;
+      margin-bottom: 20px;
+    }
+
+    .hero-copy,
+    .hero-rule {
+      border: 1px solid var(--gray-border);
+      border-radius: var(--radius);
+      background: var(--white);
+      box-shadow: var(--shadow);
+      padding: 24px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: #4d708c;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4 {
+      color: var(--navy);
+      line-height: 1.16;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+    }
+
+    .hero-copy p:last-child {
+      margin-bottom: 0;
+    }
+
+    .hero-rule {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: var(--gold);
+      border-color: var(--gold-border);
+    }
+
+    .hero-rule strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--navy);
+      font-size: 1.2rem;
+    }
+
+    .tabs {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      margin-bottom: 18px;
+      padding: 10px;
+      border: 1px solid var(--gray-border);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 6px 16px rgba(23, 50, 77, 0.08);
+      backdrop-filter: blur(8px);
+    }
+
+    .tab {
+      flex: 0 0 auto;
+      padding: 9px 14px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      background: var(--gray);
+      color: var(--navy);
+      font-weight: 750;
+    }
+
+    .tab[aria-selected="true"] {
+      border-color: var(--line);
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+      animation: fade-in 180ms ease-out;
+    }
+
+    @keyframes fade-in {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .section-heading {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: end;
+      margin: 0 0 16px;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+      font-size: clamp(1.45rem, 3vw, 2.1rem);
+    }
+
+    .section-heading p {
+      max-width: 720px;
+      margin: 4px 0 0;
+      color: var(--muted);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      border: 1px solid var(--gray-border);
+      border-radius: var(--radius);
+      background: var(--white);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .card h3,
+    .card h4 {
+      margin-top: 0;
+    }
+
+    .tone-blue {
+      border-color: var(--blue-border);
+      background: var(--blue);
+    }
+
+    .tone-green {
+      border-color: var(--green-border);
+      background: var(--green);
+    }
+
+    .tone-gold {
+      border-color: var(--gold-border);
+      background: var(--gold);
+    }
+
+    .tone-coral {
+      border-color: var(--coral-border);
+      background: var(--coral);
+    }
+
+    .tone-gray {
+      border-color: var(--gray-border);
+      background: var(--gray);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 9px;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      color: #4d708c;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .case-flow {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 54px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+
+    .case-card {
+      min-height: 330px;
+    }
+
+    .case-card ul {
+      padding-left: 20px;
+    }
+
+    .case-arrow {
+      color: var(--line);
+      font-size: 2.5rem;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .lesson-box {
+      margin-top: 14px;
+      padding: 13px;
+      border-left: 5px solid var(--green-border);
+      border-radius: 8px;
+      background: var(--green);
+      color: var(--navy);
+      font-weight: 700;
+    }
+
+    .concept-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .concept {
+      min-height: 112px;
+      padding: 13px;
+      border: 1px solid var(--gray-border);
+      border-radius: 12px;
+      background: var(--white);
+    }
+
+    .concept strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--navy);
+    }
+
+    .lifecycle-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.8fr);
+      gap: 18px;
+    }
+
+    .path-switcher {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .path-button,
+    .choice-button,
+    .mode-button,
+    .action-button {
+      padding: 8px 12px;
+      border: 1px solid var(--gray-border);
+      border-radius: 10px;
+      background: var(--white);
+      color: var(--navy);
+      font-weight: 750;
+    }
+
+    .path-button.active,
+    .mode-button.active {
+      border-color: var(--line);
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .lifecycle-track {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .life-step {
+      position: relative;
+      min-height: 155px;
+      padding: 15px;
+      border: 2px solid var(--gray-border);
+      border-radius: 14px;
+      background: var(--white);
+      color: var(--text);
+      text-align: left;
+      box-shadow: 0 4px 12px rgba(23, 50, 77, 0.06);
+    }
+
+    .life-step::after {
+      position: absolute;
+      top: 50%;
+      right: -16px;
+      z-index: 2;
+      content: "→";
+      color: var(--line);
+      font-size: 1.45rem;
+      font-weight: 900;
+      transform: translateY(-50%);
+    }
+
+    .life-step:nth-child(4)::after,
+    .life-step:nth-child(8)::after {
+      display: none;
+    }
+
+    .life-step.active {
+      border-color: var(--navy);
+      outline: 3px solid rgba(23, 50, 77, 0.12);
+    }
+
+    .life-step[data-path="write"] {
+      background: var(--blue);
+      border-color: var(--blue-border);
+    }
+
+    .life-step[data-path="read"] {
+      background: var(--green);
+      border-color: var(--green-border);
+    }
+
+    .life-step[data-path="maintain"] {
+      background: var(--gold);
+      border-color: var(--gold-border);
+    }
+
+    .step-number {
+      display: inline-grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      margin-bottom: 8px;
+      border-radius: 50%;
+      background: var(--navy);
+      color: var(--white);
+      font-size: 0.82rem;
+      font-weight: 850;
+    }
+
+    .life-step strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--navy);
+      font-size: 1rem;
+    }
+
+    .detail-panel {
+      min-height: 440px;
+    }
+
+    .detail-panel dl {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 10px;
+      margin-bottom: 0;
+    }
+
+    .detail-panel dt {
+      color: var(--navy);
+      font-weight: 800;
+    }
+
+    .detail-panel dd {
+      margin: 0;
+    }
+
+    .warning {
+      margin-top: 14px;
+      padding: 12px;
+      border-left: 5px solid var(--coral-border);
+      border-radius: 8px;
+      background: var(--coral);
+    }
+
+    .memory-type-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr);
+      gap: 18px;
+    }
+
+    .type-tree {
+      display: grid;
+      grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
+      gap: 16px;
+    }
+
+    .type-column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .type-card {
+      padding: 16px;
+      border: 2px solid var(--green-border);
+      border-radius: 14px;
+      background: var(--green);
+    }
+
+    .type-card h3 {
+      margin: 0 0 4px;
+    }
+
+    .type-card p {
+      margin: 4px 0;
+    }
+
+    .preference-nest {
+      margin-top: 12px;
+      padding: 11px;
+      border: 1px solid var(--gold-border);
+      border-radius: 10px;
+      background: var(--gold);
+    }
+
+    .quiz-prompt {
+      min-height: 118px;
+      padding: 16px;
+      border: 1px solid var(--gray-border);
+      border-radius: 12px;
+      background: var(--gray);
+      color: var(--navy);
+      font-weight: 750;
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .choice-button.correct {
+      border-color: var(--green-border);
+      background: var(--green);
+    }
+
+    .choice-button.wrong {
+      border-color: var(--coral-border);
+      background: var(--coral);
+    }
+
+    .quiz-result {
+      min-height: 64px;
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 10px;
+      background: var(--white);
+    }
+
+    .foundry-pipeline {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(135px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .foundry-step {
+      position: relative;
+      min-height: 142px;
+      padding: 14px;
+      border: 2px solid var(--green-border);
+      border-radius: 14px;
+      background: var(--green);
+      color: var(--text);
+      text-align: left;
+    }
+
+    .foundry-step::after {
+      position: absolute;
+      top: 50%;
+      right: -17px;
+      content: "→";
+      color: var(--line);
+      font-size: 1.4rem;
+      font-weight: 900;
+      transform: translateY(-50%);
+    }
+
+    .foundry-step:last-child::after {
+      display: none;
+    }
+
+    .foundry-step.active {
+      border-color: var(--navy);
+      outline: 3px solid rgba(23, 50, 77, 0.12);
+    }
+
+    .foundry-lab {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 18px;
+    }
+
+    .control-row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .control-row label {
+      color: var(--navy);
+      font-weight: 800;
+    }
+
+    .range-value {
+      display: inline-block;
+      min-width: 90px;
+      margin-left: 8px;
+      color: var(--navy);
+      font-weight: 800;
+    }
+
+    .memory-items {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .memory-item {
+      padding: 12px;
+      border: 1px solid var(--green-border);
+      border-radius: 10px;
+      background: var(--green);
+    }
+
+    .memory-item header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 5px;
+      color: var(--navy);
+      font-weight: 800;
+    }
+
+    .memory-item small {
+      color: var(--muted);
+    }
+
+    .boundary-layout {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .boundary-card {
+      min-height: 260px;
+      padding: 16px;
+      border: 2px solid var(--gray-border);
+      border-radius: 14px;
+      background: var(--white);
+    }
+
+    .boundary-card h3 {
+      margin-top: 0;
+    }
+
+    .boundary-card ul {
+      padding-left: 18px;
+    }
+
+    .boundary-rule {
+      margin-top: 18px;
+      padding: 16px;
+      border: 2px solid var(--gold-border);
+      border-radius: 14px;
+      background: var(--gold);
+      color: var(--navy);
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: 850;
+    }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--gray-border);
+      border-radius: 14px;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+      padding: 13px;
+      border-bottom: 1px solid var(--gray-border);
+      vertical-align: top;
+      text-align: left;
+    }
+
+    .comparison-table th {
+      background: var(--navy);
+      color: var(--white);
+    }
+
+    .comparison-table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .takeaways {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .takeaway {
+      padding: 14px;
+      border: 1px solid var(--gold-border);
+      border-radius: 12px;
+      background: var(--gold);
+    }
+
+    .run-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+      padding: 12px;
+      border: 1px solid var(--gray-border);
+      border-radius: 12px;
+      background: var(--gray);
+    }
+
+    .run-toolbar-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .run-button {
+      padding: 9px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--navy);
+      color: var(--white);
+      font-weight: 800;
+    }
+
+    .run-button.secondary {
+      background: var(--white);
+      color: var(--navy);
+    }
+
+    .run-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.42;
+    }
+
+    .run-progress {
+      height: 10px;
+      overflow: hidden;
+      margin-bottom: 14px;
+      border-radius: 999px;
+      background: #e3e8ec;
+    }
+
+    .run-progress > div {
+      width: 0;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #4f7ca0, #77a688);
+      transition: width 240ms ease;
+    }
+
+    .run-flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(130px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .run-node {
+      position: relative;
+      min-height: 135px;
+      padding: 13px;
+      border: 2px solid var(--gray-border);
+      border-radius: 13px;
+      background: var(--white);
+      color: var(--text);
+      text-align: left;
+      transition: transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
+    }
+
+    .run-node::after {
+      position: absolute;
+      top: 50%;
+      right: -17px;
+      z-index: 2;
+      content: "→";
+      color: var(--line);
+      font-size: 1.35rem;
+      font-weight: 900;
+      transform: translateY(-50%);
+    }
+
+    .run-node:nth-child(6)::after,
+    .run-node:last-child::after {
+      display: none;
+    }
+
+    .run-node.completed {
+      border-color: var(--green-border);
+      background: var(--green);
+      opacity: 0.75;
+    }
+
+    .run-node.active {
+      border-color: var(--navy);
+      background: var(--gold);
+      box-shadow: 0 0 0 4px rgba(216, 181, 91, 0.28), var(--shadow);
+      transform: translateY(-4px);
+    }
+
+    .run-node.active::before {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      width: 16px;
+      height: 16px;
+      border: 3px solid var(--white);
+      border-radius: 50%;
+      background: var(--navy);
+      box-shadow: 0 0 0 3px var(--navy);
+      content: "";
+      transform: translateX(-50%);
+      animation: pulse-token 900ms ease-in-out infinite alternate;
+    }
+
+    @keyframes pulse-token {
+      from {
+        transform: translateX(-50%) scale(0.8);
+      }
+      to {
+        transform: translateX(-50%) scale(1.15);
+      }
+    }
+
+    .run-node .run-index {
+      display: inline-grid;
+      width: 25px;
+      height: 25px;
+      place-items: center;
+      margin-bottom: 7px;
+      border-radius: 50%;
+      background: var(--navy);
+      color: var(--white);
+      font-size: 0.76rem;
+      font-weight: 850;
+    }
+
+    .run-node strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--navy);
+    }
+
+    .run-state-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .run-state {
+      min-height: 165px;
+      padding: 14px;
+      border: 1px solid var(--gray-border);
+      border-radius: 12px;
+      background: var(--white);
+    }
+
+    .run-state h4 {
+      margin: 0 0 8px;
+    }
+
+    .run-state-value {
+      white-space: pre-line;
+    }
+
+    .run-event {
+      margin-top: 14px;
+      padding: 14px;
+      border-left: 6px solid var(--gold-border);
+      border-radius: 10px;
+      background: var(--gold);
+      color: var(--navy);
+      font-weight: 750;
+    }
+
+    .event-log {
+      max-height: 230px;
+      overflow-y: auto;
+      margin: 12px 0 0;
+      padding: 12px 12px 12px 34px;
+      border: 1px solid var(--gray-border);
+      border-radius: 10px;
+      background: var(--gray);
+    }
+
+    .event-log li {
+      margin-bottom: 5px;
+    }
+
+    .tour-controls {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .tour-controls button {
+      min-width: 130px;
+      padding: 10px 16px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--navy);
+      color: var(--white);
+      font-weight: 800;
+    }
+
+    .tour-controls button:disabled {
+      cursor: not-allowed;
+      opacity: 0.35;
+    }
+
+    footer {
+      margin-top: 26px;
+      padding: 16px 4px 0;
+      border-top: 1px solid var(--gray-border);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    footer a {
+      color: #2f69a1;
+    }
+
+    @media (max-width: 1120px) {
+      .hero,
+      .lifecycle-layout,
+      .memory-type-layout,
+      .foundry-lab {
+        grid-template-columns: 1fr;
+      }
+
+      .foundry-pipeline {
+        grid-template-columns: repeat(3, minmax(150px, 1fr));
+      }
+
+      .run-flow {
+        grid-template-columns: repeat(3, minmax(150px, 1fr));
+      }
+
+      .run-node:nth-child(3)::after,
+      .run-node:nth-child(6)::after,
+      .run-node:nth-child(9)::after {
+        display: none;
+      }
+
+      .run-state-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .foundry-step:nth-child(3)::after,
+      .foundry-step:nth-child(6)::after {
+        display: none;
+      }
+
+      .boundary-layout {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      .page-shell {
+        width: min(94vw, 680px);
+      }
+
+      .grid-2,
+      .grid-3,
+      .case-flow,
+      .type-tree,
+      .concept-strip,
+      .takeaways,
+      .boundary-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .case-arrow {
+        transform: rotate(90deg);
+      }
+
+      .lifecycle-track {
+        grid-template-columns: 1fr;
+      }
+
+      .life-step::after {
+        top: auto;
+        right: 50%;
+        bottom: -24px;
+        transform: translateX(50%) rotate(90deg);
+      }
+
+      .life-step:nth-child(4)::after {
+        display: block;
+      }
+
+      .life-step:nth-child(8)::after {
+        display: none;
+      }
+
+      .foundry-pipeline {
+        grid-template-columns: 1fr;
+      }
+
+      .run-flow,
+      .run-state-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .run-node::after,
+      .run-node:nth-child(3)::after,
+      .run-node:nth-child(6)::after,
+      .run-node:nth-child(9)::after {
+        top: auto;
+        right: 50%;
+        bottom: -23px;
+        display: block;
+        transform: translateX(50%) rotate(90deg);
+      }
+
+      .run-node:last-child::after {
+        display: none;
+      }
+
+      .foundry-step::after,
+      .foundry-step:nth-child(3)::after {
+        top: auto;
+        right: 50%;
+        bottom: -23px;
+        display: block;
+        transform: translateX(50%) rotate(90deg);
+      }
+
+      .foundry-step:last-child::after {
+        display: none;
+      }
+
+      .comparison-table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page-shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Click-and-run learning simulation</p>
+        <h1>Agent memory flow runner</h1>
+        <p>
+          Run orders 8472 and 9315 step by step. Watch an experience become
+          durable memory, enter a later context, and remain subordinate to
+          current business truth.
+        </p>
+      </div>
+      <aside class="hero-rule" aria-label="Core rule">
+        <strong>Core rule</strong>
+        Memory can guide the next check. It does not replace current business
+        truth, authorization, or verification.
+      </aside>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Simulation sections">
+      <button class="tab" role="tab" aria-selected="true" data-view="run">1. Run simulation</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="story">2. Story</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="lifecycle">3. Lifecycle</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="types">4. Memory types</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="foundry">5. Foundry</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="boundaries">6. Boundaries</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="compare">7. Compare</button>
+    </nav>
+
+    <section class="view active" id="run" role="tabpanel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Runnable 8472 → 9315 story</p>
+          <h2>Watch memory move through the system</h2>
+          <p>
+            Select a mode, then use Run or Step. Each transition updates the
+            current case, durable memory, temporary context, and business truth.
+          </p>
+        </div>
+      </div>
+
+      <div class="run-toolbar">
+        <div class="run-toolbar-group" aria-label="Simulation mode">
+          <strong>Mode:</strong>
+          <button class="run-button simulation-mode" data-simulation-mode="neutral" aria-pressed="true">
+            Vendor-neutral
+          </button>
+          <button class="run-button secondary simulation-mode" data-simulation-mode="foundry" aria-pressed="false">
+            Microsoft Foundry
+          </button>
+        </div>
+        <div class="run-toolbar-group" aria-label="Simulation controls">
+          <button class="run-button" id="runSimulation">Run</button>
+          <button class="run-button secondary" id="pauseSimulation" disabled>Pause</button>
+          <button class="run-button secondary" id="stepSimulation">Step</button>
+          <button class="run-button secondary" id="resetSimulation">Reset</button>
+          <label for="simulationSpeed"><strong>Speed:</strong></label>
+          <select id="simulationSpeed">
+            <option value="1800">Slow</option>
+            <option value="1050" selected>Normal</option>
+            <option value="520">Fast</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="run-progress" aria-hidden="true">
+        <div id="simulationProgress"></div>
+      </div>
+
+      <div class="run-flow" id="runFlow" aria-label="Simulation flow"></div>
+
+      <div class="run-event" id="runEvent" role="status" aria-live="polite">
+        Ready. Select Run to animate the full flow, or Step to inspect one transition at a time.
+      </div>
+
+      <div class="run-state-grid">
+        <article class="run-state tone-blue">
+          <h4>Current case</h4>
+          <div class="run-state-value" id="runCase">No case started.</div>
+        </article>
+        <article class="run-state tone-green">
+          <h4>Durable memory</h4>
+          <div class="run-state-value" id="runMemory">No durable memory stored.</div>
+        </article>
+        <article class="run-state tone-gray">
+          <h4>Temporary model context</h4>
+          <div class="run-state-value" id="runContext">No memory has been retrieved.</div>
+        </article>
+        <article class="run-state tone-gold">
+          <h4>Authoritative business truth</h4>
+          <div class="run-state-value" id="runBusiness">Business records are available but not yet checked.</div>
+        </article>
+      </div>
+
+      <article class="card" style="margin-top: 14px;">
+        <h3>Event log</h3>
+        <p class="muted">The log separates memory operations from business validation and authorization.</p>
+        <ol class="event-log" id="runLog">
+          <li>Simulation initialized.</li>
+        </ol>
+      </article>
+
+      <div class="takeaway" style="margin-top: 14px;">
+        <strong>What to watch:</strong>
+        order 8472 supplies experience; memory stores a reusable lesson; order
+        9315 retrieves that lesson; current records still decide whether it applies.
+      </div>
+    </section>
+
+    <section class="view" id="story" role="tabpanel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Start with the outcome</p>
+          <h2>Why memory exists</h2>
+          <p>The first case succeeds. The second case should benefit without copying the old answer.</p>
+        </div>
+      </div>
+
+      <div class="case-flow">
+        <article class="card case-card tone-blue">
+          <span class="badge">Order 8472</span>
+          <h3>The completed experience</h3>
+          <ul>
+            <li>Payment was authorized.</li>
+            <li>Order confirmation failed.</li>
+            <li>Inventory reservation had expired.</li>
+            <li>A manager approved the repair.</li>
+            <li>The business system verified the result.</li>
+          </ul>
+          <div class="lesson-box">
+            Candidate lesson: compare reservation and payment timestamps first.
+          </div>
+        </article>
+
+        <div class="case-arrow" aria-hidden="true">→</div>
+
+        <article class="card case-card tone-green">
+          <span class="badge">Order 9315</span>
+          <h3>The new, similar case</h3>
+          <ul>
+            <li>A new workspace and workflow begin.</li>
+            <li>Memory retrieves the earlier lesson.</li>
+            <li>The agent checks current records first.</li>
+            <li>If evidence differs, it investigates another cause.</li>
+            <li>Approval and verification still apply.</li>
+          </ul>
+          <div class="lesson-box">
+            Memory shortened the search. Current evidence decided the diagnosis.
+          </div>
+        </article>
+      </div>
+
+      <div class="concept-strip" aria-label="What survives between cases">
+        <div class="concept tone-blue">
+          <strong>Workflow state</strong>
+          Progress for one execution: checks, branches, pauses, and approval status.
+        </div>
+        <div class="concept tone-blue">
+          <strong>Workspace</strong>
+          Files, notes, scripts, and artifacts used while completing the task.
+        </div>
+        <div class="concept tone-gold">
+          <strong>Business state</strong>
+          The authoritative order, payment, approval, and audit records.
+        </div>
+        <div class="concept tone-green">
+          <strong>Memory</strong>
+          Selected knowledge that may help a later task or conversation.
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="lifecycle" role="tabpanel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Vendor-neutral model</p>
+          <h2>The complete memory lifecycle</h2>
+          <p>Click a step. Use the path filters to see write, read, and maintenance responsibilities.</p>
+        </div>
+      </div>
+
+      <div class="lifecycle-layout">
+        <div class="card">
+          <div class="path-switcher" aria-label="Lifecycle path filter">
+            <button class="path-button active" data-path-filter="all">All steps</button>
+            <button class="path-button" data-path-filter="write">Write path</button>
+            <button class="path-button" data-path-filter="read">Read path</button>
+            <button class="path-button" data-path-filter="maintain">Maintenance</button>
+          </div>
+          <div class="lifecycle-track" id="lifecycleTrack"></div>
+        </div>
+
+        <aside class="card detail-panel tone-gray" aria-live="polite">
+          <span class="badge" id="lifePathBadge">Write path</span>
+          <h3 id="lifeTitle">Capture a candidate</h3>
+          <p id="lifeSummary"></p>
+          <dl>
+            <dt>Input</dt>
+            <dd id="lifeInput"></dd>
+            <dt>Output</dt>
+            <dd id="lifeOutput"></dd>
+            <dt>Owner</dt>
+            <dd id="lifeOwner"></dd>
+          </dl>
+          <div class="warning">
+            <strong>Failure to avoid:</strong>
+            <span id="lifeRisk"></span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="view" id="types" role="tabpanel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Classify retained knowledge</p>
+          <h2>Memory types answer different questions</h2>
+          <p>Preference is usually a semantic/profile fact. An episode may supply the evidence for it.</p>
+        </div>
+      </div>
+
+      <div class="memory-type-layout">
+        <div class="card">
+          <div class="type-tree">
+            <div class="type-column">
+              <article class="type-card tone-blue">
+                <span class="badge">Short-term</span>
+                <h3>What is happening now?</h3>
+                <p><strong>Conversation history:</strong> recent messages and tool results.</p>
+                <p><strong>Working memory:</strong> plan, findings, and open questions.</p>
+              </article>
+            </div>
+            <div class="type-column">
+              <article class="type-card">
+                <span class="badge">Episodic</span>
+                <h3>What happened?</h3>
+                <p>A specific situation, actions, context, and outcome.</p>
+                <p><strong>8472:</strong> reservation expired before payment authorization.</p>
+              </article>
+              <article class="type-card">
+                <span class="badge">Semantic</span>
+                <h3>What is true?</h3>
+                <p>Facts, concepts, relationships, and profiles.</p>
+                <p><strong>Fact:</strong> reservations can expire while payment is processing.</p>
+                <div class="preference-nest">
+                  <strong>Preference/profile:</strong> use one-line approval summaries.
+                </div>
+              </article>
+              <article class="type-card">
+                <span class="badge">Procedural</span>
+                <h3>How should I do it?</h3>
+                <p>A reusable method, instruction, or strategy.</p>
+                <p><strong>Method:</strong> compare reservation and payment timestamps first.</p>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <aside class="card">
+          <p class="eyebrow">Try it</p>
+          <h3>Classify the memory</h3>
+          <div class="quiz-prompt" id="quizPrompt"></div>
+          <div class="choice-grid" id="quizChoices"></div>
+          <div class="quiz-result" id="quizResult" aria-live="polite">
+            Select the best category.
+          </div>
+          <button class="action-button" id="nextQuiz">Next example</button>
+        </aside>
+      </div>
+    </section>
+
+    <section class="view" id="foundry" role="tabpanel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Microsoft Foundry Agent Service memory - preview</p>
+          <h2>How the managed implementation maps to the lifecycle</h2>
+          <p>Click a stage, then use the lab to change scope, retention, and access mode.</p>
+        </div>
+      </div>
+
+      <div class="foundry-pipeline" id="foundryPipeline"></div>
+
+      <div class="foundry-lab">
+        <section class="card tone-gray">
+          <span class="badge">Selected Foundry stage</span>
+          <h3 id="foundryTitle"></h3>
+          <p id="foundryDescription"></p>
+          <div class="warning">
+            <strong>Application responsibility:</strong>
+            <span id="foundryBoundary"></span>
+          </div>
+        </section>
+
+        <section class="card">
+          <p class="eyebrow">Memory store lab</p>
+          <h3>Change the controls</h3>
+
+          <div class="control-row">
+            <label for="scopeSelect">Scope</label>
+            <select id="scopeSelect">
+              <option value="user-42">User: user-42</option>
+              <option value="team-checkout">Team: checkout</option>
+              <option value="tenant-demo">Tenant: demo</option>
+            </select>
+          </div>
+
+          <div class="control-row">
+            <label for="ttlRange">Default TTL</label>
+            <div>
+              <input id="ttlRange" type="range" min="0" max="90" step="15" value="30">
+              <span class="range-value" id="ttlValue">30 days</span>
+            </div>
+          </div>
+
+          <div class="control-row">
+            <span><strong>Access</strong></span>
+            <div>
+              <button class="mode-button active" data-mode="tool">Memory search tool</button>
+              <button class="mode-button" data-mode="api">Memory Store APIs</button>
+            </div>
+          </div>
+
+          <p id="modeExplanation"></p>
+          <div class="memory-items" id="memoryItems"></div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+            <button class="action-button" id="rememberButton">Simulate remember</button>
+            <button class="action-button" id="forgetButton">Simulate forget latest</button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="boundaries" role="tabpanel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Do not merge these concepts</p>
+          <h2>Four stores, four responsibilities</h2>
+          <p>The technologies may share infrastructure, but their contracts remain different.</p>
+        </div>
+      </div>
+
+      <div class="boundary-layout">
+        <article class="boundary-card tone-green">
+          <h3>Agent memory</h3>
+          <p>Selected reusable knowledge.</p>
+          <ul>
+            <li>Preferences</li>
+            <li>Conversation summaries</li>
+            <li>Reusable procedures</li>
+          </ul>
+          <strong>Not authoritative business truth.</strong>
+        </article>
+
+        <article class="boundary-card tone-blue">
+          <h3>Workflow checkpoint</h3>
+          <p>Resumable execution progress.</p>
+          <ul>
+            <li>Current node</li>
+            <li>Pending approval</li>
+            <li>State needed to resume</li>
+          </ul>
+          <strong>Not proof that a side effect occurred.</strong>
+        </article>
+
+        <article class="boundary-card tone-gold">
+          <h3>Business system</h3>
+          <p>Authoritative operational records.</p>
+          <ul>
+            <li>Order and payment status</li>
+            <li>Recorded approval</li>
+            <li>Verified repair and audit trail</li>
+          </ul>
+          <strong>The source of current truth.</strong>
+        </article>
+
+        <article class="boundary-card tone-gray">
+          <h3>Model context</h3>
+          <p>Temporary input for one decision.</p>
+          <ul>
+            <li>Instructions</li>
+            <li>Selected state and memories</li>
+            <li>Recent tool results</li>
+          </ul>
+          <strong>A projection, not a durable store.</strong>
+        </article>
+      </div>
+
+      <div class="boundary-rule">
+        Memory suggests what may help. Business systems determine what is true.
+        Policies and approvals determine what is allowed.
+      </div>
+    </section>
+
+    <section class="view" id="compare" role="tabpanel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Put both models together</p>
+          <h2>Vendor-neutral concepts versus Foundry implementation</h2>
+          <p>Foundry implements important parts of the lifecycle, while the application retains the business and governance contract.</p>
+        </div>
+      </div>
+
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Concern</th>
+            <th>Vendor-neutral concept</th>
+            <th>Foundry implementation</th>
+            <th>Application still owns</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Short-term memory</td>
+            <td>Thread history and working state</td>
+            <td>Usually managed by the orchestration framework, not Foundry Memory</td>
+            <td>State schema, checkpoints, and context selection</td>
+          </tr>
+          <tr>
+            <td>Long-term types</td>
+            <td>Episodic, semantic/profile, procedural</td>
+            <td>User profile, chat summary, procedural</td>
+            <td>Mapping product terms to domain meaning</td>
+          </tr>
+          <tr>
+            <td>Write path</td>
+            <td>Capture, extract, verify, consolidate, store</td>
+            <td>Conversation update, LLM extraction, managed consolidation, memory items</td>
+            <td>What is safe and authoritative enough to retain</td>
+          </tr>
+          <tr>
+            <td>Read path</td>
+            <td>Scope, retrieve, rank, select, inject into context</td>
+            <td>Memory search tool or search APIs</td>
+            <td>Authorization and current-evidence checks</td>
+          </tr>
+          <tr>
+            <td>Maintenance</td>
+            <td>Correct, supersede, expire, delete, audit</td>
+            <td>Item CRUD, TTL, delete scope/store, remember/forget commands</td>
+            <td>Compliance workflow, audit policy, and user experience</td>
+          </tr>
+          <tr>
+            <td>Isolation</td>
+            <td>Partition memory by subject and access boundary</td>
+            <td><code>scope</code> partitions memories</td>
+            <td>Authenticate and authorize access to that scope</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="takeaways">
+        <div class="takeaway">
+          <strong>Extraction is not verification.</strong><br>
+          A model can identify a candidate memory without proving it is true.
+        </div>
+        <div class="takeaway">
+          <strong>Consolidation is not authorization.</strong><br>
+          Merging memories cannot grant permission to perform an action.
+        </div>
+        <div class="takeaway">
+          <strong>Retrieval is not current truth.</strong><br>
+          Retrieved memory must be checked against authoritative evidence.
+        </div>
+      </div>
+    </section>
+
+    <div class="tour-controls" aria-label="Guided tour controls">
+      <button id="previousView">Previous</button>
+      <button id="nextView">Next</button>
+    </div>
+
+    <footer>
+      <strong>Simulation scope:</strong> synthetic order data only. This page makes no
+      service calls and stores nothing outside the browser session.
+      Current Foundry behavior is preview functionality and may change.
+      Official references:
+      <a href="https://learn.microsoft.com/azure/foundry/agents/concepts/what-is-memory">Memory overview</a>
+      and
+      <a href="https://learn.microsoft.com/azure/foundry/agents/how-to/memory-usage">Memory usage</a>.
+    </footer>
+  </main>
+
+  <script>
+    const viewOrder = ["run", "story", "lifecycle", "types", "foundry", "boundaries", "compare"];
+
+    const neutralSimulationSteps = [
+      {
+        title: "Complete order 8472",
+        short: "A verified outcome becomes available.",
+        caseState: "Order 8472\nCompleted after an approved repair.",
+        memoryState: "No durable memory stored.",
+        contextState: "Only the current workflow state and tool results.",
+        businessState: "Payment authorized.\nReservation expired.\nRepair outcome verified.",
+        event: "The workflow completed order 8472. The business system recorded the authoritative outcome."
+      },
+      {
+        title: "Capture candidate",
+        short: "Notice a potentially reusable experience.",
+        caseState: "Order 8472\nReviewing the completed case.",
+        memoryState: "Candidate only:\nReservation expiry may explain confirmation failure.",
+        contextState: "Case history plus verified outcome.",
+        businessState: "The source records remain authoritative.",
+        event: "The harness captured a memory candidate. Raw history has not become durable memory yet."
+      },
+      {
+        title: "Extract lesson",
+        short: "Distill the reusable part.",
+        caseState: "Order 8472\nExtracting a concise lesson.",
+        memoryState: "Candidate procedure:\nCompare reservation and payment timestamps first.",
+        contextState: "Relevant events were selected from the completed case.",
+        businessState: "Evidence links the failure to reservation expiry.",
+        event: "Extraction converted one episode into a reusable procedure. Extraction alone does not prove truth."
+      },
+      {
+        title: "Verify candidate",
+        short: "Check the lesson against trusted evidence.",
+        caseState: "Order 8472\nCandidate under verification.",
+        memoryState: "Verified candidate:\nCompare reservation and payment timestamps first.",
+        contextState: "Candidate plus provenance from order 8472.",
+        businessState: "Payment and reservation timestamps confirm the relationship.",
+        event: "The application verified the candidate against business records rather than model confidence."
+      },
+      {
+        title: "Consolidate",
+        short: "Merge overlap without hiding conflict.",
+        caseState: "Order 8472\nPreparing durable memory.",
+        memoryState: "Consolidated procedure:\nCheck reservation/payment timing before deeper payment-log analysis.",
+        contextState: "Existing related memories were compared.",
+        businessState: "No conflicting verified procedure was found.",
+        event: "The memory layer merged overlapping wording while preserving source and status."
+      },
+      {
+        title: "Store with controls",
+        short: "Persist a scoped, governed item.",
+        caseState: "Order 8472\nMemory write complete.",
+        memoryState: "ACTIVE · team-checkout\nProcedure: check reservation/payment timing first.\nSource: order 8472 · TTL: 90 days",
+        contextState: "The completed workflow can now end.",
+        businessState: "Business audit history remains separate from memory.",
+        event: "The verified procedure was stored with scope, source, status, and retention metadata."
+      },
+      {
+        title: "Start order 9315",
+        short: "A new execution begins later.",
+        caseState: "Order 9315\nNew confirmation failure.",
+        memoryState: "The scoped procedure from order 8472 remains available.",
+        contextState: "New workflow state only. Memory has not been retrieved.",
+        businessState: "Current order records have not yet been checked.",
+        event: "Order 9315 starts with new workflow state. It does not inherit the old checkpoint."
+      },
+      {
+        title: "Retrieve and rank",
+        short: "Search within the allowed scope.",
+        caseState: "Order 9315\nInvestigating the failure.",
+        memoryState: "Search hit: timing-check procedure from order 8472.",
+        contextState: "Ranked recall:\nCheck reservation and payment timestamps first.",
+        businessState: "Current records are still required.",
+        event: "Memory search found a relevant procedure. Retrieval indicates usefulness, not current truth."
+      },
+      {
+        title: "Build model context",
+        short: "Project selected memory temporarily.",
+        caseState: "Order 9315\nReady for the next model decision.",
+        memoryState: "Durable item is unchanged in the memory store.",
+        contextState: "Task + workflow state + selected memory + safe tool results.",
+        businessState: "Policies and approval requirements remain in force.",
+        event: "The harness placed the selected memory into temporary model context."
+      },
+      {
+        title: "Check current truth",
+        short: "Test the remembered hypothesis.",
+        caseState: "Order 9315\nThe old hypothesis does not match.",
+        memoryState: "Procedure remains useful as an initial check.",
+        contextState: "Remembered procedure + fresh order and payment records.",
+        businessState: "Reservation is active.\nA duplicate payment retry caused this failure.",
+        event: "Current evidence rejected reservation expiry as the cause. The agent must branch to another diagnosis."
+      },
+      {
+        title: "Close and maintain",
+        short: "Record outcome; update only when justified.",
+        caseState: "Order 9315\nDuplicate retry repaired and verified.",
+        memoryState: "Existing timing procedure retained.\nNew candidate: detect duplicate payment retries.",
+        contextState: "The temporary context can be discarded after completion.",
+        businessState: "Repair, approval, and outcome are recorded in authoritative systems.",
+        event: "Memory shortened the search, but current evidence decided the diagnosis. A new candidate begins its own lifecycle."
+      }
+    ];
+
+    const foundrySimulationSteps = [
+      {
+        title: "Send eligible content",
+        short: "Order 8472 supplies source interactions.",
+        caseState: "Order 8472\nCompleted and selected for memory processing.",
+        memoryState: "Foundry memory store has no new item yet.",
+        contextState: "Conversation items and safe case summary.",
+        businessState: "Verified outcome remains in business and audit systems.",
+        event: "The application sends eligible conversation content to the configured Foundry memory store."
+      },
+      {
+        title: "Extract candidate",
+        short: "A configured chat model identifies a lesson.",
+        caseState: "Order 8472\nManaged extraction is running.",
+        memoryState: "Candidate procedure:\nCompare reservation and payment timestamps first.",
+        contextState: "Foundry processes the supplied content.",
+        businessState: "Extraction has not replaced evidence validation.",
+        event: "Foundry uses the configured model to extract a candidate. The output is not automatically authoritative."
+      },
+      {
+        title: "Verify in the app",
+        short: "Apply trust and business rules outside memory.",
+        caseState: "Order 8472\nApplication verification boundary.",
+        memoryState: "Candidate carries source and review status.",
+        contextState: "Candidate plus provenance is available to application policy.",
+        businessState: "Order records confirm reservation expiry and payment timing.",
+        event: "The application checks trusted records. Foundry memory does not own business authorization or truth."
+      },
+      {
+        title: "Consolidate",
+        short: "Foundry merges related information.",
+        caseState: "Order 8472\nPreparing the managed item.",
+        memoryState: "Consolidated procedural memory with related wording merged.",
+        contextState: "Existing scoped memories are considered during consolidation.",
+        businessState: "Conflicts still require application policy or review.",
+        event: "Foundry consolidates overlapping information according to the memory type."
+      },
+      {
+        title: "Store by scope",
+        short: "Persist the item with retention controls.",
+        caseState: "Order 8472\nManaged memory write complete.",
+        memoryState: "ACTIVE · scope: team-checkout\nType: procedural\nTTL: 90 days · source: order 8472",
+        contextState: "The original conversation need not remain in model context.",
+        businessState: "Authoritative audit records remain outside the memory store.",
+        event: "Foundry stores the managed item under an application-authorized scope with retention metadata."
+      },
+      {
+        title: "Start order 9315",
+        short: "A later run begins with separate state.",
+        caseState: "Order 9315\nNew confirmation failure.",
+        memoryState: "The Foundry item remains available in team-checkout.",
+        contextState: "New thread or workflow context; no recall yet.",
+        businessState: "Current order state has not yet been queried.",
+        event: "The framework starts a new execution. Foundry supplies long-term memory only when the application requests it."
+      },
+      {
+        title: "Search scoped memory",
+        short: "Use the memory tool or lower-level APIs.",
+        caseState: "Order 9315\nSearching relevant long-term memory.",
+        memoryState: "Search returns the procedural item for the allowed scope.",
+        contextState: "Ranked result:\nCheck reservation and payment timestamps first.",
+        businessState: "Scope access does not prove the recalled statement applies.",
+        event: "The memory search tool or APIs retrieve an item after the application resolves and authorizes scope."
+      },
+      {
+        title: "Build agent context",
+        short: "Add selected recall to the next model call.",
+        caseState: "Order 9315\nThe agent has a useful first check.",
+        memoryState: "The managed item remains durable and separately maintained.",
+        contextState: "Recent messages + workflow state + selected Foundry memory.",
+        businessState: "Current evidence, policy, and approval still govern action.",
+        event: "Retrieved memory becomes temporary context for the next decision; it is not copied into business state."
+      },
+      {
+        title: "Check live records",
+        short: "Validate the hypothesis outside Foundry memory.",
+        caseState: "Order 9315\nThe remembered cause is rejected.",
+        memoryState: "The procedure remains a valid diagnostic first step.",
+        contextState: "Memory result plus fresh tool output.",
+        businessState: "Reservation is active.\nA duplicate payment retry caused the failure.",
+        event: "Live records show a different cause. The application rejects the recalled hypothesis and continues the workflow."
+      },
+      {
+        title: "Maintain the item",
+        short: "Update, expire, or forget when required.",
+        caseState: "Order 9315\nRepair completed and verified.",
+        memoryState: "Timing procedure retained.\nNew duplicate-retry candidate may be remembered separately.",
+        contextState: "Temporary context is released when the run ends.",
+        businessState: "The verified repair is recorded in authoritative systems.",
+        event: "The application may use Foundry item APIs or remember/forget behavior to maintain memory without rewriting business history."
+      }
+    ];
+
+    const lifecycleSteps = [
+      {
+        title: "Capture a candidate",
+        short: "Notice potentially reusable information.",
+        path: "write",
+        input: "Messages, tool results, verified case outcome",
+        output: "A candidate episode, fact, method, or preference",
+        owner: "Harness or application",
+        risk: "Saving every log line or treating raw history as memory."
+      },
+      {
+        title: "Extract the lesson",
+        short: "Distill the reusable part.",
+        path: "write",
+        input: "Candidate experience",
+        output: "A concise memory statement or structured record",
+        owner: "Memory service, model, or deterministic logic",
+        risk: "Losing context or inventing a lesson not supported by the source."
+      },
+      {
+        title: "Verify the candidate",
+        short: "Check trusted evidence.",
+        path: "write",
+        input: "Extracted memory plus provenance",
+        output: "Candidate, reviewed, verified, or disputed status",
+        owner: "Application policy, trusted data, or reviewer",
+        risk: "Assuming extraction or model confidence proves truth."
+      },
+      {
+        title: "Consolidate",
+        short: "Merge duplicates; preserve conflicts.",
+        path: "write",
+        input: "New and existing memories",
+        output: "Updated profile, collection, or conflict set",
+        owner: "Memory service with application rules",
+        risk: "Silently overwriting a conflicting fact."
+      },
+      {
+        title: "Store with controls",
+        short: "Persist content plus metadata.",
+        path: "write",
+        input: "Verified or policy-approved memory",
+        output: "Scoped item with source, time, owner, and TTL",
+        owner: "Memory store and application authorization",
+        risk: "Storing sensitive data or using a shared scope accidentally."
+      },
+      {
+        title: "Retrieve and rank",
+        short: "Find what may help now.",
+        path: "read",
+        input: "Current task, scope, recent messages, filters",
+        output: "A ranked set of potentially relevant memories",
+        owner: "Memory search layer",
+        risk: "Loading too much, retrieving the wrong scope, or ignoring recency."
+      },
+      {
+        title: "Use and verify",
+        short: "Place selected memory in context.",
+        path: "read",
+        input: "Ranked memories plus current state",
+        output: "A better next decision, checked against current truth",
+        owner: "Context builder, agent, and business application",
+        risk: "Letting remembered knowledge replace authorization or live evidence."
+      },
+      {
+        title: "Update or forget",
+        short: "Correct, supersede, expire, or delete.",
+        path: "maintain",
+        input: "Feedback, new evidence, TTL, deletion request",
+        output: "Maintained memory with an auditable lifecycle",
+        owner: "Application, user controls, and memory store",
+        risk: "Keeping stale or unwanted memories indefinitely."
+      }
+    ];
+
+    const foundryStages = [
+      {
+        title: "Conversation content",
+        short: "Source interactions",
+        description: "The service receives conversation items that may contain preferences, facts, summaries, or recurring methods.",
+        boundary: "Do not send secrets or data the agent should not retain. Decide which content is eligible for memory processing."
+      },
+      {
+        title: "Extraction",
+        short: "LLM identifies candidates",
+        description: "A configured chat model extracts meaningful information from conversation content.",
+        boundary: "An extracted statement is a candidate memory, not automatically an authoritative fact."
+      },
+      {
+        title: "Consolidation",
+        short: "Merge and resolve",
+        description: "Foundry can merge related or overlapping items and apply conflict-resolution behavior that varies by memory type.",
+        boundary: "Consolidation may improve consistency, but the application must decide when trusted evidence or review is required."
+      },
+      {
+        title: "Memory store",
+        short: "Scoped managed items",
+        description: "Items live in a managed store configured with chat and embedding model deployments, procedural-memory options, and retention defaults.",
+        boundary: "Choose stable scopes, authorization rules, retention, and what information is appropriate to keep."
+      },
+      {
+        title: "Retrieval",
+        short: "Tool or APIs",
+        description: "The memory search tool or Memory Store APIs retrieve user-profile, chat-summary, or procedural memories for a scope.",
+        boundary: "The caller must be allowed to access the scope. Retrieval results are untrusted context until checked."
+      },
+      {
+        title: "Agent context",
+        short: "Selected recall",
+        description: "Retrieved memories become part of the temporary context used for the next model decision.",
+        boundary: "Current business records, policy, approvals, and verification remain authoritative."
+      }
+    ];
+
+    const quizExamples = [
+      {
+        prompt: "Order 8472 failed because its reservation expired before payment authorization.",
+        answer: "Episodic",
+        explanation: "This describes a specific event, its context, and outcome."
+      },
+      {
+        prompt: "Reservations can expire while payment is still processing.",
+        answer: "Semantic",
+        explanation: "This is a general fact that is no longer tied only to one event."
+      },
+      {
+        prompt: "Compare reservation and payment timestamps before searching payment logs.",
+        answer: "Procedural",
+        explanation: "This is a reusable method for performing the investigation."
+      },
+      {
+        prompt: "The reviewer prefers one-line approval summaries.",
+        answer: "Preference",
+        explanation: "This is a user or team profile fact, usually stored as semantic/profile memory."
+      },
+      {
+        prompt: "The current plan still needs an inventory check.",
+        answer: "Short-term",
+        explanation: "This is working state for the current task, not cross-session knowledge."
+      }
+    ];
+
+    const storeData = {
+      "user-42": [
+        { type: "User profile", text: "Prefers one-line approval summaries", status: "active" },
+        { type: "Chat summary", text: "Previously investigated checkout timing failures", status: "active" },
+        { type: "Procedural", text: "Compare reservation and payment timestamps first", status: "active" }
+      ],
+      "team-checkout": [
+        { type: "Procedural", text: "Check current order state before proposing repair", status: "active" },
+        { type: "Procedural", text: "Reuse the stable operation ID for retries", status: "active" }
+      ],
+      "tenant-demo": [
+        { type: "Chat summary", text: "Checkout support discussions covered reservation expiry", status: "active" }
+      ]
+    };
+
+    let currentViewIndex = 0;
+    let currentLifecycleIndex = 0;
+    let currentFoundryIndex = 0;
+    let currentQuizIndex = 0;
+    let accessMode = "tool";
+    let simulationMode = "neutral";
+    let simulationIndex = -1;
+    let simulationTimer = null;
+
+    function setView(viewName) {
+      if (viewName !== "run") pauseRun();
+      currentViewIndex = viewOrder.indexOf(viewName);
+      document.querySelectorAll(".view").forEach((view) => {
+        view.classList.toggle("active", view.id === viewName);
+      });
+      document.querySelectorAll(".tab").forEach((tab) => {
+        const active = tab.dataset.view === viewName;
+        tab.setAttribute("aria-selected", String(active));
+      });
+      document.getElementById("previousView").disabled = currentViewIndex === 0;
+      document.getElementById("nextView").disabled = currentViewIndex === viewOrder.length - 1;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function getSimulationSteps() {
+      return simulationMode === "foundry" ? foundrySimulationSteps : neutralSimulationSteps;
+    }
+
+    function renderSimulationFlow() {
+      const flow = document.getElementById("runFlow");
+      const steps = getSimulationSteps();
+      flow.innerHTML = "";
+      steps.forEach((step, index) => {
+        const button = document.createElement("button");
+        button.className = "run-node";
+        button.dataset.index = String(index);
+        button.setAttribute("aria-label", `Step ${index + 1}: ${step.title}`);
+        button.innerHTML = `
+          <span class="run-index">${index + 1}</span>
+          <strong>${step.title}</strong>
+          <span>${step.short}</span>
+        `;
+        button.addEventListener("click", () => {
+          pauseRun();
+          simulationIndex = index;
+          renderSimulationState();
+        });
+        flow.appendChild(button);
+      });
+      renderSimulationState();
+    }
+
+    function rebuildSimulationLog() {
+      const log = document.getElementById("runLog");
+      const steps = getSimulationSteps();
+      log.innerHTML = "";
+      const initial = document.createElement("li");
+      initial.textContent = `${simulationMode === "foundry" ? "Microsoft Foundry" : "Vendor-neutral"} simulation initialized.`;
+      log.appendChild(initial);
+      for (let index = 0; index <= simulationIndex; index += 1) {
+        const item = document.createElement("li");
+        item.textContent = `Step ${index + 1}: ${steps[index].event}`;
+        log.appendChild(item);
+      }
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function renderSimulationState() {
+      const steps = getSimulationSteps();
+      const activeStep = simulationIndex >= 0 ? steps[simulationIndex] : null;
+
+      document.querySelectorAll(".run-node").forEach((node) => {
+        const index = Number(node.dataset.index);
+        node.classList.toggle("completed", index < simulationIndex);
+        node.classList.toggle("active", index === simulationIndex);
+        node.setAttribute("aria-current", index === simulationIndex ? "step" : "false");
+      });
+
+      document.getElementById("simulationProgress").style.width =
+        simulationIndex < 0 ? "0%" : `${((simulationIndex + 1) / steps.length) * 100}%`;
+      document.getElementById("runCase").textContent =
+        activeStep ? activeStep.caseState : "No case started.";
+      document.getElementById("runMemory").textContent =
+        activeStep ? activeStep.memoryState : "No durable memory stored.";
+      document.getElementById("runContext").textContent =
+        activeStep ? activeStep.contextState : "No memory has been retrieved.";
+      document.getElementById("runBusiness").textContent =
+        activeStep ? activeStep.businessState : "Business records are available but not yet checked.";
+      document.getElementById("runEvent").textContent = activeStep
+        ? activeStep.event
+        : "Ready. Select Run to animate the full flow, or Step to inspect one transition at a time.";
+
+      rebuildSimulationLog();
+      updateSimulationButtons();
+    }
+
+    function updateSimulationButtons() {
+      const atEnd = simulationIndex >= getSimulationSteps().length - 1;
+      const running = simulationTimer !== null;
+      document.getElementById("runSimulation").disabled = running;
+      document.getElementById("pauseSimulation").disabled = !running;
+      document.getElementById("stepSimulation").disabled = running || atEnd;
+    }
+
+    function advanceSimulation() {
+      const steps = getSimulationSteps();
+      if (simulationIndex >= steps.length - 1) {
+        pauseRun();
+        return false;
+      }
+      simulationIndex += 1;
+      renderSimulationState();
+      if (simulationIndex >= steps.length - 1) pauseRun();
+      return true;
+    }
+
+    function scheduleRun() {
+      const delay = Number(document.getElementById("simulationSpeed").value);
+      simulationTimer = window.setInterval(advanceSimulation, delay);
+      updateSimulationButtons();
+    }
+
+    function startRun() {
+      if (simulationTimer !== null) return;
+      if (simulationIndex >= getSimulationSteps().length - 1) resetRun();
+      if (simulationIndex < 0) advanceSimulation();
+      if (simulationIndex < getSimulationSteps().length - 1) scheduleRun();
+    }
+
+    function pauseRun() {
+      if (simulationTimer !== null) {
+        window.clearInterval(simulationTimer);
+        simulationTimer = null;
+      }
+      updateSimulationButtons();
+    }
+
+    function resetRun() {
+      pauseRun();
+      simulationIndex = -1;
+      renderSimulationState();
+    }
+
+    function setSimulationMode(mode) {
+      simulationMode = mode;
+      document.querySelectorAll(".simulation-mode").forEach((button) => {
+        const active = button.dataset.simulationMode === mode;
+        button.classList.toggle("secondary", !active);
+        button.setAttribute("aria-pressed", String(active));
+      });
+      pauseRun();
+      simulationIndex = -1;
+      renderSimulationFlow();
+    }
+
+    function renderLifecycle(filter = "all") {
+      const track = document.getElementById("lifecycleTrack");
+      track.innerHTML = "";
+      lifecycleSteps.forEach((step, index) => {
+        const button = document.createElement("button");
+        button.className = "life-step";
+        button.dataset.path = step.path;
+        button.dataset.index = String(index);
+        button.style.opacity = filter === "all" || filter === step.path ? "1" : "0.24";
+        button.innerHTML = `
+          <span class="step-number">${index + 1}</span>
+          <strong>${step.title}</strong>
+          <span>${step.short}</span>
+        `;
+        button.addEventListener("click", () => selectLifecycle(index));
+        track.appendChild(button);
+      });
+      selectLifecycle(currentLifecycleIndex);
+    }
+
+    function selectLifecycle(index) {
+      currentLifecycleIndex = index;
+      const step = lifecycleSteps[index];
+      document.querySelectorAll(".life-step").forEach((node) => {
+        node.classList.toggle("active", Number(node.dataset.index) === index);
+      });
+      document.getElementById("lifePathBadge").textContent =
+        step.path === "write" ? "Write path" : step.path === "read" ? "Read path" : "Maintenance";
+      document.getElementById("lifeTitle").textContent = `${index + 1}. ${step.title}`;
+      document.getElementById("lifeSummary").textContent = step.short;
+      document.getElementById("lifeInput").textContent = step.input;
+      document.getElementById("lifeOutput").textContent = step.output;
+      document.getElementById("lifeOwner").textContent = step.owner;
+      document.getElementById("lifeRisk").textContent = ` ${step.risk}`;
+    }
+
+    function renderQuiz() {
+      const example = quizExamples[currentQuizIndex];
+      document.getElementById("quizPrompt").textContent = example.prompt;
+      document.getElementById("quizResult").textContent = "Select the best category.";
+      const choices = ["Episodic", "Semantic", "Procedural", "Preference", "Short-term"];
+      const grid = document.getElementById("quizChoices");
+      grid.innerHTML = "";
+      choices.forEach((choice) => {
+        const button = document.createElement("button");
+        button.className = "choice-button";
+        button.textContent = choice;
+        button.addEventListener("click", () => {
+          grid.querySelectorAll("button").forEach((node) => {
+            node.classList.remove("correct", "wrong");
+          });
+          const correct = choice === example.answer;
+          button.classList.add(correct ? "correct" : "wrong");
+          document.getElementById("quizResult").innerHTML =
+            `<strong>${correct ? "Correct." : `Best answer: ${example.answer}.`}</strong> ${example.explanation}`;
+        });
+        grid.appendChild(button);
+      });
+    }
+
+    function renderFoundryPipeline() {
+      const pipeline = document.getElementById("foundryPipeline");
+      pipeline.innerHTML = "";
+      foundryStages.forEach((stage, index) => {
+        const button = document.createElement("button");
+        button.className = "foundry-step";
+        button.dataset.index = String(index);
+        button.innerHTML = `<strong>${stage.title}</strong><br><span>${stage.short}</span>`;
+        button.addEventListener("click", () => selectFoundry(index));
+        pipeline.appendChild(button);
+      });
+      selectFoundry(currentFoundryIndex);
+    }
+
+    function selectFoundry(index) {
+      currentFoundryIndex = index;
+      const stage = foundryStages[index];
+      document.querySelectorAll(".foundry-step").forEach((node) => {
+        node.classList.toggle("active", Number(node.dataset.index) === index);
+      });
+      document.getElementById("foundryTitle").textContent = `${index + 1}. ${stage.title}`;
+      document.getElementById("foundryDescription").textContent = stage.description;
+      document.getElementById("foundryBoundary").textContent = ` ${stage.boundary}`;
+    }
+
+    function renderStore() {
+      const scope = document.getElementById("scopeSelect").value;
+      const items = storeData[scope] || [];
+      const container = document.getElementById("memoryItems");
+      container.innerHTML = "";
+      if (items.length === 0) {
+        container.innerHTML = `<div class="memory-item"><em>No memories in this simulated scope.</em></div>`;
+      } else {
+        items.forEach((item, index) => {
+          const article = document.createElement("article");
+          article.className = "memory-item";
+          article.innerHTML = `
+            <header>
+              <span>${item.type}</span>
+              <small>item ${index + 1} · ${item.status}</small>
+            </header>
+            <div>${item.text}</div>
+          `;
+          container.appendChild(article);
+        });
+      }
+      const modeText = accessMode === "tool"
+        ? "The managed memory search tool simplifies read/write behavior and can resolve per-user scope from the request identity or header."
+        : "Direct APIs provide explicit control over scope, updates, search, item CRUD, and deletion. The application must supply and authorize the scope.";
+      document.getElementById("modeExplanation").textContent = modeText;
+    }
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => setView(tab.dataset.view));
+    });
+
+    document.querySelectorAll(".simulation-mode").forEach((button) => {
+      button.addEventListener("click", () => setSimulationMode(button.dataset.simulationMode));
+    });
+
+    document.getElementById("runSimulation").addEventListener("click", startRun);
+    document.getElementById("pauseSimulation").addEventListener("click", pauseRun);
+    document.getElementById("stepSimulation").addEventListener("click", advanceSimulation);
+    document.getElementById("resetSimulation").addEventListener("click", resetRun);
+    document.getElementById("simulationSpeed").addEventListener("change", () => {
+      if (simulationTimer !== null) {
+        window.clearInterval(simulationTimer);
+        simulationTimer = null;
+        scheduleRun();
+      }
+    });
+
+    document.querySelectorAll(".path-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".path-button").forEach((node) => node.classList.remove("active"));
+        button.classList.add("active");
+        renderLifecycle(button.dataset.pathFilter);
+      });
+    });
+
+    document.getElementById("previousView").addEventListener("click", () => {
+      if (currentViewIndex > 0) setView(viewOrder[currentViewIndex - 1]);
+    });
+
+    document.getElementById("nextView").addEventListener("click", () => {
+      if (currentViewIndex < viewOrder.length - 1) setView(viewOrder[currentViewIndex + 1]);
+    });
+
+    document.getElementById("nextQuiz").addEventListener("click", () => {
+      currentQuizIndex = (currentQuizIndex + 1) % quizExamples.length;
+      renderQuiz();
+    });
+
+    document.getElementById("scopeSelect").addEventListener("change", renderStore);
+
+    document.getElementById("ttlRange").addEventListener("input", (event) => {
+      const days = Number(event.target.value);
+      document.getElementById("ttlValue").textContent = days === 0 ? "No expiry" : `${days} days`;
+    });
+
+    document.querySelectorAll(".mode-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        accessMode = button.dataset.mode;
+        document.querySelectorAll(".mode-button").forEach((node) => node.classList.remove("active"));
+        button.classList.add("active");
+        renderStore();
+      });
+    });
+
+    document.getElementById("rememberButton").addEventListener("click", () => {
+      const scope = document.getElementById("scopeSelect").value;
+      storeData[scope].push({
+        type: "User profile",
+        text: "Simulated explicit memory: prefers concise status updates",
+        status: "remembered"
+      });
+      renderStore();
+    });
+
+    document.getElementById("forgetButton").addEventListener("click", () => {
+      const scope = document.getElementById("scopeSelect").value;
+      if (storeData[scope].length > 0) storeData[scope].pop();
+      renderStore();
+    });
+
+    renderSimulationFlow();
+    renderLifecycle();
+    renderQuiz();
+    renderFoundryPipeline();
+    renderStore();
+    setView("run");
+  </script>
+</body>
+</html>
