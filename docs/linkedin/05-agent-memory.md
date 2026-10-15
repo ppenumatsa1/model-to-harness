@@ -203,7 +203,7 @@ for execution progress; and the system of record for business truth. In this
 series' implementation, PostgreSQL is the authoritative business database for
 the case, approval, and audit trail.
 
-## 8. Memory helps. Confidence requires evidence.
+## 8. The agent can learn. How do we know its next decision is right?
 
 By the time order 9315 closes, every layer in the series has contributed:
 
